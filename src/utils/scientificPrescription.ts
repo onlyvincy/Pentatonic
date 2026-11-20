@@ -207,6 +207,22 @@ const DOSE_COPY_BY_EXERCISE: Record<
     coachMethod: 'Intonazione & Vibrato',
     scientificRationale: 'Centra il pitch nei bend rapidi e fai cantare il vibrato.',
   },
+  'ex-harmony-scale': {
+    coachMethod: 'Armonia & Gradi',
+    scientificRationale: 'Padroneggia i 7 gradi della scala e le progressioni in numeri romani.',
+  },
+  'ex-arpeggio-progressions': {
+    coachMethod: 'Arpeggi & Songwriting',
+    scientificRationale: 'Pattern ritmici di arpeggio su progressioni reali per comporre e accompagnare.',
+  },
+  'ex-pent-licks': {
+    coachMethod: 'Lick Solisti',
+    scientificRationale: 'Vocabolario di lick pentatonici veloci e ritmici pronti per gli assoli.',
+  },
+  'ex-lead-phrasing': {
+    coachMethod: 'Target & Double-Stop',
+    scientificRationale: 'Atterra sulle note chiave degli accordi e arricchisci il fraseggio con i double-stop.',
+  },
 };
 
 export function generateScientificPrescription(
@@ -256,10 +272,11 @@ export function generateScientificPrescription(
 
   if (pathId === 'solista') {
     const solistaPrimary = [
+      'ex-pent-licks',
       'ex-picking-pg6',
-      'ex-legato-trill',
       'ex-lead-bending',
-      'ex-pent-box1',
+      'ex-lead-phrasing',
+      'ex-legato-trill',
     ];
     solistaPrimary.forEach((id, idx) => {
       addIfAvailable(
@@ -273,7 +290,13 @@ export function generateScientificPrescription(
       );
     });
 
-    const solistaSupport = ['ex-picking-spider', 'ex-pent-diagonal'];
+    const solistaSupport = [
+      'ex-arpeggio-progressions',
+      'ex-pent-box1',
+      'ex-pent-diagonal',
+      'ex-harmony-scale',
+      'ex-picking-spider',
+    ];
     solistaSupport.forEach((id) => {
       addIfAvailable(
         id,
@@ -305,6 +328,8 @@ export function generateScientificPrescription(
     });
   } else {
     const rhythmPrimary = [
+      'ex-arpeggio-progressions',
+      'ex-harmony-scale',
       'ex-rhythm-palmmute',
       'ex-rhythm-chords',
       'ex-rhythm-gap',
@@ -322,7 +347,11 @@ export function generateScientificPrescription(
       );
     });
 
-    const rhythmSupport = ['ex-picking-pg6', 'ex-picking-spider'];
+    const rhythmSupport = [
+      'ex-lead-phrasing',
+      'ex-picking-pg6',
+      'ex-picking-spider',
+    ];
     rhythmSupport.forEach((id) => {
       addIfAvailable(
         id,
@@ -336,6 +365,7 @@ export function generateScientificPrescription(
     });
 
     const rhythmSoloBase = [
+      'ex-pent-licks',
       'ex-pent-box1',
       'ex-legato-trill',
       'ex-lead-bending',
@@ -528,15 +558,19 @@ export function getFondamentaForExercise(ex: Exercise): FondamentaId {
   switch (ex.id) {
     case 'ex-picking-pg6':
     case 'ex-pent-box1':
+    case 'ex-pent-licks':
       return 'velocita';
     case 'ex-picking-spider':
     case 'ex-rhythm-palmmute':
+    case 'ex-arpeggio-progressions':
       return 'precisione';
     case 'ex-legato-trill':
     case 'ex-lead-bending':
+    case 'ex-lead-phrasing':
       return 'espressivita';
     case 'ex-pent-diagonal':
     case 'ex-rhythm-chords':
+    case 'ex-harmony-scale':
       return 'visione';
     case 'ex-rhythm-gap':
     case 'ex-rhythm-funk16':

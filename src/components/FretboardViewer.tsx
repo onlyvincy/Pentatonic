@@ -242,6 +242,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
       if (mode === 'slow-intro') {
         const stepSec = 60 / slowBpm / 2;
         const totalStepsPerPass = effectiveSteps.length;
+        const passes = totalStepsPerPass >= 16 ? 1 : 2;
         const startAnchor = getNowSec();
         let lastTriggeredTotalIdx = 0;
 
@@ -252,7 +253,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
           const elapsed = Math.max(0, getNowSec() - startAnchor);
           const totalIdx = Math.floor(elapsed / stepSec);
 
-          if (totalIdx >= totalStepsPerPass * 2) {
+          if (totalIdx >= totalStepsPerPass * passes) {
             clearTimers();
             endTimeoutRef.current = window.setTimeout(() => {
               setIsPlayingDemo(false);
@@ -1147,12 +1148,22 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
     </div>
   );
 
-  // Instant 0ms highlight 8-slot 4/4 cyclic rhythm grid
+  // Instant 0ms highlight 8-slot 4/4 cyclic rhythm grid (slices 8-step bars for multi-bar progressions)
+  const totalBars = Math.max(1, Math.ceil(effectiveSteps.length / 8));
+  const activeBarIdx =
+    effectiveActiveStepIndex !== null
+      ? Math.floor(effectiveActiveStepIndex / 8) % totalBars
+      : 0;
+  const barOffset = activeBarIdx * 8;
+  const barSteps = effectiveSteps.slice(barOffset, barOffset + 8);
+  const activeTechniqueLabel =
+    effectiveActiveStepIndex !== null ? activeStep?.technique : undefined;
+
   const rhythmGridBar =
-    !interactive && effectiveSteps.length > 0 && effectiveSteps.length <= 16 ? (
+    !interactive && barSteps.length > 0 && effectiveSteps.length <= 16 ? (
       <div className="grid grid-cols-8 gap-1 w-full min-w-0">
-        {effectiveSteps.slice(0, 8).map((step, idx) => {
-          const isActive = effectiveActiveStepIndex === idx;
+        {barSteps.map((step, idx) => {
+          const isActive = effectiveActiveStepIndex === barOffset + idx;
           const slotLabel = BAR_8_LABELS[idx] ?? String(idx + 1);
           const isDownbeat = idx % 2 === 0;
           const art = getStepArticulation(step);
@@ -1183,7 +1194,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
 
           return (
             <div
-              key={idx}
+              key={`${barOffset}-${idx}`}
               className={`min-w-0 flex flex-col items-center justify-center rounded-lg border py-1 text-[10px] font-bold tabular-nums ${
                 isActive
                   ? 'border-[#FF6B00] bg-[#FF6B00] text-black'
@@ -1216,6 +1227,21 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
     return (
       <div className="w-full min-w-0 max-w-full space-y-4">
         {fretboardSvg}
+
+        {(activeTechniqueLabel || totalBars > 1) && (
+          <div className="mx-auto flex min-h-[26px] max-w-md items-center justify-center gap-2">
+            {activeTechniqueLabel && (
+              <span className="rounded-full border border-[#FF6B00]/50 bg-[#FF6B00]/12 px-3 py-0.5 text-[11px] font-black tracking-wide text-[#FF6B00]">
+                {activeTechniqueLabel}
+              </span>
+            )}
+            {totalBars > 1 && (
+              <span className="rounded-full border border-white/15 bg-black px-2.5 py-0.5 text-[10px] font-bold text-white/55 tabular-nums">
+                B{activeBarIdx + 1}/{totalBars}
+              </span>
+            )}
+          </div>
+        )}
 
         {rhythmGridBar && <div className="mx-auto max-w-md">{rhythmGridBar}</div>}
 
@@ -1278,7 +1304,12 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
             </button>
           )}
 
-          {demoMode !== 'live-loop' &&
+          {activeTechniqueLabel && effectiveActiveStepIndex !== null ? (
+            <span className="rounded-full border border-[#FF6B00]/50 bg-[#FF6B00]/12 px-2.5 py-0.5 text-[11px] font-black tracking-wide text-[#FF6B00] tabular-nums">
+              {activeTechniqueLabel}
+            </span>
+          ) : (
+            demoMode !== 'live-loop' &&
             activeStep &&
             effectiveActiveStepIndex !== null && (
               <span className="text-[11px] font-bold text-white/85 tabular-nums">
@@ -1294,7 +1325,14 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                       .map((n) => `${STRING_SHORT_MAP[n.string]}${n.fret}`)
                       .join(' ')}
               </span>
-            )}
+            )
+          )}
+
+          {totalBars > 1 && (
+            <span className="rounded-full border border-white/15 bg-black px-2 py-0.5 text-[10px] font-bold text-white/55 tabular-nums">
+              B{activeBarIdx + 1}/{totalBars}
+            </span>
+          )}
         </div>
 
         <div className="flex rounded-full bg-black border border-white/15 p-0.5">

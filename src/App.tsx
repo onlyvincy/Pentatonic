@@ -525,7 +525,14 @@ export function App() {
           />
         )}
 
-        {activeTab === 'tuner' && <TunerAndCheatSheet />}
+        {activeTab === 'tuner' && (
+          <TunerAndCheatSheet
+            initialMetronomeSound={appState.settings.metronomeSound ?? 'woodblock'}
+            onChangeMetronomeSound={(sound) =>
+              updateSettings({ metronomeSound: sound })
+            }
+          />
+        )}
       </main>
 
       {/* Mobile Bottom Tab Bar */}

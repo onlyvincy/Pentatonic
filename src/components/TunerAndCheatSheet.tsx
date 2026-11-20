@@ -1,8 +1,17 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, Mic, Volume2 } from 'lucide-react';
-import { DemoStep, FretNote } from '../types/practice';
+import { ChevronDown, Mic, Minus, Play, Plus, Square, Volume2, VolumeX } from 'lucide-react';
 import {
+  DemoStep,
+  FretNote,
+  GapClickMode,
+  MetronomeSoundId,
+  Subdivision,
+} from '../types/practice';
+import { useMetronome } from '../hooks/useMetronome';
+import {
+  METRONOME_SOUNDS,
   playGuitarFrequency,
+  playSoftMetronomeTick,
   recoverPlaybackAfterMic,
   setIosMicSessionActive,
   unlockSharedAudioContext,
@@ -393,11 +402,38 @@ interface DetectedPitch {
   cents: number;
 }
 
-export const TunerAndCheatSheet: React.FC = () => {
+interface TunerAndCheatSheetProps {
+  initialMetronomeSound?: MetronomeSoundId;
+  onChangeMetronomeSound?: (sound: MetronomeSoundId) => void;
+}
+
+const SUBDIVISIONS: Subdivision[] = ['1/4', '1/8', '1/8T', '1/16'];
+const GAP_MODES: { id: GapClickMode; label: string }[] = [
+  { id: 'off', label: 'Off' },
+  { id: '1-in-4', label: '1/4' },
+  { id: 'random-25', label: 'Rnd' },
+];
+
+export const TunerAndCheatSheet: React.FC<TunerAndCheatSheetProps> = ({
+  initialMetronomeSound = 'woodblock',
+  onChangeMetronomeSound,
+}) => {
+  const [toolMode, setToolMode] = useState<'tuner' | 'metronome'>('tuner');
   const [tuningId, setTuningId] = useState<TuningId>('eadgbe');
   const [showTuningPicker, setShowTuningPicker] = useState(false);
   const [cheatMode, setCheatMode] = useState<'scales' | 'chords'>('scales');
   const [selectedScaleId, setSelectedScaleId] = useState<ScaleId>('minor-pent');
+
+  const metronome = useMetronome({
+    initialBpm: 90,
+    initialSubdivision: '1/4',
+    initialGapClick: 'off',
+    initialSound: initialMetronomeSound,
+  });
+
+  useEffect(() => {
+    metronome.setSoundId(initialMetronomeSound);
+  }, [initialMetronomeSound, metronome.setSoundId]);
 
   const [isListening, setIsListening] = useState(false);
   const [micBlocked, setMicBlocked] = useState(false);
@@ -553,8 +589,34 @@ export const TunerAndCheatSheet: React.FC = () => {
     return () => {
       mountedRef.current = false;
       stopTuner();
+      metronome.stop();
     };
-  }, [startTuner, stopTuner]);
+  }, [startTuner, stopTuner, metronome.stop]);
+
+  const handleSelectToolMode = (nextMode: 'tuner' | 'metronome') => {
+    if (nextMode === toolMode) return;
+    if (nextMode === 'metronome') {
+      stopTuner();
+      setShowTuningPicker(false);
+      setToolMode('metronome');
+    } else {
+      metronome.stop();
+      setToolMode('tuner');
+      startTuner();
+    }
+  };
+
+  const handleToggleMetronome = () => {
+    if (metronome.isPlaying) {
+      metronome.stop();
+      return;
+    }
+    if (streamRef.current || tunerCtxRef.current) {
+      stopTuner();
+    }
+    unlockSharedAudioContext().catch(() => {});
+    metronome.start();
+  };
 
   const handleStrumChord = (chord: ChordCheat) => {
     unlockSharedAudioContext().catch(() => {});
@@ -611,170 +673,413 @@ export const TunerAndCheatSheet: React.FC = () => {
 
   return (
     <div className="w-full min-w-0 max-w-full overflow-hidden space-y-4">
-      {/* ULTRA-MINIMAL LIVE TUNER (AUTO-ACTIVE) */}
+      {/* ULTRA-MINIMAL LIVE TUNER + FREE METRONOME */}
       <section className="relative w-full min-w-0 max-w-full overflow-hidden rounded-3xl bg-black border border-white/15 p-4 sm:p-5 space-y-5">
         <div
           aria-hidden="true"
           className="pointer-events-none absolute -top-20 left-1/2 h-40 w-48 -translate-x-1/2 rounded-full bg-[#FF6B00]/12 blur-3xl"
         />
-        {/* Top Row: Single Active Tuning Pill + Live Dot */}
+        {/* Top Row: Tool Switcher (Tuner / Metronomo) + Context Controls */}
         <div className="relative z-10 flex items-center justify-between gap-2">
-          <div className="relative">
+          <div className="flex rounded-full bg-black border border-white/15 p-0.5">
             <button
               type="button"
-              onClick={() => setShowTuningPicker((v) => !v)}
-              aria-expanded={showTuningPicker}
-              className="inline-flex items-center gap-1.5 rounded-full border border-white/25 bg-black px-3.5 py-1 text-xs font-black tracking-wider text-white hover:border-white/60 transition tabular-nums"
+              onClick={() => handleSelectToolMode('tuner')}
+              className={`rounded-full px-3.5 py-1 text-xs font-bold transition ${
+                toolMode === 'tuner'
+                  ? 'bg-white text-black'
+                  : 'text-white/55 hover:text-white'
+              }`}
             >
-              {activeTuning.label}
-              <ChevronDown
-                className={`h-3.5 w-3.5 text-white/60 transition-transform ${
-                  showTuningPicker ? 'rotate-180' : ''
-                }`}
-              />
+              Tuner
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSelectToolMode('metronome')}
+              className={`rounded-full px-3.5 py-1 text-xs font-bold transition ${
+                toolMode === 'metronome'
+                  ? 'bg-white text-black'
+                  : 'text-white/55 hover:text-white'
+              }`}
+            >
+              Metronomo
             </button>
           </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              if (!isListening) startTuner();
-            }}
-            className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-white/50 hover:text-white transition"
-          >
-            <span
-              className={`h-2 w-2 rounded-full ${
-                isListening
-                  ? inTune
-                    ? 'bg-[#A4FF00]'
-                    : 'bg-[#FF6B00] animate-pulse-fast'
-                  : 'bg-white/25'
-              }`}
-            />
-            {isListening ? 'LIVE' : 'MIC'}
-          </button>
-        </div>
-
-        {/* Collapsible Tuning Picker (Hidden until active tuning pill is clicked) */}
-        {showTuningPicker && (
-          <div className="flex flex-wrap gap-1.5">
-            {TUNING_PRESETS.map((preset) => {
-              const active = preset.id === tuningId;
-              return (
-                <button
-                  key={preset.id}
-                  type="button"
-                  onClick={() => {
-                    setTuningId(preset.id);
-                    setShowTuningPicker(false);
-                  }}
-                  className={`rounded-full border px-3 py-1 text-xs font-black tracking-wide transition tabular-nums ${
-                    active
-                      ? 'border-white bg-white text-black'
-                      : 'border-white/15 bg-black text-white/65 hover:border-white/40 hover:text-white'
-                  }`}
-                >
-                  {preset.label}
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {/* 31-Segment Horizontal Strobe Meter */}
-        <div className="flex w-full min-w-0 overflow-hidden gap-[1.5px] sm:gap-1 items-center h-9 px-1">
-          {Array.from({ length: LED_COUNT }, (_, idx) => {
-            const distFromCenter = Math.abs(idx - centerIdx);
-            const isCenterZone = distFromCenter <= 1;
-            const isLit =
-              detected &&
-              (idx === activeLedIdx ||
-                (inTune && isCenterZone) ||
-                (!inTune &&
-                  ((activeLedIdx < centerIdx &&
-                    idx >= activeLedIdx &&
-                    idx < centerIdx) ||
-                    (activeLedIdx > centerIdx &&
-                      idx <= activeLedIdx &&
-                      idx > centerIdx))));
-
-            const baseHeight = isCenterZone
-              ? 'h-7'
-              : distFromCenter % 5 === 0
-              ? 'h-5'
-              : 'h-3';
-
-            let ledColor = 'bg-white/15';
-            if (isLit) {
-              ledColor = inTune
-                ? 'bg-[#A4FF00] shadow-[0_0_10px_rgba(164,255,0,0.85)]'
-                : isCenterZone
-                ? 'bg-white/60'
-                : 'bg-[#FF6B00] shadow-[0_0_8px_rgba(255,107,0,0.75)]';
-            }
-
-            return (
-              <div
-                key={idx}
-                className={`flex-1 min-w-0 rounded-sm ${baseHeight} ${ledColor}`}
-              />
-            );
-          })}
-        </div>
-
-        {/* Center Giant Note + Minimal Tuning Direction */}
-        <div className="flex flex-col items-center justify-center text-center py-2 space-y-2">
-          <div className="flex items-baseline justify-center gap-1.5">
-            <span
-              className={`text-7xl sm:text-8xl font-black tracking-tight tabular-nums leading-none ${
-                inTune
-                  ? 'text-[#A4FF00]'
-                  : detected
-                  ? 'text-white'
-                  : 'text-white/20'
-              }`}
-            >
-              {detected ? detected.noteName : '—'}
-            </span>
-            {detected && (
-              <span className="text-xl font-black text-white/40 tabular-nums">
-                {detected.octave}
-              </span>
-            )}
-          </div>
-
-          <div className="min-h-[24px] flex items-center justify-center gap-2 text-xs font-bold tabular-nums">
-            {detected ? (
-              <>
-                <span
-                  className={`rounded-full border px-3 py-0.5 text-[11px] font-black tracking-wider ${
-                    inTune
-                      ? 'border-[#A4FF00]/60 bg-[#A4FF00]/10 text-[#A4FF00]'
-                      : 'border-[#FF6B00]/60 bg-[#FF6B00]/10 text-[#FF6B00]'
-                  }`}
-                >
-                  {inTune
-                    ? 'IN TUNE'
-                    : detected.cents < 0
-                    ? `↑ ${detected.cents}`
-                    : `↓ +${detected.cents}`}
-                </span>
-                <span className="text-white/45">{detected.freq} Hz</span>
-              </>
-            ) : !isListening ? (
+          {toolMode === 'tuner' ? (
+            <div className="flex items-center gap-2.5">
               <button
                 type="button"
-                onClick={() => startTuner()}
-                className="inline-flex items-center gap-1.5 rounded-full border border-[#FF6B00]/60 bg-[#FF6B00]/10 px-3.5 py-1.5 text-[11px] font-black text-[#FF6B00] hover:bg-[#FF6B00]/20 transition"
+                onClick={() => setShowTuningPicker((v) => !v)}
+                aria-expanded={showTuningPicker}
+                className="inline-flex items-center gap-1 rounded-full border border-white/25 bg-black px-3 py-1 text-xs font-black tracking-wider text-white hover:border-white/60 transition tabular-nums"
               >
-                <Mic className="h-3.5 w-3.5" />
-                {micBlocked ? 'Consenti Microfono' : 'Attiva Microfono'}
+                {activeTuning.label}
+                <ChevronDown
+                  className={`h-3.5 w-3.5 text-white/60 transition-transform ${
+                    showTuningPicker ? 'rotate-180' : ''
+                  }`}
+                />
               </button>
-            ) : (
-              <span className="text-white/30">440 Hz</span>
-            )}
-          </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isListening) startTuner();
+                }}
+                className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-white/50 hover:text-white transition"
+              >
+                <span
+                  className={`h-2 w-2 rounded-full ${
+                    isListening
+                      ? inTune
+                        ? 'bg-[#A4FF00]'
+                        : 'bg-[#FF6B00] animate-pulse-fast'
+                      : 'bg-white/25'
+                  }`}
+                />
+                {isListening ? 'LIVE' : 'MIC'}
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => metronome.setVisualOnly(!metronome.visualOnly)}
+              aria-label={metronome.visualOnly ? 'Attiva suono click' : 'Disattiva suono click'}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-bold transition ${
+                metronome.visualOnly
+                  ? 'border-white/15 bg-black text-white/45 hover:text-white'
+                  : 'border-white/25 bg-black text-white hover:border-white/60'
+              }`}
+            >
+              {metronome.visualOnly ? (
+                <VolumeX className="h-3.5 w-3.5" />
+              ) : (
+                <Volume2 className="h-3.5 w-3.5 text-[#FF6B00]" />
+              )}
+              <span>{metronome.visualOnly ? 'Muto' : 'Audio'}</span>
+            </button>
+          )}
         </div>
+
+        {toolMode === 'tuner' ? (
+          <>
+            {/* Collapsible Tuning Picker (Hidden until active tuning pill is clicked) */}
+            {showTuningPicker && (
+              <div className="flex flex-wrap gap-1.5">
+                {TUNING_PRESETS.map((preset) => {
+                  const active = preset.id === tuningId;
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => {
+                        setTuningId(preset.id);
+                        setShowTuningPicker(false);
+                      }}
+                      className={`rounded-full border px-3 py-1 text-xs font-black tracking-wide transition tabular-nums ${
+                        active
+                          ? 'border-white bg-white text-black'
+                          : 'border-white/15 bg-black text-white/65 hover:border-white/40 hover:text-white'
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* 31-Segment Horizontal Strobe Meter */}
+            <div className="flex w-full min-w-0 overflow-hidden gap-[1.5px] sm:gap-1 items-center h-9 px-1">
+              {Array.from({ length: LED_COUNT }, (_, idx) => {
+                const distFromCenter = Math.abs(idx - centerIdx);
+                const isCenterZone = distFromCenter <= 1;
+                const isLit =
+                  detected &&
+                  (idx === activeLedIdx ||
+                    (inTune && isCenterZone) ||
+                    (!inTune &&
+                      ((activeLedIdx < centerIdx &&
+                        idx >= activeLedIdx &&
+                        idx < centerIdx) ||
+                        (activeLedIdx > centerIdx &&
+                          idx <= activeLedIdx &&
+                          idx > centerIdx))));
+
+                const baseHeight = isCenterZone
+                  ? 'h-7'
+                  : distFromCenter % 5 === 0
+                  ? 'h-5'
+                  : 'h-3';
+
+                let ledColor = 'bg-white/15';
+                if (isLit) {
+                  ledColor = inTune
+                    ? 'bg-[#A4FF00] shadow-[0_0_10px_rgba(164,255,0,0.85)]'
+                    : isCenterZone
+                    ? 'bg-white/60'
+                    : 'bg-[#FF6B00] shadow-[0_0_8px_rgba(255,107,0,0.75)]';
+                }
+
+                return (
+                  <div
+                    key={idx}
+                    className={`flex-1 min-w-0 rounded-sm ${baseHeight} ${ledColor}`}
+                  />
+                );
+              })}
+            </div>
+
+            {/* Center Giant Note + Minimal Tuning Direction */}
+            <div className="flex flex-col items-center justify-center text-center py-2 space-y-2">
+              <div className="flex items-baseline justify-center gap-1.5">
+                <span
+                  className={`text-7xl sm:text-8xl font-black tracking-tight tabular-nums leading-none ${
+                    inTune
+                      ? 'text-[#A4FF00]'
+                      : detected
+                      ? 'text-white'
+                      : 'text-white/20'
+                  }`}
+                >
+                  {detected ? detected.noteName : '—'}
+                </span>
+                {detected && (
+                  <span className="text-xl font-black text-white/40 tabular-nums">
+                    {detected.octave}
+                  </span>
+                )}
+              </div>
+
+              <div className="min-h-[24px] flex items-center justify-center gap-2 text-xs font-bold tabular-nums">
+                {detected ? (
+                  <>
+                    <span
+                      className={`rounded-full border px-3 py-0.5 text-[11px] font-black tracking-wider ${
+                        inTune
+                          ? 'border-[#A4FF00]/60 bg-[#A4FF00]/10 text-[#A4FF00]'
+                          : 'border-[#FF6B00]/60 bg-[#FF6B00]/10 text-[#FF6B00]'
+                      }`}
+                    >
+                      {inTune
+                        ? 'IN TUNE'
+                        : detected.cents < 0
+                        ? `↑ ${detected.cents}`
+                        : `↓ +${detected.cents}`}
+                    </span>
+                    <span className="text-white/45">{detected.freq} Hz</span>
+                  </>
+                ) : !isListening ? (
+                  <button
+                    type="button"
+                    onClick={() => startTuner()}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-[#FF6B00]/60 bg-[#FF6B00]/10 px-3.5 py-1.5 text-[11px] font-black text-[#FF6B00] hover:bg-[#FF6B00]/20 transition"
+                  >
+                    <Mic className="h-3.5 w-3.5" />
+                    {micBlocked ? 'Consenti Microfono' : 'Attiva Microfono'}
+                  </button>
+                ) : (
+                  <span className="text-white/30">440 Hz</span>
+                )}
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="relative z-10 space-y-5">
+            {/* 4-Beat Pulse Dots */}
+            <div className="flex items-center justify-center gap-3.5 pt-1 min-h-[24px]">
+              {[1, 2, 3, 4].map((beat) => {
+                const isActive = metronome.isPlaying && metronome.currentBeat === beat;
+                const isAccent = beat === 1;
+                return (
+                  <span
+                    key={beat}
+                    className={`rounded-full transition-all duration-75 ${
+                      isActive
+                        ? metronome.isGapBar
+                          ? 'h-3.5 w-3.5 bg-white/30 scale-110'
+                          : isAccent
+                          ? 'h-4 w-4 bg-[#FF6B00] shadow-[0_0_14px_rgba(255,107,0,0.9)] scale-110'
+                          : 'h-3.5 w-3.5 bg-white shadow-[0_0_10px_rgba(255,255,255,0.7)] scale-110'
+                        : 'h-2.5 w-2.5 bg-white/15'
+                    }`}
+                  />
+                );
+              })}
+              {metronome.isPlaying && metronome.isGapBar && (
+                <span className="ml-1 rounded-full border border-white/20 px-2 py-0.5 text-[10px] font-black tracking-widest text-white/55">
+                  SILENZIO
+                </span>
+              )}
+            </div>
+
+            {/* Giant BPM Display + Step Controls */}
+            <div className="flex flex-col items-center space-y-3">
+              <div className="flex items-center justify-center gap-4 sm:gap-6">
+                <button
+                  type="button"
+                  onClick={() => metronome.setBpm(metronome.bpm - 1)}
+                  aria-label="Diminuisci BPM"
+                  className="flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-black text-white/80 hover:border-white/50 hover:text-white active:scale-95 transition"
+                >
+                  <Minus className="h-4 w-4" />
+                </button>
+
+                <div className="flex flex-col items-center min-w-[120px]">
+                  <span className="text-6xl sm:text-7xl font-black tracking-tight text-white tabular-nums leading-none">
+                    {metronome.bpm}
+                  </span>
+                  <span className="mt-1 text-[10px] font-bold uppercase tracking-[0.25em] text-white/40">
+                    BPM
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => metronome.setBpm(metronome.bpm + 1)}
+                  aria-label="Aumenta BPM"
+                  className="flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-black text-white/80 hover:border-white/50 hover:text-white active:scale-95 transition"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Smooth BPM Slider */}
+              <div className="w-full max-w-sm flex items-center gap-3 px-1">
+                <button
+                  type="button"
+                  onClick={() => metronome.setBpm(metronome.bpm - 5)}
+                  className="text-[11px] font-bold text-white/40 hover:text-white tabular-nums transition"
+                >
+                  -5
+                </button>
+                <input
+                  type="range"
+                  min={40}
+                  max={240}
+                  value={metronome.bpm}
+                  onChange={(e) => metronome.setBpm(Number(e.target.value))}
+                  aria-label="Seleziona BPM"
+                  className="w-full h-1.5 rounded-full appearance-none bg-white/15 accent-[#FF6B00] cursor-pointer"
+                />
+                <button
+                  type="button"
+                  onClick={() => metronome.setBpm(metronome.bpm + 5)}
+                  className="text-[11px] font-bold text-white/40 hover:text-white tabular-nums transition"
+                >
+                  +5
+                </button>
+              </div>
+
+              {/* Primary Play / Stop + Tap Tempo */}
+              <div className="flex items-center justify-center gap-2.5 pt-1">
+                <button
+                  type="button"
+                  onClick={handleToggleMetronome}
+                  className={`inline-flex items-center justify-center gap-2 rounded-full px-7 py-2.5 text-sm font-black tracking-wide active:scale-95 transition ${
+                    metronome.isPlaying
+                      ? 'bg-white text-black hover:bg-white/90'
+                      : 'bg-[#FF6B00] text-black hover:bg-[#ff7f24]'
+                  }`}
+                >
+                  {metronome.isPlaying ? (
+                    <>
+                      <Square className="h-3.5 w-3.5 fill-current" />
+                      Stop
+                    </>
+                  ) : (
+                    <>
+                      <Play className="h-3.5 w-3.5 fill-current" />
+                      Avvia
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => metronome.registerTap()}
+                  className="rounded-full border border-white/20 bg-black px-5 py-2.5 text-xs font-black uppercase tracking-wider text-white/80 hover:border-white/50 hover:text-white active:scale-95 transition"
+                >
+                  Tap
+                </button>
+              </div>
+            </div>
+
+            {/* Compact Options: Subdivision, Gap Click, Sound */}
+            <div className="border-t border-white/10 pt-4 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5">
+                  {SUBDIVISIONS.map((sub) => {
+                    const active = metronome.subdivision === sub;
+                    return (
+                      <button
+                        key={sub}
+                        type="button"
+                        onClick={() => metronome.setSubdivision(sub)}
+                        className={`rounded-full border px-2.5 py-1 text-[11px] font-bold tabular-nums transition ${
+                          active
+                            ? 'border-white bg-white text-black'
+                            : 'border-white/15 bg-black text-white/60 hover:border-white/40 hover:text-white'
+                        }`}
+                      >
+                        {sub}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-white/35">
+                    Gap
+                  </span>
+                  {GAP_MODES.map((g) => {
+                    const active = metronome.gapClickMode === g.id;
+                    return (
+                      <button
+                        key={g.id}
+                        type="button"
+                        onClick={() => metronome.setGapClickMode(g.id)}
+                        className={`rounded-full border px-2.5 py-1 text-[11px] font-bold transition ${
+                          active
+                            ? 'border-[#FF6B00] bg-[#FF6B00]/15 text-[#FF6B00]'
+                            : 'border-white/15 bg-black text-white/55 hover:border-white/40 hover:text-white'
+                        }`}
+                      >
+                        {g.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-1.5">
+                {METRONOME_SOUNDS.map((snd) => {
+                  const active = metronome.soundId === snd.id;
+                  return (
+                    <button
+                      key={snd.id}
+                      type="button"
+                      onClick={() => {
+                        metronome.setSoundId(snd.id);
+                        onChangeMetronomeSound?.(snd.id);
+                        unlockSharedAudioContext().catch(() => {});
+                        playSoftMetronomeTick(true, snd.id);
+                      }}
+                      className={`rounded-full border px-3 py-1 text-[11px] font-bold transition ${
+                        active
+                          ? 'border-white bg-white text-black'
+                          : 'border-white/15 bg-black text-white/60 hover:border-white/40 hover:text-white'
+                      }`}
+                    >
+                      {snd.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* MINIMAL SCALE & ACCORDI */}

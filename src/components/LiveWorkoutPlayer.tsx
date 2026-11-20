@@ -528,8 +528,9 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
               <X className="h-4 w-4" />
             </button>
             <div className="min-w-0">
-              <div className="text-[11px] font-bold text-white/45 tabular-nums leading-tight">
+              <div className="text-[11px] font-bold text-white/45 tabular-nums truncate leading-tight">
                 S{setNumber}/{currentItem.sets}
+                {activeVariant ? ` · ${activeVariant.shortLabel}` : ''}
               </div>
               <h2 className="text-sm font-bold text-white truncate leading-tight">
                 {currentExercise.title}
@@ -595,9 +596,16 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
         {/* 1. AUTOMATIC BPM-SYNCED FRETBOARD DEMO (BEFORE PRE-TIMER & SET TIMER) */}
         {phase === 'demo' && (
           <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col items-center justify-center gap-5 px-4 py-5">
-            <h3 className="text-center text-lg sm:text-xl font-black text-white">
-              {currentExercise.title}
-            </h3>
+            <div className="text-center space-y-1.5">
+              <h3 className="text-lg sm:text-xl font-black text-white">
+                {currentExercise.title}
+              </h3>
+              {activeVariant && (
+                <div className="inline-flex rounded-full border border-[#FF6B00]/45 bg-[#FF6B00]/12 px-3 py-0.5 text-xs font-bold text-[#FF6B00]">
+                  {activeVariant.name}
+                </div>
+              )}
+            </div>
 
             <FretboardViewer
               notes={activeVariant?.fretboardNotes ?? currentExercise.fretboardNotes}
