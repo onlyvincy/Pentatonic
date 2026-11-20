@@ -1,15 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BookmarkCheck,
-  CheckCircle2,
   FastForward,
+  Mic,
   Pause,
   Play,
   RotateCcw,
   Settings2,
   Square,
   Timer,
-  Trash2,
   Volume2,
   VolumeX,
   X,
@@ -76,6 +75,14 @@ type PlayerPhase =
   | 'rating'
   | 'rest'
   | 'summary';
+
+interface SessionSetEntry {
+  setLog: SetLog;
+  exerciseTitle: string;
+  baselineBpm: number;
+  isBenchmark: boolean;
+  take: CapturedTake | null;
+}
 
 const RATING_TEXT: Record<CleanlinessScore, string> = {
   1: 'Ho sbagliato tutto',
@@ -197,18 +204,21 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     currentItem?.restSec ?? 15
   );
 
-  const [selectedCleanliness, setSelectedCleanliness] =
-    useState<CleanlinessScore>(4);
-  const [saveChoice, setSaveChoice] = useState<'save' | 'discard'>('discard');
-  const [markAsBenchmark, setMarkAsBenchmark] = useState<boolean>(
-    Boolean(currentExercise?.isBenchmark)
-  );
-  const [setNote, setSetNote] = useState<string>('');
   const [capturedTake, setCapturedTake] = useState<CapturedTake | null>(null);
-
   const [loggedSets, setLoggedSets] = useState<SetLog[]>([]);
-  const [pendingRecordings, setPendingRecordings] = useState<FeedRecording[]>([]);
+  const [sessionSetEntries, setSessionSetEntries] = useState<SessionSetEntry[]>([]);
+  const [savedSetIds, setSavedSetIds] = useState<Set<string>>(() => new Set());
+  const [expandedAudioSetId, setExpandedAudioSetId] = useState<string | null>(null);
+  const [isSavingSummary, setIsSavingSummary] = useState(false);
+  const takeUrlsRef = useRef<string[]>([]);
   const sessionStartRef = useRef<number>(Date.now());
+
+  useEffect(() => {
+    return () => {
+      takeUrlsRef.current.forEach((u) => URL.revokeObjectURL(u));
+      takeUrlsRef.current = [];
+    };
+  }, []);
 
   const metronome = useMetronome({
     initialBpm: initialFirstBpm,
@@ -267,7 +277,6 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     metronome.setGapClickMode(currentExercise.gapClickMode);
     setSetRemainingSec(currentItem.durationSec);
     setRestRemainingSec(currentItem.restSec);
-    setMarkAsBenchmark(Boolean(currentExercise.isBenchmark));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [exerciseIdx]);
 
@@ -316,9 +325,6 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     metronome.stop();
     const take = await shadowplay.stopCapture(metronome.bpm);
     setCapturedTake(take);
-    setSaveChoice('discard');
-    setSetNote('');
-    setSelectedCleanliness(4);
     setPhase('rating');
   };
 
@@ -373,99 +379,63 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     startPlayingNow();
   };
 
-  const overloadFeedback = useMemo(
-    () =>
-      calculateGoldilocksNextBpm(
-        metronome.bpm,
-        currentComfortBpm,
-        selectedCleanliness,
-        setNumber
-      ),
-    [metronome.bpm, currentComfortBpm, selectedCleanliness, setNumber]
-  );
-
-  const automaticNextBpm = useMemo(() => {
-    if (!currentItem || !currentExercise) return metronome.bpm;
-    return overloadFeedback.nextBpm;
-  }, [currentItem, currentExercise, metronome.bpm, overloadFeedback]);
-
-  const handleSelectVariantInPlayer = (variantId: string) => {
+  const handleRateSet = (score: CleanlinessScore) => {
     if (!currentItem || !currentExercise) return;
-    setSelectedVariantId(variantId);
-    const comfortBpm = resolveVariantBpm(
-      currentExercise,
-      variantId,
-      currentItem.targetBpm
+
+    const feedback = calculateGoldilocksNextBpm(
+      metronome.bpm,
+      currentComfortBpm,
+      score,
+      setNumber
     );
-    const nextBpm =
-      setNumber === 1
-        ? calculateWarmupBpm(comfortBpm)
-        : calculateGoldilocksTargetBpm(comfortBpm);
-    metronome.setBpm(nextBpm);
-    setDemoReplayKey((k) => k + 1);
-  };
+    const nextBpmForScore = feedback.nextBpm;
 
-  const handleConfirmSetRating = async () => {
-    if (!currentItem || !currentExercise) return;
-
-    const shouldSave = saveChoice === 'save';
-    let savedRecId: string | undefined;
-
-    if (shouldSave && capturedTake) {
-      savedRecId = `rec-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-      await saveRecordingBlob(savedRecId, capturedTake.blob);
-
-      const newRec: FeedRecording = {
-        id: savedRecId,
-        exerciseId: currentExercise.id,
-        exerciseTitle: currentExercise.title,
-        workoutTitle: plan.workout.title,
-        date: new Date().toISOString(),
-        bpm: metronome.bpm,
-        baselineBpmAtTime: currentExercise.baselineBpm,
-        cleanliness: selectedCleanliness,
-        mediaType: capturedTake.mediaType,
-        durationSec: capturedTake.durationSec,
-        note:
-          setNote.trim() ||
-          `Serie ${setNumber}${activeVariant ? ` (${activeVariant.shortLabel})` : ''} @ ${metronome.bpm} BPM (${CLEANLINESS_LABELS[selectedCleanliness].label})`,
-        isBenchmarkCheckpoint: markAsBenchmark,
-      };
-      setPendingRecordings((prev) => [newRec, ...prev]);
-    } else {
-      shadowplay.discardPreview();
+    let retainedTake: CapturedTake | null = null;
+    if (capturedTake) {
+      const ownedUrl = URL.createObjectURL(capturedTake.blob);
+      takeUrlsRef.current.push(ownedUrl);
+      retainedTake = { ...capturedTake, url: ownedUrl };
     }
+    shadowplay.discardPreview();
     setCapturedTake(null);
 
     const hasMoreSets = setNumber < currentItem.sets;
     const hasMoreExercises = exerciseIdx < plan.items.length - 1;
 
     const newSetLog: SetLog = {
-      id: `set-${Date.now()}`,
+      id: `set-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
       exerciseId: currentExercise.id,
       variantId: activeVariant?.id,
       variantLabel: activeVariant?.shortLabel,
       setNumber,
       bpm: metronome.bpm,
       durationSec: Math.max(10, currentItem.durationSec - setRemainingSec),
-      cleanliness: selectedCleanliness,
-      nextRecommendedBpm: automaticNextBpm,
+      cleanliness: score,
+      nextRecommendedBpm: nextBpmForScore,
       timestamp: new Date().toISOString(),
-      savedRecordingId: savedRecId,
-      note: setNote.trim() || undefined,
     };
 
     const nextLoggedSets = [...loggedSets, newSetLog];
     setLoggedSets(nextLoggedSets);
+    setSessionSetEntries((prev) => [
+      ...prev,
+      {
+        setLog: newSetLog,
+        exerciseTitle: currentExercise.title,
+        baselineBpm: currentExercise.baselineBpm,
+        isBenchmark: Boolean(currentExercise.isBenchmark),
+        take: retainedTake,
+      },
+    ]);
 
     const existingVariantBpms = {
       ...(currentExercise.variantBpms ?? {}),
       ...(variantBpmMap[currentExercise.id] ?? {}),
     };
     const savedVariantBpm =
-      setNumber === 1 && selectedCleanliness >= 3
-        ? Math.max(currentComfortBpm, automaticNextBpm)
-        : automaticNextBpm;
+      setNumber === 1 && score >= 3
+        ? Math.max(currentComfortBpm, nextBpmForScore)
+        : nextBpmForScore;
     const updatedExVariantBpms = activeVariant
       ? { ...existingVariantBpms, [activeVariant.id]: savedVariantBpm }
       : existingVariantBpms;
@@ -479,7 +449,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     let nextVariant = activeVariant;
     // Anti-boredom rotation: rotate to a fresh variant when clean/edge (>= 3);
     // keep the same variant when sloppy (<= 2) to repair motor control first.
-    if (hasMoreSets && vars.length > 1 && activeVariant && selectedCleanliness >= 3) {
+    if (hasMoreSets && vars.length > 1 && activeVariant && score >= 3) {
       const currIdx = vars.findIndex((v) => v.id === activeVariant.id);
       nextVariant = vars[(currIdx + 1) % vars.length];
     }
@@ -500,7 +470,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
         durationPreset: plan.preset,
         totalMinutes: 1,
         sets: nextLoggedSets,
-        averageCleanliness: selectedCleanliness,
+        averageCleanliness: score,
       },
     ];
 
@@ -513,7 +483,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     const prevBest =
       bpmOverrides[currentExercise.id]?.bestCleanBpm ?? currentExercise.bestCleanBpm;
     const newBest =
-      selectedCleanliness >= 4 && metronome.bpm > prevBest ? metronome.bpm : prevBest;
+      score >= 4 && metronome.bpm > prevBest ? metronome.bpm : prevBest;
 
     setBpmOverrides((prev) => ({
       ...prev,
@@ -535,10 +505,10 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
         const targetNextVarBpm =
           nextVarEntry && nextVarEntry.isPracticed
             ? calculateGoldilocksTargetBpm(nextVarEntry.bpm)
-            : automaticNextBpm;
+            : nextBpmForScore;
         metronome.setBpm(targetNextVarBpm);
       } else {
-        metronome.setBpm(automaticNextBpm);
+        metronome.setBpm(nextBpmForScore);
       }
       setRestRemainingSec(currentItem.restSec);
       setPhase('rest');
@@ -552,17 +522,59 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     }
   };
 
-  const handleFinishAndSaveWorkout = () => {
+  const toggleSaveSetRecording = (setId: string) => {
+    setSavedSetIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(setId)) next.delete(setId);
+      else next.add(setId);
+      return next;
+    });
+  };
+
+  const handleFinishAndSaveWorkout = async () => {
+    if (isSavingSummary) return;
+    setIsSavingSummary(true);
+
+    const recordingsToPersist: FeedRecording[] = [];
+    const finalSets: SetLog[] = [];
+
+    for (const entry of sessionSetEntries) {
+      let savedRecordingId: string | undefined;
+      if (entry.take && savedSetIds.has(entry.setLog.id)) {
+        savedRecordingId = `rec-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        await saveRecordingBlob(savedRecordingId, entry.take.blob);
+        recordingsToPersist.push({
+          id: savedRecordingId,
+          exerciseId: entry.setLog.exerciseId,
+          exerciseTitle: entry.exerciseTitle,
+          workoutTitle: plan.workout.title,
+          date: entry.setLog.timestamp,
+          bpm: entry.setLog.bpm,
+          baselineBpmAtTime: entry.baselineBpm,
+          cleanliness: entry.setLog.cleanliness,
+          mediaType: entry.take.mediaType,
+          durationSec: entry.take.durationSec,
+          note: `S${entry.setLog.setNumber} • ${entry.setLog.bpm} BPM (${CLEANLINESS_LABELS[entry.setLog.cleanliness].label})`,
+          isBenchmarkCheckpoint: entry.isBenchmark,
+        });
+      }
+      finalSets.push(
+        savedRecordingId
+          ? { ...entry.setLog, savedRecordingId }
+          : entry.setLog
+      );
+    }
+
     const elapsedMin = Math.max(
       1,
       Math.round((Date.now() - sessionStartRef.current) / 60000)
     );
     const avgClean =
-      loggedSets.length > 0
+      finalSets.length > 0
         ? Number(
             (
-              loggedSets.reduce((acc, s) => acc + s.cleanliness, 0) /
-              loggedSets.length
+              finalSets.reduce((acc, s) => acc + s.cleanliness, 0) /
+              finalSets.length
             ).toFixed(1)
           )
         : 4.0;
@@ -574,11 +586,12 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
       date: new Date().toISOString(),
       durationPreset: plan.preset,
       totalMinutes: elapsedMin,
-      sets: loggedSets,
+      sets: finalSets,
       averageCleanliness: avgClean,
     };
 
-    onCompleteSession(sessionLog, pendingRecordings, bpmOverrides);
+    shadowplay.releaseMicrophone();
+    onCompleteSession(sessionLog, recordingsToPersist, bpmOverrides);
   };
 
   const formatMMSS = (sec: number) => {
@@ -608,6 +621,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
               onClick={() => {
                 metronome.stop();
                 shadowplay.discardPreview();
+                shadowplay.releaseMicrophone();
                 onCancel();
               }}
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black border border-white/15 text-white hover:border-white/40 transition"
@@ -638,12 +652,31 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            {shadowplay.isRecording && (
+            {shadowplay.isRecording && !shadowplay.isFallbackStream ? (
               <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 px-2.5 py-0.5 text-[10px] font-bold text-white animate-pulse-fast">
                 <span className="h-1.5 w-1.5 rounded-full bg-[#FF6B00]" />
                 REC
               </span>
-            )}
+            ) : !shadowplay.hasMicPermission &&
+              (phase === 'demo' || phase === 'precount' || phase === 'playing') ? (
+              <button
+                type="button"
+                onClick={() => {
+                  shadowplay.primeMicrophone().then((granted) => {
+                    if (granted && phase === 'playing') {
+                      shadowplay.startCapture('audio').finally(() => {
+                        unlockSharedAudioContext().catch(() => {});
+                      });
+                    }
+                  });
+                }}
+                aria-label="Attiva microfono"
+                className="inline-flex items-center gap-1 rounded-full border border-[#FF6B00]/60 bg-[#FF6B00]/10 px-2.5 py-1 text-[10px] font-bold text-[#FF6B00] hover:bg-[#FF6B00]/20 transition"
+              >
+                <Mic className="h-3 w-3" />
+                Mic
+              </button>
+            ) : null}
             {(phase === 'precount' || phase === 'playing') && (
               <button
                 type="button"
@@ -702,36 +735,10 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
       <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
         {/* 1. AUTOMATIC BPM-SYNCED FRETBOARD DEMO (BEFORE PRE-TIMER & SET TIMER) */}
         {phase === 'demo' && (
-          <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col items-center justify-center gap-4 px-4 py-5">
-            <div className="text-center">
-              <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#FF6B00]">
-                Osserva &amp; Ascolta
-              </div>
-              <h3 className="mt-1 text-lg sm:text-xl font-black text-white">
-                {currentExercise.title}
-              </h3>
-              {currentExercise.variants && currentExercise.variants.length > 0 && (
-                <div className="mt-2.5 flex flex-wrap items-center justify-center gap-1.5">
-                  {currentExercise.variants.map((v) => {
-                    const isActive = v.id === activeVariant?.id;
-                    return (
-                      <button
-                        key={v.id}
-                        type="button"
-                        onClick={() => handleSelectVariantInPlayer(v.id)}
-                        className={`rounded-full border px-2.5 py-0.5 text-[11px] font-bold transition ${
-                          isActive
-                            ? 'border-white bg-white text-black'
-                            : 'border-white/15 bg-black text-white/60 hover:border-white/40 hover:text-white'
-                        }`}
-                      >
-                        {v.shortLabel}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+          <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col items-center justify-center gap-5 px-4 py-5">
+            <h3 className="text-center text-lg sm:text-xl font-black text-white">
+              {currentExercise.title}
+            </h3>
 
             <FretboardViewer
               notes={activeVariant?.fretboardNotes ?? currentExercise.fretboardNotes}
@@ -756,11 +763,14 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
               </button>
               <button
                 type="button"
-                onClick={startPreCountNow}
+                onClick={() => {
+                  shadowplay.primeMicrophone();
+                  startPreCountNow();
+                }}
                 className="inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-xs font-black text-black hover:bg-white/90 transition"
               >
                 <FastForward className="h-3.5 w-3.5" />
-                Salta Demo
+                Salta
               </button>
             </div>
           </div>
@@ -790,7 +800,10 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
 
             <button
               type="button"
-              onClick={skipPreCountNow}
+              onClick={() => {
+                shadowplay.primeMicrophone();
+                skipPreCountNow();
+              }}
               className="rounded-full border border-white/15 bg-black px-5 py-2 text-xs font-bold text-white/60 hover:text-white hover:border-white/40 transition"
             >
               Salta
@@ -1053,198 +1066,178 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
           </div>
         )}
 
-        {/* 5. FULL-SCREEN SUMMARY */}
+        {/* 5. FULL-SCREEN MINIMAL SUMMARY (WITH OPTIONAL END-OF-WORKOUT RECORDING SAVE) */}
         {phase === 'summary' && (
-          <div className="mx-auto flex min-h-full max-w-md flex-col items-center justify-center p-6 text-center">
-            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-white/20 text-white">
-              <CheckCircle2 className="h-7 w-7 text-[#FF6B00]" />
-            </div>
-            <h2 className="text-2xl font-black text-white">Completato!</h2>
-            <p className="mt-1 text-xs text-white/55">
-              Livello e media ponderata BPM aggiornati per la prossima sessione.
-            </p>
-
-            <div className="mt-5 grid w-full grid-cols-3 gap-2.5">
-              <div className="rounded-xl bg-black border border-white/15 p-3">
-                <div className="text-[10px] text-white/50">Serie</div>
-                <div className="mt-0.5 text-xl font-black text-white tabular-nums">
-                  {loggedSets.length}
-                </div>
-              </div>
-              <div className="rounded-xl bg-black border border-white/15 p-3">
-                <div className="text-[10px] text-white/50">Media</div>
-                <div className="mt-0.5 text-xl font-black text-white tabular-nums">
+          <div className="mx-auto flex min-h-full w-full max-w-lg flex-col justify-between gap-6 px-4 py-6">
+            <div className="space-y-4">
+              <div className="flex items-baseline justify-between border-b border-white/15 pb-3">
+                <h2 className="text-2xl font-black text-white">Completato</h2>
+                <div className="text-xs font-bold text-white/50 tabular-nums">
+                  {loggedSets.length} serie ·{' '}
                   {loggedSets.length > 0
                     ? (
                         loggedSets.reduce((a, b) => a + b.cleanliness, 0) /
                         loggedSets.length
                       ).toFixed(1)
-                    : '4.0'}
+                    : '—'}
                   /5
                 </div>
               </div>
-              <div className="rounded-xl bg-black border border-white/15 p-3">
-                <div className="text-[10px] text-white/50">Clip</div>
-                <div className="mt-0.5 text-xl font-black text-[#FF6B00] tabular-nums">
-                  {pendingRecordings.length}
-                </div>
-              </div>
-            </div>
 
-            <button
-              type="button"
-              onClick={handleFinishAndSaveWorkout}
-              className="mt-6 w-full rounded-xl bg-[#FF6B00] px-5 py-3 text-sm font-black text-black hover:bg-[#ff7d1f] transition"
-            >
-              Salva e Torna alla Home
-            </button>
-          </div>
-        )}
-      </div>
+              <div className="space-y-2">
+                {sessionSetEntries.map((entry) => {
+                  const isSaved = savedSetIds.has(entry.setLog.id);
+                  const isAudioOpen = expandedAudioSetId === entry.setLog.id;
 
-      {/* END-OF-SET RATING MODAL (Pitch-Black + White Border) */}
-      {phase === 'rating' && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/90 backdrop-blur-md p-2 sm:p-4 overscroll-none">
-          <div className="w-full max-w-lg max-h-[92vh] overflow-y-auto overscroll-contain rounded-2xl bg-black border border-white/20 p-4 sm:p-5 shadow-2xl space-y-3.5">
-            <div>
-              <span className="text-[11px] font-bold text-white/50">
-                Serie {setNumber} di {currentItem.sets} • {metronome.bpm} BPM
-              </span>
-              <h3 className="mt-0.5 text-base sm:text-lg font-bold text-white">
-                Com'è andata?
-              </h3>
-
-              <div className="mt-2.5 space-y-1.5">
-                {([5, 4, 3, 2, 1] as CleanlinessScore[]).map((score) => {
-                  const info = CLEANLINESS_LABELS[score];
-                  const isSelected = selectedCleanliness === score;
                   return (
-                    <button
-                      key={score}
-                      type="button"
-                      onClick={() => setSelectedCleanliness(score)}
-                      className={`flex w-full items-center justify-between rounded-xl border px-3.5 py-2 text-left transition ${
-                        isSelected
-                          ? 'bg-white text-black border-white'
-                          : 'bg-black text-white border-white/15 hover:border-white/35'
-                      }`}
+                    <div
+                      key={entry.setLog.id}
+                      className="rounded-xl border border-white/15 bg-black px-3.5 py-2.5 space-y-2"
                     >
-                      <span className="text-xs sm:text-sm font-bold">
-                        {score} • {RATING_TEXT[score]}
-                      </span>
-                      <span
-                        className={`text-[11px] font-bold ${
-                          isSelected ? 'text-black/75' : 'text-white/50'
-                        }`}
-                      >
-                        {info.label}
-                      </span>
-                    </button>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-xs sm:text-sm font-bold text-white">
+                            {entry.exerciseTitle}
+                          </div>
+                          <div className="text-[11px] font-bold text-white/45 tabular-nums">
+                            S{entry.setLog.setNumber} · {entry.setLog.bpm} BPM
+                          </div>
+                        </div>
+
+                        <div className="flex shrink-0 items-center gap-2">
+                          <span className="rounded-full border border-white/15 px-2 py-0.5 text-[11px] font-black text-white tabular-nums">
+                            {entry.setLog.cleanliness}/5
+                          </span>
+
+                          {entry.take && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setExpandedAudioSetId((curr) =>
+                                    curr === entry.setLog.id ? null : entry.setLog.id
+                                  )
+                                }
+                                aria-label="Ascolta registrazione"
+                                className={`flex h-7 w-7 items-center justify-center rounded-full border transition ${
+                                  isAudioOpen
+                                    ? 'border-white bg-white text-black'
+                                    : 'border-white/15 bg-black text-white/65 hover:border-white/40 hover:text-white'
+                                }`}
+                              >
+                                <Play className="h-3 w-3 fill-current ml-0.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => toggleSaveSetRecording(entry.setLog.id)}
+                                className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-black transition ${
+                                  isSaved
+                                    ? 'border-[#FF6B00] bg-[#FF6B00] text-black'
+                                    : 'border-white/15 bg-black text-white/60 hover:border-white/40 hover:text-white'
+                                }`}
+                              >
+                                <BookmarkCheck className="h-3 w-3" />
+                                {isSaved ? 'Salvata' : 'Salva'}
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      {entry.take && isAudioOpen && (
+                        <audio
+                          src={entry.take.url}
+                          controls
+                          className="w-full h-8"
+                        />
+                      )}
+                    </div>
                   );
                 })}
               </div>
             </div>
 
-            {/* Plek Verdict + Automatic Next BPM */}
-            <div className="rounded-xl border border-white/15 bg-black p-3">
-              <div className="text-xs font-black text-[#FF6B00] tabular-nums">
-                {activeVariant
-                  ? `Variante ${activeVariant.shortLabel}: prossimo target ${automaticNextBpm} BPM`
-                  : `Prossimo target: ${automaticNextBpm} BPM`}
-              </div>
-              <p className="mt-1 text-xs text-white/80 leading-relaxed">
-                “{overloadFeedback.plekQuip}”
-              </p>
+            <button
+              type="button"
+              disabled={isSavingSummary}
+              onClick={handleFinishAndSaveWorkout}
+              className="w-full rounded-xl bg-[#FF6B00] px-5 py-3.5 text-sm font-black text-black hover:bg-[#ff7d1f] disabled:opacity-50 transition"
+            >
+              {savedSetIds.size > 0
+                ? `Fine (${savedSetIds.size} clip)`
+                : 'Fine'}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* 1-CLICK END-OF-SET RATING MODAL */}
+      {phase === 'rating' && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/90 backdrop-blur-md p-2 sm:p-4 overscroll-none">
+          <div className="w-full max-w-lg rounded-2xl bg-black border border-white/20 p-4 sm:p-5 shadow-2xl space-y-3">
+            <div className="flex items-baseline justify-between gap-2">
+              <h3 className="text-base sm:text-lg font-black text-white">
+                Com'è andata?
+              </h3>
+              <span className="text-[11px] font-bold text-white/45 tabular-nums">
+                S{setNumber}/{currentItem.sets} · {metronome.bpm} BPM
+              </span>
             </div>
 
-            {/* Audio Replay & Save/Discard */}
-            {capturedTake && (
-              <div className="rounded-xl border border-white/15 bg-black p-3 space-y-2.5">
-                <div className="flex items-center justify-between gap-2 text-xs font-bold text-white">
-                  <span>Riascolta ({capturedTake.durationSec}s)</span>
-                  <span className="text-[10px] font-semibold text-white/50">
-                    {capturedTake.isFallback
-                      ? 'Simulazione (Mic non attivo)'
-                      : 'Audio Mic WAV'}
-                  </span>
-                </div>
+            <div className="space-y-1.5">
+              {([5, 4, 3, 2, 1] as CleanlinessScore[]).map((score) => {
+                const { delta } = calculateGoldilocksNextBpm(
+                  metronome.bpm,
+                  currentComfortBpm,
+                  score,
+                  setNumber
+                );
+                const deltaText =
+                  delta > 0
+                    ? `+${delta} BPM`
+                    : delta < 0
+                    ? `${delta} BPM`
+                    : '= BPM';
+                const deltaColor =
+                  delta > 0
+                    ? 'text-[#A4FF00]'
+                    : delta < 0
+                    ? 'text-[#FF6B00]'
+                    : 'text-white/45';
 
-                <audio src={capturedTake.url} controls className="w-full h-9" />
-
-                <div className="grid grid-cols-2 gap-2">
+                return (
                   <button
+                    key={score}
                     type="button"
-                    onClick={() => setSaveChoice('save')}
-                    className={`flex items-center justify-center gap-1.5 rounded-lg border py-2 text-xs font-bold transition ${
-                      saveChoice === 'save'
-                        ? 'bg-white text-black border-white'
-                        : 'bg-black text-white border-white/15 hover:border-white/40'
-                    }`}
+                    onClick={() => handleRateSet(score)}
+                    className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/15 bg-black px-3.5 py-3 text-left hover:border-white/50 hover:bg-white/5 active:scale-[0.99] transition"
                   >
-                    <BookmarkCheck className="h-3.5 w-3.5" />
-                    Salva nel Diario
+                    <span className="text-xs sm:text-sm font-bold text-white">
+                      {score}. {RATING_TEXT[score]}
+                    </span>
+                    <span
+                      className={`shrink-0 text-xs font-black tabular-nums ${deltaColor}`}
+                    >
+                      {deltaText}
+                    </span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setSaveChoice('discard')}
-                    className={`flex items-center justify-center gap-1.5 rounded-lg border py-2 text-xs font-bold transition ${
-                      saveChoice === 'discard'
-                        ? 'bg-white/15 text-white border-white/30'
-                        : 'bg-black text-white/50 border-white/15 hover:text-white'
-                    }`}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Scarta
-                  </button>
-                </div>
-
-                {saveChoice === 'save' && (
-                  <div className="space-y-1.5 pt-1">
-                    <label className="flex items-center gap-2 text-xs text-white cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={markAsBenchmark}
-                        onChange={(e) => setMarkAsBenchmark(e.target.checked)}
-                        className="rounded text-[#FF6B00]"
-                      />
-                      Confronto Prima vs Dopo
-                    </label>
-                    <input
-                      type="text"
-                      value={setNote}
-                      onChange={(e) => setSetNote(e.target.value)}
-                      placeholder="Nota veloce (opzionale)..."
-                      className="w-full rounded-lg bg-black border border-white/15 px-2.5 py-1.5 text-xs text-white placeholder-white/35 outline-none focus:border-white/40"
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  shadowplay.discardPreview();
-                  setCapturedTake(null);
-                  setSetRemainingSec(currentItem.durationSec);
-                  setPrecountBeat(4);
-                  setPhase('precount');
-                }}
-                className="flex items-center justify-center gap-1.5 rounded-xl bg-black border border-white/15 px-3.5 py-2.5 text-xs font-bold text-white hover:border-white/40 transition"
-              >
-                <RotateCcw className="h-3.5 w-3.5" /> Ripeti
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmSetRating}
-                className="flex-1 rounded-xl bg-[#FF6B00] px-4 py-2.5 text-xs sm:text-sm font-black text-black hover:bg-[#ff7d1f] transition"
-              >
-                {setNumber < currentItem.sets || exerciseIdx < plan.items.length - 1
-                  ? 'Avanti → Prossima Serie'
-                  : 'Concludi Allenamento'}
-              </button>
+                );
+              })}
             </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                shadowplay.discardPreview();
+                setCapturedTake(null);
+                setSetRemainingSec(currentItem.durationSec);
+                setPrecountBeat(4);
+                setPhase('precount');
+              }}
+              className="flex w-full items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-bold text-white/45 hover:text-white transition"
+            >
+              <RotateCcw className="h-3 w-3" /> Ripeti serie
+            </button>
           </div>
         </div>
       )}

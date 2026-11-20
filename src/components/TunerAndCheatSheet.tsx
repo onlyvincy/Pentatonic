@@ -4,6 +4,7 @@ import { DemoStep, FretNote } from '../types/practice';
 import {
   getSharedAudioContext,
   playGuitarFrequency,
+  setIosMicSessionActive,
   unlockSharedAudioContext,
 } from '../utils/guitarSynth';
 import { FretboardViewer } from './FretboardViewer';
@@ -408,6 +409,7 @@ export const TunerAndCheatSheet: React.FC = () => {
   const rafRef = useRef<number | null>(null);
   const smoothCentsRef = useRef<number>(0);
   const mountedRef = useRef(true);
+  const startingRef = useRef(false);
 
   const activeTuning = useMemo(
     () => TUNING_PRESETS.find((t) => t.id === tuningId) ?? TUNING_PRESETS[0],
@@ -430,6 +432,8 @@ export const TunerAndCheatSheet: React.FC = () => {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     }
+    startingRef.current = false;
+    setIosMicSessionActive(false);
     setIsListening(false);
   }, []);
 
@@ -465,15 +469,19 @@ export const TunerAndCheatSheet: React.FC = () => {
   }, []);
 
   const startTuner = useCallback(async () => {
-    if (streamRef.current) return;
-    setMicBlocked(false);
-
-    await unlockSharedAudioContext();
-    const ctx = getSharedAudioContext();
-    if (!ctx || !navigator.mediaDevices?.getUserMedia) {
+    if (streamRef.current || startingRef.current) return;
+    if (!navigator.mediaDevices?.getUserMedia) {
       if (mountedRef.current) setMicBlocked(true);
       return;
     }
+
+    startingRef.current = true;
+    setMicBlocked(false);
+    // CRITICAL for iOS Safari:
+    // 1) Switch audioSession to 'play-and-record' synchronously before getUserMedia.
+    // 2) Call getUserMedia synchronously BEFORE any `await` so iOS preserves the
+    //    user-gesture token and displays the native microphone permission prompt.
+    setIosMicSessionActive(true);
 
     try {
       let stream: MediaStream;
@@ -491,6 +499,16 @@ export const TunerAndCheatSheet: React.FC = () => {
 
       if (!mountedRef.current) {
         stream.getTracks().forEach((t) => t.stop());
+        setIosMicSessionActive(false);
+        return;
+      }
+
+      await unlockSharedAudioContext();
+      const ctx = getSharedAudioContext();
+      if (!ctx) {
+        stream.getTracks().forEach((t) => t.stop());
+        setIosMicSessionActive(false);
+        if (mountedRef.current) setMicBlocked(true);
         return;
       }
 
@@ -505,7 +523,10 @@ export const TunerAndCheatSheet: React.FC = () => {
       setIsListening(true);
       rafRef.current = window.requestAnimationFrame(analyzePitchFrame);
     } catch {
+      setIosMicSessionActive(false);
       if (mountedRef.current) setMicBlocked(true);
+    } finally {
+      startingRef.current = false;
     }
   }, [analyzePitchFrame]);
 
@@ -594,7 +615,13 @@ export const TunerAndCheatSheet: React.FC = () => {
             </button>
           </div>
 
-          <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-white/50">
+          <button
+            type="button"
+            onClick={() => {
+              if (!isListening) startTuner();
+            }}
+            className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-white/50 hover:text-white transition"
+          >
             <span
               className={`h-2 w-2 rounded-full ${
                 isListening
@@ -605,7 +632,7 @@ export const TunerAndCheatSheet: React.FC = () => {
               }`}
             />
             {isListening ? 'LIVE' : 'MIC'}
-          </div>
+          </button>
         </div>
 
         {/* Collapsible Tuning Picker (Hidden until active tuning pill is clicked) */}
@@ -714,14 +741,14 @@ export const TunerAndCheatSheet: React.FC = () => {
                 </span>
                 <span className="text-white/45">{detected.freq} Hz</span>
               </>
-            ) : micBlocked ? (
+            ) : !isListening ? (
               <button
                 type="button"
                 onClick={() => startTuner()}
-                className="inline-flex items-center gap-1.5 rounded-full border border-[#FF6B00]/60 px-3 py-1 text-[11px] font-bold text-[#FF6B00]"
+                className="inline-flex items-center gap-1.5 rounded-full border border-[#FF6B00]/60 bg-[#FF6B00]/10 px-3.5 py-1.5 text-[11px] font-black text-[#FF6B00] hover:bg-[#FF6B00]/20 transition"
               >
-                <Mic className="h-3 w-3" />
-                Consenti Mic
+                <Mic className="h-3.5 w-3.5" />
+                {micBlocked ? 'Consenti Microfono' : 'Attiva Microfono'}
               </button>
             ) : (
               <span className="text-white/30">440 Hz</span>

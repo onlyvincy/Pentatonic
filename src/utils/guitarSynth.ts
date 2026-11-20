@@ -61,22 +61,37 @@ let unlockListenersAttached = false;
 let samplePreloadPromise: Promise<void> | null = null;
 let iosKeepAliveAudio: HTMLAudioElement | null = null;
 let iosKeepAliveUrl: string | null = null;
+let iosMicSessionActive = false;
 
 /**
- * Forces iOS Safari / standalone PWAs into the 'playback' audio session category
- * so metronome clicks, guitar demos, and tuner reference tones play audibly
- * even when the iPhone hardware Ring/Silent switch is muted.
+ * Forces iOS Safari / standalone PWAs into the right audio session category:
+ * - 'play-and-record' while microphone capture/tuner is active (so CoreAudio
+ *   allows BOTH mic input and speaker playback, ignoring the silent switch).
+ * - 'playback' when only playing metronome/guitar demos.
  */
 function configureIosPlaybackSession(): void {
   if (typeof navigator === 'undefined') return;
   const nav = navigator as Navigator & {
     audioSession?: { type: string };
   };
-  if (nav.audioSession && nav.audioSession.type !== 'playback') {
+  const desiredType = iosMicSessionActive ? 'play-and-record' : 'playback';
+  if (nav.audioSession && nav.audioSession.type !== desiredType) {
     try {
-      nav.audioSession.type = 'playback';
+      nav.audioSession.type = desiredType;
     } catch {
       // Unsupported browser or read-only audioSession
+    }
+  }
+}
+
+export function setIosMicSessionActive(active: boolean): void {
+  iosMicSessionActive = active;
+  configureIosPlaybackSession();
+  if (active && iosKeepAliveAudio && !iosKeepAliveAudio.paused) {
+    try {
+      iosKeepAliveAudio.pause();
+    } catch {
+      // Ignore
     }
   }
 }
@@ -118,6 +133,7 @@ function createSilentWavUrl(): string {
 function ensureIosSilentAudioChannel(): void {
   if (typeof window === 'undefined' || typeof Audio === 'undefined') return;
   configureIosPlaybackSession();
+  if (iosMicSessionActive) return;
 
   try {
     if (!iosKeepAliveAudio) {

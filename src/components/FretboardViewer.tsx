@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { DemoStep, FretNote, MetronomeSoundId } from '../types/practice';
 import { Play, Square } from 'lucide-react';
 import {
-  STRING_LABEL_MAP,
   STRING_SHORT_MAP,
   getSharedAudioContext,
   playGuitarFrequency,
@@ -56,24 +55,6 @@ const DEFAULT_STRING_NAMES = ['e', 'B', 'G', 'D', 'A', 'E'] as const;
 const INLAY_FRETS = [3, 5, 7, 9, 12, 15];
 const BAR_8_LABELS = ['1', '&', '2', '&', '3', '&', '4', '&'] as const;
 
-function formatStepMinimal(step: DemoStep): string {
-  if (step.muted || step.notes.length === 0) {
-    return step.technique || 'Stoppata';
-  }
-  if (step.sustain) {
-    return step.technique
-      ? `${step.technique} (Lascia suonare)`
-      : 'Tenuta (Lascia suonare)';
-  }
-  if (step.notes.length > 1) {
-    return step.technique || 'Accordo';
-  }
-  const n = step.notes[0];
-  const finger = n.finger ? ` • Dito ${n.finger}` : '';
-  const tech = step.technique ? ` • ${step.technique}` : '';
-  return `Corda ${STRING_LABEL_MAP[n.string]} • Tasto ${n.fret}${finger}${tech}`;
-}
-
 export const FretboardViewer: React.FC<FretboardViewerProps> = ({
   notes,
   demoSequence,
@@ -82,8 +63,6 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
   variant = 'compact',
   demoMode = 'manual',
   externalStepTick,
-  currentBeat,
-  subdivisionLabel,
   metronomeSound = 'woodblock',
   stringLabels = DEFAULT_STRING_NAMES,
   customStringFreqs,
@@ -98,7 +77,6 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
   const [labelMode, setLabelMode] = useState<LabelMode>('fingers');
   const [isPlayingDemo, setIsPlayingDemo] = useState(false);
   const [activeStepIndex, setActiveStepIndex] = useState<number | null>(null);
-  const [introPass, setIntroPass] = useState<1 | 2>(1);
   const [clickedNoteKey, setClickedNoteKey] = useState<string | null>(null);
 
   const rafRef = useRef<number | null>(null);
@@ -130,7 +108,6 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
     clearTimers();
     setIsPlayingDemo(false);
     setActiveStepIndex(null);
-    setIntroPass(1);
   }, [clearTimers]);
 
   const playNoteForTuning = useCallback(
@@ -191,7 +168,6 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
         const startAnchor = getNowSec();
         let lastTriggeredTotalIdx = 0;
 
-        setIntroPass(1);
         setActiveStepIndex(0);
         triggerStepAudio(0, true);
 
@@ -204,7 +180,6 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
             endTimeoutRef.current = window.setTimeout(() => {
               setIsPlayingDemo(false);
               setActiveStepIndex(null);
-              setIntroPass(1);
               onDemoCompleteRef.current?.();
             }, Math.round(stepSec * 400));
             return;
@@ -212,9 +187,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
 
           if (totalIdx !== lastTriggeredTotalIdx) {
             lastTriggeredTotalIdx = totalIdx;
-            const pass: 1 | 2 = totalIdx >= totalStepsPerPass ? 2 : 1;
             const stepIdx = totalIdx % totalStepsPerPass;
-            setIntroPass(pass);
             setActiveStepIndex(stepIdx);
             triggerStepAudio(stepIdx, true);
           }
@@ -730,7 +703,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
 
         {rhythmGridBar && <div className="mx-auto max-w-md">{rhythmGridBar}</div>}
 
-        <div className="mx-auto max-w-md space-y-2 text-center">
+        <div className="mx-auto max-w-md space-y-3 text-center">
           <div className="flex items-center justify-center gap-2.5">
             {[0, 1, 2, 3].map((b) => {
               const lit = stageBeatIdx === b;
@@ -747,27 +720,6 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                 />
               );
             })}
-          </div>
-
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-black px-3 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-white/70 tabular-nums">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#FF6B00] animate-pulse-fast" />
-            {demoMode === 'slow-intro'
-              ? `DEMO 4/4 • ${slowBpm} BPM (1/8) • GIRO ${introPass}/2`
-              : `SYNC 4/4 • ${bpm} BPM`}
-          </div>
-
-          <div className="min-h-[22px] text-xs sm:text-sm font-bold tracking-wide text-white tabular-nums">
-            {activeStep && effectiveActiveStepIndex !== null ? (
-              <span>
-                <span className="text-[#FF6B00] mr-1.5">
-                  {BAR_8_LABELS[effectiveActiveStepIndex % 8] ??
-                    effectiveActiveStepIndex + 1}
-                </span>
-                {formatStepMinimal(activeStep)}
-              </span>
-            ) : (
-              <span className="text-white/40">Pronto...</span>
-            )}
           </div>
 
           <div className="h-1 w-full overflow-hidden rounded-full bg-white/10">
@@ -810,33 +762,23 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
             </button>
           )}
 
-          {demoMode === 'live-loop' && !forceStopDemo && (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-black px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white/75 tabular-nums">
-              <span
-                className={`h-1.5 w-1.5 rounded-full ${
-                  currentBeat === 1 ? 'bg-[#FF6B00]' : 'bg-white/60'
-                }`}
-              />
-              4/4 • {bpm} BPM
-              {subdivisionLabel ? ` • ${subdivisionLabel}` : ''}
-            </span>
-          )}
-
-          {activeStep && effectiveActiveStepIndex !== null && (
-            <span className="text-[11px] font-bold text-white/85 tabular-nums">
-              <span className="text-[#FF6B00] mr-1">
-                {BAR_8_LABELS[effectiveActiveStepIndex % 8] ??
-                  effectiveActiveStepIndex + 1}
+          {demoMode !== 'live-loop' &&
+            activeStep &&
+            effectiveActiveStepIndex !== null && (
+              <span className="text-[11px] font-bold text-white/85 tabular-nums">
+                <span className="text-[#FF6B00] mr-1">
+                  {BAR_8_LABELS[effectiveActiveStepIndex % 8] ??
+                    effectiveActiveStepIndex + 1}
+                </span>
+                {activeStep.sustain
+                  ? 'Tenuta'
+                  : activeStep.muted || activeStep.notes.length === 0
+                  ? '×'
+                  : activeStep.notes
+                      .map((n) => `${STRING_SHORT_MAP[n.string]}${n.fret}`)
+                      .join(' ')}
               </span>
-              {activeStep.sustain
-                ? 'Tenuta'
-                : activeStep.muted || activeStep.notes.length === 0
-                ? '×'
-                : activeStep.notes
-                    .map((n) => `${STRING_SHORT_MAP[n.string]}${n.fret}`)
-                    .join(' ')}
-            </span>
-          )}
+            )}
         </div>
 
         <div className="flex rounded-full bg-black border border-white/15 p-0.5">

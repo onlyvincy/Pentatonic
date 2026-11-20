@@ -3,6 +3,7 @@ import { ShadowplayMode } from '../types/practice';
 import {
   fillKarplusStrongPluck,
   getSharedAudioContext,
+  setIosMicSessionActive,
   unlockSharedAudioContext,
 } from '../utils/guitarSynth';
 
@@ -88,6 +89,7 @@ function generateGuitarFallbackWavBlob(durationSec: number, bpm = 100): Blob {
 export function useShadowplayRecorder() {
   const [isRecording, setIsRecording] = useState(false);
   const [isFallbackStream, setIsFallbackStream] = useState(false);
+  const [hasMicPermission, setHasMicPermission] = useState(false);
   const [liveStream, setLiveStream] = useState<MediaStream | null>(null);
   const [lastCapturedTake, setLastCapturedTake] = useState<CapturedTake | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -101,11 +103,16 @@ export function useShadowplayRecorder() {
   const zeroGainNodeRef = useRef<GainNode | null>(null);
 
   const streamRef = useRef<MediaStream | null>(null);
+  const primedStreamRef = useRef<MediaStream | null>(null);
+  const primingPromiseRef = useRef<Promise<boolean> | null>(null);
   const startTimeRef = useRef<number>(0);
   const activeModeRef = useRef<ShadowplayMode>('off');
   const fallbackModeRef = useRef<boolean>(false);
 
-  const cleanupPipeline = useCallback(() => {
+  const hasLiveAudioTrack = (s: MediaStream | null): boolean =>
+    Boolean(s && s.getAudioTracks().some((t) => t.readyState === 'live'));
+
+  const cleanupPipeline = useCallback((releaseMic = false) => {
     try {
       processorNodeRef.current?.disconnect();
     } catch {
@@ -125,12 +132,75 @@ export function useShadowplayRecorder() {
     sourceNodeRef.current = null;
     zeroGainNodeRef.current = null;
 
-    if (streamRef.current) {
+    if (streamRef.current && streamRef.current !== primedStreamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
+    }
+    streamRef.current = null;
+
+    if (releaseMic) {
+      if (primedStreamRef.current) {
+        primedStreamRef.current.getTracks().forEach((track) => track.stop());
+        primedStreamRef.current = null;
+      }
+      setHasMicPermission(false);
+      setIosMicSessionActive(false);
     }
     setLiveStream(null);
   }, []);
+
+  /**
+   * Call synchronously inside a user tap/click handler on iOS Safari so the
+   * browser displays the native microphone permission dialog and keeps a live
+   * audio stream ready for subsequent timer-triggered sets.
+   */
+  const primeMicrophone = useCallback((): Promise<boolean> => {
+    if (hasLiveAudioTrack(primedStreamRef.current)) {
+      setHasMicPermission(true);
+      setIosMicSessionActive(true);
+      return Promise.resolve(true);
+    }
+    if (primingPromiseRef.current) {
+      return primingPromiseRef.current;
+    }
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setHasMicPermission(false);
+      return Promise.resolve(false);
+    }
+
+    setIosMicSessionActive(true);
+
+    const rawAudioConstraints: MediaTrackConstraints = {
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false,
+    };
+
+    const req = navigator.mediaDevices
+      .getUserMedia({ audio: rawAudioConstraints })
+      .catch(() => navigator.mediaDevices.getUserMedia({ audio: true }))
+      .then((stream) => {
+        primedStreamRef.current = stream;
+        setHasMicPermission(true);
+        setIsFallbackStream(false);
+        setStatusMessage(null);
+        return true;
+      })
+      .catch(() => {
+        setHasMicPermission(false);
+        setIosMicSessionActive(false);
+        return false;
+      })
+      .finally(() => {
+        primingPromiseRef.current = null;
+      });
+
+    primingPromiseRef.current = req;
+    return req;
+  }, []);
+
+  const releaseMicrophone = useCallback(() => {
+    cleanupPipeline(true);
+  }, [cleanupPipeline]);
 
   const discardPreview = useCallback(() => {
     setLastCapturedTake((prev) => {
@@ -144,7 +214,7 @@ export function useShadowplayRecorder() {
   const startCapture = useCallback(
     async (mode: ShadowplayMode) => {
       discardPreview();
-      cleanupPipeline();
+      cleanupPipeline(false);
       activeModeRef.current = mode;
 
       if (mode === 'off') {
@@ -154,6 +224,7 @@ export function useShadowplayRecorder() {
         return;
       }
 
+      setIosMicSessionActive(true);
       startTimeRef.current = performance.now();
       mediaChunksRef.current = [];
       pcmChunksRef.current = [];
@@ -170,7 +241,9 @@ export function useShadowplayRecorder() {
       };
 
       try {
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        if (mode === 'audio' && hasLiveAudioTrack(primedStreamRef.current)) {
+          stream = primedStreamRef.current;
+        } else if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
           try {
             stream = await navigator.mediaDevices.getUserMedia(
               mode === 'video'
@@ -190,13 +263,18 @@ export function useShadowplayRecorder() {
               mode === 'video' ? { audio: true, video: true } : { audio: true }
             );
           }
+          if (mode === 'audio' && stream) {
+            primedStreamRef.current = stream;
+            setHasMicPermission(true);
+          }
         } else {
           throw new Error('MediaDevices unavailable');
         }
       } catch {
         usingFallback = true;
+        setHasMicPermission(false);
         setStatusMessage(
-          'Microfono non disponibile o bloccato: usa i permessi browser per registrare la chitarra.'
+          'Microfono non disponibile o bloccato: tocca MIC per consentire l’accesso.'
         );
         stream = null;
       }
@@ -363,16 +441,19 @@ export function useShadowplayRecorder() {
 
   useEffect(() => {
     return () => {
-      cleanupPipeline();
+      cleanupPipeline(true);
     };
   }, [cleanupPipeline]);
 
   return {
     isRecording,
     isFallbackStream,
+    hasMicPermission,
     liveStream,
     lastCapturedTake,
     statusMessage,
+    primeMicrophone,
+    releaseMicrophone,
     startCapture,
     stopCapture,
     discardPreview,
