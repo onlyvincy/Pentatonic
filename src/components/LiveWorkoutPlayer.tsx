@@ -30,7 +30,6 @@ import {
   calculateGoldilocksNextBpm,
   calculateGoldilocksTargetBpm,
   calculateWarmupBpm,
-  computeExerciseBpmRamp,
   computeExerciseScore,
   computeWeightedExerciseBpm,
   pickNextRecommendedVariant,
@@ -174,13 +173,6 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     );
   }, [currentItem, currentExercise, activeVariant, resolveVariantBpm, bpmOverrides]);
 
-  const currentRamp = useMemo(() => {
-    if (!currentItem || !currentExercise) {
-      return { minBpm: 68, maxBpm: 88, setBpms: [68] };
-    }
-    return computeExerciseBpmRamp(currentExercise, currentItem.sets, currentComfortBpm);
-  }, [currentItem, currentExercise, currentComfortBpm]);
-
   const initialFirstBpm = useMemo(() => {
     const first = plan.items[0];
     if (!first) return 68;
@@ -288,7 +280,6 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
 
   const startPlayingNow = useCallback(() => {
     unlockSharedAudioContext().catch(() => {});
-    metronome.playPreCountBeep(true);
     setPhase('playing');
     setIsSetPaused(false);
     metronome.start();
@@ -779,19 +770,8 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
         {/* 2. FULL-SCREEN PRE-TIMER WITH METRONOME (4-3-2-1) */}
         {phase === 'precount' && (
           <div className="flex min-h-full flex-col items-center justify-center p-6 text-center">
-            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-white/50 tabular-nums">
-              <span>
-                {metronome.bpm} BPM • S{setNumber}/{currentItem.sets}
-              </span>
-              <span
-                className={`rounded-full border px-2 py-0.5 text-[9px] font-black tracking-wider ${
-                  setNumber === 1
-                    ? 'border-white/25 text-white/75'
-                    : 'border-[#FF6B00]/50 bg-[#FF6B00]/10 text-[#FF6B00]'
-                }`}
-              >
-                {setNumber === 1 ? 'RISCALDAMENTO' : 'GOLDILOCKS'}
-              </span>
+            <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/50 tabular-nums">
+              {metronome.bpm} BPM • S{setNumber}/{currentItem.sets}
             </div>
 
             <div className="my-8 flex h-44 w-44 items-center justify-center rounded-full border-2 border-[#FF6B00] bg-black text-7xl font-black text-white tabular-nums shadow-[0_0_50px_rgba(255,107,0,0.2)]">
@@ -939,48 +919,8 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
                 <div className="text-6xl sm:text-7xl font-black tracking-tight text-white tabular-nums">
                   {formatMMSS(setRemainingSec)}
                 </div>
-                <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
-                  <span className="text-lg font-black text-[#FF6B00] tabular-nums">
-                    {metronome.bpm} BPM
-                  </span>
-                  <span
-                    className={`rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${
-                      setNumber === 1
-                        ? 'border-white/25 bg-white/5 text-white/80'
-                        : 'border-[#FF6B00]/50 bg-[#FF6B00]/10 text-[#FF6B00]'
-                    }`}
-                  >
-                    {setNumber === 1 ? 'Riscaldamento' : 'Goldilocks'}
-                  </span>
-                  {activeVariant && (
-                    <>
-                      <span className="text-white/25">•</span>
-                      <span className="rounded-full border border-white/20 px-2.5 py-0.5 text-[11px] font-bold text-white">
-                        {activeVariant.shortLabel}
-                      </span>
-                    </>
-                  )}
-                  <span className="text-white/25">•</span>
-                  <div className="flex items-center gap-1">
-                    {currentRamp.setBpms.map((stepBpm, idx) => {
-                      const isCurrent = idx + 1 === setNumber;
-                      const isDone = idx + 1 < setNumber;
-                      return (
-                        <span
-                          key={idx}
-                          className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold tabular-nums ${
-                            isCurrent
-                              ? 'bg-white text-black'
-                              : isDone
-                              ? 'text-white/40 line-through'
-                              : 'text-white/45'
-                          }`}
-                        >
-                          {stepBpm}
-                        </span>
-                      );
-                    })}
-                  </div>
+                <div className="mt-2 text-lg font-black text-[#FF6B00] tabular-nums">
+                  {metronome.bpm} BPM
                 </div>
               </div>
 

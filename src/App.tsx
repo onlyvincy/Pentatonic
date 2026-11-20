@@ -4,6 +4,8 @@ import {
   Compass,
   Flame,
   Radio,
+  RefreshCw,
+  X,
 } from 'lucide-react';
 import {
   AppState,
@@ -41,6 +43,7 @@ import { TunerAndCheatSheet } from './components/TunerAndCheatSheet';
 import { AnalyticsView } from './components/AnalyticsView';
 import { LiveWorkoutPlayer } from './components/LiveWorkoutPlayer';
 import { OnboardingFlow } from './components/OnboardingFlow';
+import { useAppUpdate } from './hooks/useAppUpdate';
 
 export type NavTab = 'today' | 'programs' | 'analytics' | 'tuner';
 
@@ -90,6 +93,7 @@ export function App() {
     useState<ScaledWorkoutPlan | null>(null);
   const [showDiagnosticQuiz, setShowDiagnosticQuiz] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const appUpdate = useAppUpdate();
 
   useEffect(() => {
     if (appState.feedRecordings.some((r) => r.isSyntheticDemo)) {
@@ -443,6 +447,39 @@ export function App() {
       {toastMessage && (
         <div className="fixed top-16 right-4 z-40 rounded-full bg-black border border-white/30 px-4 py-2 text-xs font-bold text-white shadow-2xl">
           {toastMessage}
+        </div>
+      )}
+
+      {/* PWA New Deploy Update Popup */}
+      {appUpdate.updateAvailable && !activeLivePlan && (
+        <div className="fixed bottom-20 sm:bottom-6 inset-x-4 sm:left-auto sm:right-6 z-40 mx-auto sm:mx-0 max-w-sm rounded-2xl border border-white/25 bg-black/95 backdrop-blur-xl px-4 py-3 shadow-2xl flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="h-2 w-2 shrink-0 rounded-full bg-[#FF6B00] animate-pulse-fast" />
+            <span className="truncate text-xs font-bold text-white">
+              Nuova versione disponibile
+            </span>
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <button
+              type="button"
+              disabled={appUpdate.isUpdating}
+              onClick={appUpdate.applyUpdate}
+              className="inline-flex items-center gap-1.5 rounded-full bg-[#FF6B00] px-3 py-1.5 text-[11px] font-black text-black hover:bg-[#ff7d1f] disabled:opacity-60 transition"
+            >
+              <RefreshCw
+                className={`h-3 w-3 ${appUpdate.isUpdating ? 'animate-spin' : ''}`}
+              />
+              {appUpdate.isUpdating ? 'Aggiorno...' : 'Aggiorna app'}
+            </button>
+            <button
+              type="button"
+              onClick={appUpdate.dismissUpdate}
+              aria-label="Chiudi avviso aggiornamento"
+              className="flex h-7 w-7 items-center justify-center rounded-full border border-white/15 text-white/50 hover:text-white transition"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
       )}
 

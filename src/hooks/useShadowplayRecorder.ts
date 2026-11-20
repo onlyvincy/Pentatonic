@@ -289,40 +289,9 @@ export function useShadowplayRecorder() {
         setLiveStream(null);
       }
 
-      // Preferred uncompressed 16-bit PCM WAV capture for guitar audio
-      if (stream && mode === 'audio') {
-        try {
-          await unlockSharedAudioContext();
-          const ctx = getSharedAudioContext();
-          if (ctx) {
-            pcmSampleRateRef.current = ctx.sampleRate;
-            const source = ctx.createMediaStreamSource(stream);
-            const processor = ctx.createScriptProcessor(4096, 1, 1);
-            const zeroGain = ctx.createGain();
-            zeroGain.gain.value = 0;
-
-            processor.onaudioprocess = (ev) => {
-              const input = ev.inputBuffer.getChannelData(0);
-              pcmChunksRef.current.push(new Float32Array(input));
-            };
-
-            source.connect(processor);
-            processor.connect(zeroGain);
-            zeroGain.connect(ctx.destination);
-
-            sourceNodeRef.current = source;
-            processorNodeRef.current = processor;
-            zeroGainNodeRef.current = zeroGain;
-            mediaRecorderRef.current = null;
-            setIsRecording(true);
-            setStatusMessage('Registrazione WAV PCM raw attiva');
-            return;
-          }
-        } catch {
-          // Fall through to MediaRecorder if Web Audio capture fails
-        }
-      }
-
+      // Prefer hardware/off-main-thread MediaRecorder first so microphone capture
+      // NEVER attaches a ScriptProcessorNode(4096) to the shared metronome AudioContext
+      // (which previously caused ~93ms+ buffer latency and audio/visual desync on mobile).
       if (stream && typeof MediaRecorder !== 'undefined') {
         try {
           const preferredMime =
@@ -360,6 +329,40 @@ export function useShadowplayRecorder() {
             );
           }
           return;
+        } catch {
+          // Fall through to Web Audio PCM fallback only if MediaRecorder fails
+        }
+      }
+
+      // Legacy fallback only when MediaRecorder is unavailable
+      if (stream && mode === 'audio') {
+        try {
+          await unlockSharedAudioContext();
+          const ctx = getSharedAudioContext();
+          if (ctx) {
+            pcmSampleRateRef.current = ctx.sampleRate;
+            const source = ctx.createMediaStreamSource(stream);
+            const processor = ctx.createScriptProcessor(2048, 1, 1);
+            const zeroGain = ctx.createGain();
+            zeroGain.gain.value = 0;
+
+            processor.onaudioprocess = (ev) => {
+              const input = ev.inputBuffer.getChannelData(0);
+              pcmChunksRef.current.push(new Float32Array(input));
+            };
+
+            source.connect(processor);
+            processor.connect(zeroGain);
+            zeroGain.connect(ctx.destination);
+
+            sourceNodeRef.current = source;
+            processorNodeRef.current = processor;
+            zeroGainNodeRef.current = zeroGain;
+            mediaRecorderRef.current = null;
+            setIsRecording(true);
+            setStatusMessage('Registrazione WAV PCM attiva');
+            return;
+          }
         } catch {
           // Fall through to simulated fallback
         }
