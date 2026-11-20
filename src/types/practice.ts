@@ -8,7 +8,12 @@ export type SessionDurationPreset = 5 | 15 | 30 | 45;
 
 export type ExerciseCategory = 'pentatonic' | 'picking' | 'rhythm' | 'legato' | 'fretboard';
 
-export type FondamentaId = 'picking' | 'legato' | 'pentatonic' | 'rhythm';
+export type FondamentaId =
+  | 'velocita'
+  | 'precisione'
+  | 'espressivita'
+  | 'visione'
+  | 'groove';
 
 export type PainPointId =
   | 'speed_wall'

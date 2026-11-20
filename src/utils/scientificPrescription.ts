@@ -475,29 +475,35 @@ export const FONDAMENTA_CATALOG: Record<
   FondamentaId,
   { id: FondamentaId; title: string; subtitle: string; order: number }
 > = {
-  picking: {
-    id: 'picking',
-    title: 'Plettro & Velocità',
-    subtitle: 'Sincronia mani, cambio corda e indipendenza dita',
+  velocita: {
+    id: 'velocita',
+    title: 'Velocità',
+    subtitle: 'Alternate picking e cambio corda veloce',
     order: 1,
   },
-  legato: {
-    id: 'legato',
-    title: 'Mano Sinistra & Legato',
-    subtitle: 'Forza dita, hammer-on, pull-off e controllo',
+  precisione: {
+    id: 'precisione',
+    title: 'Precisione',
+    subtitle: 'Indipendenza dita, controllo e palm muting',
     order: 2,
   },
-  pentatonic: {
-    id: 'pentatonic',
-    title: 'Assoli & Manico',
-    subtitle: 'Pentatonica, fraseggio e visione orizzontale',
+  espressivita: {
+    id: 'espressivita',
+    title: 'Espressività',
+    subtitle: 'Legato, hammer-on, pull-off, bending e vibrato',
     order: 3,
   },
-  rhythm: {
-    id: 'rhythm',
-    title: 'Ritmo & Groove',
-    subtitle: 'Orologio interno, battuta muta e polso destro',
+  visione: {
+    id: 'visione',
+    title: 'Visione',
+    subtitle: 'Spostamenti sul manico, accordi e barrè mobili',
     order: 4,
+  },
+  groove: {
+    id: 'groove',
+    title: 'Groove & Timing',
+    subtitle: 'Orologio interno, battuta muta e polso ritmico',
+    order: 5,
   },
 };
 
@@ -519,10 +525,29 @@ export interface FondamentaWeeklyGroup {
 }
 
 export function getFondamentaForExercise(ex: Exercise): FondamentaId {
-  if (ex.category === 'picking') return 'picking';
-  if (ex.category === 'legato') return 'legato';
-  if (ex.category === 'rhythm') return 'rhythm';
-  return 'pentatonic';
+  switch (ex.id) {
+    case 'ex-picking-pg6':
+    case 'ex-pent-box1':
+      return 'velocita';
+    case 'ex-picking-spider':
+    case 'ex-rhythm-palmmute':
+      return 'precisione';
+    case 'ex-legato-trill':
+    case 'ex-lead-bending':
+      return 'espressivita';
+    case 'ex-pent-diagonal':
+    case 'ex-rhythm-chords':
+      return 'visione';
+    case 'ex-rhythm-gap':
+    case 'ex-rhythm-funk16':
+      return 'groove';
+    default:
+      if (ex.category === 'picking') return 'velocita';
+      if (ex.category === 'fretboard') return 'precisione';
+      if (ex.category === 'legato') return 'espressivita';
+      if (ex.category === 'pentatonic') return 'visione';
+      return 'groove';
+  }
 }
 
 export function computeWeeklyDoseProgress(
@@ -630,16 +655,16 @@ export function computeFondamentaWeeklyGroups(
   const weekly = computeWeeklyDoseProgress(prescription, exercises, sessionLogs);
   const pathId = resolvePathId(prescription.answers);
   const primaryFondamenta: FondamentaId =
-    pathId === 'rhythm' ? 'rhythm' : 'picking';
+    pathId === 'rhythm' ? 'groove' : 'velocita';
   const pathOrder: FondamentaId[] =
     pathId === 'rhythm'
-      ? ['rhythm', 'picking', 'legato', 'pentatonic']
-      : ['picking', 'legato', 'pentatonic', 'rhythm'];
+      ? ['groove', 'precisione', 'visione', 'velocita', 'espressivita']
+      : ['velocita', 'espressivita', 'precisione', 'visione', 'groove'];
 
   const bucket = new Map<FondamentaId, ExerciseWeeklyProgressItem[]>();
-  (['picking', 'legato', 'pentatonic', 'rhythm'] as FondamentaId[]).forEach((fid) =>
-    bucket.set(fid, [])
-  );
+  (
+    ['velocita', 'precisione', 'espressivita', 'visione', 'groove'] as FondamentaId[]
+  ).forEach((fid) => bucket.set(fid, []));
 
   for (const item of weekly.items) {
     const fid = getFondamentaForExercise(item.exercise);

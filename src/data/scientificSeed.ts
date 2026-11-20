@@ -20,7 +20,7 @@ const daysAgoIso = (daysAgo: number, hour = 19): string => {
 export const SEED_EXERCISES: Exercise[] = [
   {
     id: 'ex-pent-box1',
-    pillarName: 'Meccanica & Cambio Corda',
+    pillarName: 'Velocità',
     title: 'Pentatonica Box 1 (4/4)',
     category: 'pentatonic',
     forWho: 'Per chi si inceppa quando passa da una corda all’altra.',
@@ -168,7 +168,7 @@ export const SEED_EXERCISES: Exercise[] = [
   },
   {
     id: 'ex-picking-pg6',
-    pillarName: 'Velocità & Sincronia Mani',
+    pillarName: 'Velocità',
     title: 'Sprint Ritmico 2 Corde',
     category: 'picking',
     forWho: 'Per chi quando accelera perde il controllo delle note.',
@@ -308,7 +308,7 @@ export const SEED_EXERCISES: Exercise[] = [
   },
   {
     id: 'ex-rhythm-gap',
-    pillarName: 'Orologio Interno & Timing',
+    pillarName: 'Groove & Timing',
     title: 'Gap Click Groove 4/4',
     category: 'rhythm',
     forWho: 'Per chi va fuori tempo appena non sente più il click.',
@@ -440,7 +440,7 @@ export const SEED_EXERCISES: Exercise[] = [
   },
   {
     id: 'ex-legato-trill',
-    pillarName: 'Forza & Legato Mano Sinistra',
+    pillarName: 'Espressività',
     title: 'Legato Ritmico & Espressivo',
     category: 'legato',
     forWho: 'Per chi vuole legati potenti e fraseggio dinamico, non meccanico.',
@@ -578,7 +578,7 @@ export const SEED_EXERCISES: Exercise[] = [
   },
   {
     id: 'ex-pent-diagonal',
-    pillarName: 'Visione Orizzontale Manico',
+    pillarName: 'Visione',
     title: 'Slide Diagonale Box 1–2',
     category: 'pentatonic',
     forWho: 'Per chi rimane bloccato sempre nei soliti 4 tasti.',
@@ -724,7 +724,7 @@ export const SEED_EXERCISES: Exercise[] = [
   },
   {
     id: 'ex-picking-spider',
-    pillarName: 'Indipendenza & Controllo Dita',
+    pillarName: 'Precisione',
     title: 'Spider Indipendenza Dita',
     category: 'picking',
     forWho: 'Per chi evita il mignolo o alza troppo le dita dalla tastiera.',
@@ -877,7 +877,7 @@ export const SEED_EXERCISES: Exercise[] = [
   },
   {
     id: 'ex-rhythm-funk16',
-    pillarName: 'Groove & Polso Destro',
+    pillarName: 'Groove & Timing',
     title: 'Groove Funk & Accenti 4/4',
     category: 'rhythm',
     forWho: 'Per chi sente il braccio destro rigido quando accompagna.',
@@ -1189,7 +1189,7 @@ export const SEED_EXERCISES: Exercise[] = [
   },
   {
     id: 'ex-rhythm-palmmute',
-    pillarName: 'Muting & Attacco Ritmico',
+    pillarName: 'Precisione',
     title: 'Palm Mute & Power Chords',
     category: 'rhythm',
     forWho: 'Per chi vuole ritmiche rock/metal compatte e definite senza sbavature.',
@@ -1374,7 +1374,7 @@ export const SEED_EXERCISES: Exercise[] = [
   },
   {
     id: 'ex-rhythm-chords',
-    pillarName: 'Cambi Accordo & Barrè',
+    pillarName: 'Visione',
     title: 'Successioni Accordi & Barrè',
     category: 'rhythm',
     forWho: 'Per cambiare accordo a tempo senza esitazioni e padroneggiare i barrè mobili.',
@@ -1744,7 +1744,7 @@ export const SEED_EXERCISES: Exercise[] = [
   },
   {
     id: 'ex-lead-bending',
-    pillarName: 'Bending & Intonazione',
+    pillarName: 'Espressività',
     title: 'Bending & Vibrato Espressivo',
     category: 'legato',
     forWho: 'Per chi vuole assoli espressivi, bend intonati al centesimo e vibrato controllato.',

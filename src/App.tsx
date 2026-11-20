@@ -58,6 +58,7 @@ export function App() {
       if (!seed) return ex;
       return {
         ...ex,
+        pillarName: seed.pillarName,
         title: seed.title,
         description: seed.description,
         scientificRationale: seed.scientificRationale,

@@ -32,11 +32,11 @@ interface ProgramsAndBuilderProps {
 }
 
 const CATEGORY_LABELS: Record<ExerciseCategory, string> = {
-  pentatonic: 'Assoli & Manico',
-  picking: 'Plettro & Velocità',
-  legato: 'Mano Sinistra & Legato',
-  rhythm: 'Ritmo & Groove',
-  fretboard: 'Tastiera',
+  picking: 'Velocità',
+  fretboard: 'Precisione',
+  legato: 'Espressività',
+  pentatonic: 'Visione',
+  rhythm: 'Groove & Timing',
 };
 
 export const ProgramsAndBuilder: React.FC<ProgramsAndBuilderProps> = ({

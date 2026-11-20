@@ -16,6 +16,7 @@ import {
 import { computeNerdTelemetry } from '../utils/nerdStats';
 import {
   buildSessionPlanFromPrescription,
+  computeFondamentaWeeklyGroups,
   computeWeeklyDoseProgress,
 } from '../utils/scientificPrescription';
 import {
@@ -72,6 +73,11 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
     [prescription, exercises, sessionLogs]
   );
 
+  const fondamentaGroups = useMemo(
+    () => computeFondamentaWeeklyGroups(prescription, exercises, sessionLogs),
+    [prescription, exercises, sessionLogs]
+  );
+
   // Post-hold Tactical Session Launcher state
   const [showLauncher, setShowLauncher] = useState(false);
   const [launcherPreset, setLauncherPreset] =
@@ -97,14 +103,24 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
     [previewPlan]
   );
 
-  const topDeficitItem = weekly.items[0];
+  const topDeficitGroup = useMemo(() => {
+    const incomplete = fondamentaGroups.filter((g) => !g.minReached);
+    if (incomplete.length === 0) return fondamentaGroups[0];
+    return [...incomplete].sort(
+      (a, b) =>
+        b.weeklyMinSets -
+        b.completedSets -
+        (a.weeklyMinSets - a.completedSets)
+    )[0];
+  }, [fondamentaGroups]);
+
   const plekHeadline =
     weekly.totalMissingForMin > 0
       ? `Mancano ${weekly.totalMissingForMin} serie al minimo.`
       : 'Minimo settimanale raggiunto.';
   const plekSub =
-    weekly.totalMissingForMin > 0 && topDeficitItem
-      ? `Oggi partiamo da ${topDeficitItem.exercise.pillarName || topDeficitItem.exercise.title}.`
+    weekly.totalMissingForMin > 0 && topDeficitGroup
+      ? `Oggi partiamo da ${topDeficitGroup.title}.`
       : 'Tieni premuto Inizia per allenarti.';
 
   // Hold-to-start circle animation (0..1)
@@ -131,21 +147,21 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   }, [selectedPreset]);
 
   const openTodoLauncher = useCallback(
-    (exerciseId: string) => {
+    (exerciseIds: string[]) => {
       setLauncherPreset(selectedPreset);
-      setCustomSelectedIds([exerciseId]);
+      setCustomSelectedIds(exerciseIds);
       setShowLauncher(true);
     },
     [selectedPreset]
   );
 
-  const completedMissions = weekly.items.filter((i) => i.minReached).length;
-  const todoItems = useMemo(
+  const completedGroups = fondamentaGroups.filter((g) => g.minReached).length;
+  const todoGroups = useMemo(
     () =>
-      [...weekly.items].sort(
+      [...fondamentaGroups].sort(
         (a, b) => Number(a.minReached) - Number(b.minReached)
       ),
-    [weekly.items]
+    [fondamentaGroups]
   );
 
   const beginHold = useCallback(() => {
@@ -365,7 +381,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
                 To-Do Settimana
               </span>
               <span className="rounded-full border border-white/15 bg-black px-2 py-0.5 text-[10px] font-black text-white tabular-nums">
-                {completedMissions}/{weekly.items.length} completati
+                {completedGroups}/{fondamentaGroups.length} completati
               </span>
             </div>
 
@@ -388,68 +404,75 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
         </div>
 
         <div className="space-y-1.5">
-          {todoItems.map((item) => (
-            <button
-              key={item.exercise.id}
-              type="button"
-              onClick={() => openTodoLauncher(item.exercise.id)}
-              className="flex w-full items-center justify-between gap-3 rounded-2xl bg-black border border-white/15 px-3.5 py-2.5 text-left hover:border-white/40 active:scale-[0.99] transition"
-            >
-              <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                {item.minReached ? (
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-black">
-                    <Check className="h-3 w-3 stroke-[3]" />
-                  </span>
-                ) : item.completedSets > 0 ? (
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-[#FF6B00]">
-                    <span className="h-2 w-2 rounded-full bg-[#FF6B00]" />
-                  </span>
-                ) : (
-                  <span className="h-5 w-5 shrink-0 rounded-full border border-white/25" />
-                )}
+          {todoGroups.map((group) => {
+            const totalTicks = Math.min(10, Math.max(1, group.weeklyMinSets));
+            const filledTicks =
+              group.weeklyMinSets > 0
+                ? Math.min(
+                    totalTicks,
+                    Math.round(
+                      (group.completedSets / group.weeklyMinSets) * totalTicks
+                    )
+                  )
+                : 0;
 
-                <span
-                  className={`truncate text-xs sm:text-sm font-black ${
-                    item.minReached ? 'line-through text-white/45' : 'text-white'
-                  }`}
-                >
-                  {item.exercise.pillarName || item.exercise.title}
-                </span>
-              </div>
+            return (
+              <button
+                key={group.fondamentaId}
+                type="button"
+                onClick={() =>
+                  openTodoLauncher(group.items.map((it) => it.exercise.id))
+                }
+                className="flex w-full items-center justify-between gap-3 rounded-2xl bg-black border border-white/15 px-3.5 py-2.5 text-left hover:border-white/40 active:scale-[0.99] transition"
+              >
+                <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                  {group.minReached ? (
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-black">
+                      <Check className="h-3 w-3 stroke-[3]" />
+                    </span>
+                  ) : group.completedSets > 0 ? (
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-[#FF6B00]">
+                      <span className="h-2 w-2 rounded-full bg-[#FF6B00]" />
+                    </span>
+                  ) : (
+                    <span className="h-5 w-5 shrink-0 rounded-full border border-white/25" />
+                  )}
 
-              <div className="flex shrink-0 items-center gap-2">
-                <div className="flex items-center gap-0.5" aria-hidden="true">
-                  {Array.from({ length: item.weeklyMinSets }, (_, idx) => {
-                    const filled = idx < item.completedSets;
-                    return (
-                      <span
-                        key={idx}
-                        className={`h-2.5 w-1.5 rounded-sm transition-colors ${
-                          item.minReached
-                            ? 'bg-white'
-                            : filled
-                            ? 'bg-[#FF6B00]'
-                            : 'bg-white/15'
-                        }`}
-                      />
-                    );
-                  })}
+                  <span
+                    className={`truncate text-xs sm:text-sm font-black ${
+                      group.minReached ? 'line-through text-white/45' : 'text-white'
+                    }`}
+                  >
+                    {group.title}
+                  </span>
                 </div>
 
-                <span className="text-[11px] font-black text-white/80 tabular-nums">
-                  {item.completedSets}/{item.weeklyMinSets}
-                </span>
+                <div className="flex shrink-0 items-center gap-2.5">
+                  <div className="flex items-center gap-0.5" aria-hidden="true">
+                    {Array.from({ length: totalTicks }, (_, idx) => {
+                      const filled = idx < filledTicks;
+                      return (
+                        <span
+                          key={idx}
+                          className={`h-2.5 w-1.5 rounded-sm transition-colors ${
+                            group.minReached
+                              ? 'bg-white'
+                              : filled
+                              ? 'bg-[#FF6B00]'
+                              : 'bg-white/15'
+                          }`}
+                        />
+                      );
+                    })}
+                  </div>
 
-                <span className="rounded-lg border border-white/15 bg-black px-1.5 py-0.5 text-[10px] font-black text-[#FF6B00] tabular-nums">
-                  {item.mastery.weightedBpm} BPM
-                </span>
-
-                <span className="rounded-lg border border-white/15 bg-black px-1.5 py-0.5 text-[10px] font-black text-white tabular-nums">
-                  Lv. {item.mastery.level}
-                </span>
-              </div>
-            </button>
-          ))}
+                  <span className="text-[11px] font-black text-white/80 tabular-nums">
+                    {group.completedSets}/{group.weeklyMinSets}
+                  </span>
+                </div>
+              </button>
+            );
+          })}
         </div>
       </section>
 
@@ -544,13 +567,14 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
                     >
                       <div className="min-w-0 flex-1">
                         <div className="text-xs sm:text-sm font-black">
-                          {wItem.exercise.pillarName || wItem.exercise.title}
+                          {wItem.exercise.title}
                         </div>
                         <div
                           className={`text-[11px] font-medium tabular-nums ${
                             isSelected ? 'text-black/75' : 'text-white/55'
                           }`}
                         >
+                          {wItem.exercise.pillarName ? `${wItem.exercise.pillarName} • ` : ''}
                           {wItem.completedSets}/{wItem.weeklyMinSets} min
                           {isSelected ? ` • +${plannedSets} oggi` : ''}
                         </div>
