@@ -160,12 +160,21 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
     [effectiveSteps]
   );
 
+  const hasChordContext = useMemo(
+    () => Boolean(effectiveSteps[0]?.chordNotes && effectiveSteps[0].chordNotes.length > 0),
+    [effectiveSteps]
+  );
+
   useEffect(() => {
     setUserLabelMode(null);
   }, [notes, demoSequence]);
 
-  const labelMode: LabelMode =
-    userLabelMode ?? (isChordPattern ? 'none' : 'fingers');
+  const defaultLabelMode: LabelMode = hasChordContext
+    ? 'intervals'
+    : isChordPattern
+    ? 'none'
+    : 'fingers';
+  const labelMode: LabelMode = userLabelMode ?? defaultLabelMode;
 
   // Steady didactic half-time tempo in 1/8 subdivision (2 notes per metronome beat)
   const slowBpm = 56;
@@ -453,7 +462,38 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
     };
   }, [activeArticulation, effectiveActiveNotes, activeStep]);
 
+  const activeContextChordNotes: FretNote[] | null = useMemo(() => {
+    if (!hasChordContext) return null;
+    if (effectiveActiveStepIndex !== null) {
+      const step = effectiveSteps[effectiveActiveStepIndex];
+      if (step?.chordNotes && step.chordNotes.length > 0) {
+        return step.chordNotes;
+      }
+    }
+    return effectiveSteps[0]?.chordNotes ?? null;
+  }, [hasChordContext, effectiveActiveStepIndex, effectiveSteps]);
+
+  const activeContextChordNoteMap = useMemo(() => {
+    if (!activeContextChordNotes) return null;
+    const m = new Map<string, FretNote>();
+    activeContextChordNotes.forEach((n) => m.set(`${n.string}-${n.fret}`, n));
+    return m;
+  }, [activeContextChordNotes]);
+
+  const activeContextChordKeys = useMemo(() => {
+    if (!activeContextChordNotes) return null;
+    const s = new Set<string>();
+    activeContextChordNotes.forEach((n) => s.add(`${n.string}-${n.fret}`));
+    return s;
+  }, [activeContextChordNotes]);
+
   const activeBarre = useMemo(() => {
+    if (hasChordContext && activeContextChordNotes) {
+      const barre = getBarreInfo(activeContextChordNotes);
+      return barre
+        ? { ...barre, isActive: effectiveActiveStepIndex !== null }
+        : null;
+    }
     if (effectiveActiveStepIndex !== null) {
       const barre = getBarreInfo(effectiveActiveNotes);
       return barre ? { ...barre, isActive: true } : null;
@@ -463,7 +503,13 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
       return staticBarre ? { ...staticBarre, isActive: false } : null;
     }
     return null;
-  }, [effectiveActiveStepIndex, effectiveActiveNotes, effectiveSteps]);
+  }, [
+    hasChordContext,
+    activeContextChordNotes,
+    effectiveActiveStepIndex,
+    effectiveActiveNotes,
+    effectiveSteps,
+  ]);
 
   const legatoConnections = useMemo(() => {
     const conns: {
@@ -817,9 +863,15 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                 const fretNum = fretRange.start + fIdx;
                 const cx = leftPad + fIdx * fretWidth + fretWidth / 2;
                 const noteKey = `${stringNum}-${fretNum}`;
-                const note = noteMap.get(noteKey);
+                const note =
+                  activeContextChordNoteMap?.get(noteKey) ?? noteMap.get(noteKey);
                 const isHighlighted = activeNoteKeys.has(noteKey);
                 const isLegatoAnchor = legatoAnchorKey === noteKey;
+                const isOutOfActiveChordContext =
+                  activeContextChordKeys !== null &&
+                  !activeContextChordKeys.has(noteKey);
+                const isInContextChordOnly =
+                  hasChordContext && !isHighlighted && !isOutOfActiveChordContext;
                 const isIdleDimmedChordNote =
                   isChordPattern &&
                   effectiveActiveStepIndex === null &&
@@ -827,9 +879,11 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                   previewChordKeys !== null &&
                   !previewChordKeys.has(noteKey);
                 const isDimmed =
-                  (effectivePlayingVisual || effectiveActiveStepIndex !== null) &&
                   !isHighlighted &&
-                  !isLegatoAnchor;
+                  !isLegatoAnchor &&
+                  (isOutOfActiveChordContext ||
+                    ((effectivePlayingVisual || effectiveActiveStepIndex !== null) &&
+                      !hasChordContext));
 
                 const isBentNote =
                   isHighlighted &&
@@ -842,6 +896,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                 const showEmptyChordDot =
                   labelMode === 'none' ||
                   isIdleDimmedChordNote ||
+                  isOutOfActiveChordContext ||
                   (isChordPattern && isDimmed);
                 const textLabel = showEmptyChordDot
                   ? ''
@@ -868,15 +923,18 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                   ? 16
                   : 14.5;
 
-                const noteOpacity = isIdleDimmedChordNote
-                  ? 0.08
-                  : isDimmed
-                  ? isChordPattern
+                const noteOpacity =
+                  isIdleDimmedChordNote || isOutOfActiveChordContext
                     ? 0.08
-                    : 0.24
-                  : isLegatoAnchor
-                  ? 0.72
-                  : 1;
+                    : isInContextChordOnly
+                    ? 0.9
+                    : isDimmed
+                    ? isChordPattern
+                      ? 0.08
+                      : 0.24
+                    : isLegatoAnchor
+                    ? 0.72
+                    : 1;
 
                 return (
                   <g
@@ -1160,37 +1218,45 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
     effectiveActiveStepIndex !== null ? activeStep?.technique : undefined;
 
   const rhythmGridBar =
-    !interactive && barSteps.length > 0 && effectiveSteps.length <= 16 ? (
+    !interactive && barSteps.length > 0 && effectiveSteps.length <= 32 ? (
       <div className="grid grid-cols-8 gap-1 w-full min-w-0">
         {barSteps.map((step, idx) => {
           const isActive = effectiveActiveStepIndex === barOffset + idx;
           const slotLabel = BAR_8_LABELS[idx] ?? String(idx + 1);
           const isDownbeat = idx % 2 === 0;
           const art = getStepArticulation(step);
+          const degreeLabel = step.notes[0]?.label;
+          const isChordDegree =
+            hasChordContext &&
+            (degreeLabel === '1' ||
+              degreeLabel === '3' ||
+              degreeLabel === '5' ||
+              degreeLabel === '8');
           const isArticulatedSlot =
             art === 'hammer' ||
             art === 'pull' ||
             art === 'slide' ||
             art === 'bend' ||
             art === 'palmmute';
-          const symbol =
-            art === 'bend'
-              ? '↑'
-              : art === 'palmmute'
-              ? 'PM'
-              : art === 'hammer'
-              ? 'H'
-              : art === 'pull'
-              ? 'P'
-              : art === 'slide'
-              ? '/'
-              : art === 'vibrato'
-              ? '~'
-              : art === 'sustain'
-              ? '—'
-              : art === 'muted'
-              ? '×'
-              : '●';
+          const symbol = isChordDegree
+            ? degreeLabel
+            : art === 'bend'
+            ? '↑'
+            : art === 'palmmute'
+            ? 'PM'
+            : art === 'hammer'
+            ? 'H'
+            : art === 'pull'
+            ? 'P'
+            : art === 'slide'
+            ? '/'
+            : art === 'vibrato'
+            ? '~'
+            : art === 'sustain'
+            ? '—'
+            : art === 'muted'
+            ? '×'
+            : '●';
 
           return (
             <div
@@ -1340,7 +1406,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
             type="button"
             onClick={() =>
               setUserLabelMode((curr) => {
-                const effective = curr ?? (isChordPattern ? 'none' : 'fingers');
+                const effective = curr ?? defaultLabelMode;
                 if (effective === 'fingers' && isChordPattern) return 'none';
                 return 'fingers';
               })
@@ -1357,7 +1423,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
             type="button"
             onClick={() =>
               setUserLabelMode((curr) => {
-                const effective = curr ?? (isChordPattern ? 'none' : 'fingers');
+                const effective = curr ?? defaultLabelMode;
                 if (effective === 'intervals' && isChordPattern) return 'none';
                 return 'intervals';
               })
@@ -1368,7 +1434,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                 : 'text-white/50 hover:text-white'
             }`}
           >
-            Note
+            {hasChordContext ? 'Gradi' : 'Note'}
           </button>
         </div>
       </div>

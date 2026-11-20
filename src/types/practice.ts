@@ -79,6 +79,8 @@ export interface FretNote {
 export interface DemoStep {
   /** One note for single-note patterns, or multiple notes for a chord strum */
   notes: FretNote[];
+  /** Optional active chord context notes (e.g. the 1, 3, 5, 8 degrees of the current chord during an arpeggio) */
+  chordNotes?: FretNote[];
   /** True for percussive muted hit ("stoppata") */
   muted?: boolean;
   /** True when the note from the previous step sustains through this 1/8 slot without re-plucking (creates 1/4 holds & rhythmic variety) */

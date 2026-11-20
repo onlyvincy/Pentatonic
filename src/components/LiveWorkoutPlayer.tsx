@@ -39,6 +39,12 @@ import {
   recoverPlaybackAfterMic,
   unlockSharedAudioContext,
 } from '../utils/guitarSynth';
+import {
+  ARPEGGIO_EXERCISE_ID,
+  ARPEGGIO_PROGRESSIONS,
+  buildArpeggioWorkoutData,
+  pickRecommendedProgression,
+} from '../utils/arpeggioEngine';
 import { FretboardViewer } from './FretboardViewer';
 
 interface LiveWorkoutPlayerProps {
@@ -148,6 +154,28 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     if (vars.length === 0) return undefined;
     return vars.find((v) => v.id === selectedVariantId) ?? vars[0];
   }, [currentExercise, selectedVariantId, plan.playerLevel]);
+
+  const [selectedArpeggioProgressionId, setSelectedArpeggioProgressionId] =
+    useState<string>(() => pickRecommendedProgression(sessionLogs.length).id);
+
+  const isArpeggioExercise = currentExercise?.id === ARPEGGIO_EXERCISE_ID;
+  const arpeggioData = useMemo(() => {
+    if (!isArpeggioExercise) return null;
+    return buildArpeggioWorkoutData(
+      activeVariant?.id,
+      selectedArpeggioProgressionId
+    );
+  }, [isArpeggioExercise, activeVariant?.id, selectedArpeggioProgressionId]);
+
+  const effectiveFretboardNotes =
+    arpeggioData?.fretboardNotes ??
+    activeVariant?.fretboardNotes ??
+    currentExercise?.fretboardNotes ??
+    [];
+  const effectiveDemoSequence =
+    arpeggioData?.demoSequence ??
+    activeVariant?.demoSequence ??
+    currentExercise?.demoSequence;
 
   const resolveVariantBpm = useCallback(
     (ex: Exercise, varId: string | undefined, fallbackBpm: number): number => {
@@ -595,21 +623,57 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
       <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
         {/* 1. AUTOMATIC BPM-SYNCED FRETBOARD DEMO (BEFORE PRE-TIMER & SET TIMER) */}
         {phase === 'demo' && (
-          <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col items-center justify-center gap-5 px-4 py-5">
+          <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col items-center justify-center gap-4 px-4 py-5">
             <div className="text-center space-y-1.5">
               <h3 className="text-lg sm:text-xl font-black text-white">
                 {currentExercise.title}
               </h3>
-              {activeVariant && (
-                <div className="inline-flex rounded-full border border-[#FF6B00]/45 bg-[#FF6B00]/12 px-3 py-0.5 text-xs font-bold text-[#FF6B00]">
-                  {activeVariant.name}
+              {arpeggioData ? (
+                <div className="flex flex-wrap items-center justify-center gap-1.5">
+                  <span className="inline-flex rounded-full border border-[#FF6B00]/50 bg-[#FF6B00]/12 px-3 py-0.5 text-xs font-black text-[#FF6B00] tabular-nums">
+                    Formula Gradi: {arpeggioData.pattern.formulaText}
+                  </span>
+                  <span className="inline-flex rounded-full border border-white/20 bg-black px-2.5 py-0.5 text-[11px] font-bold text-white/80">
+                    {arpeggioData.progression.name}
+                  </span>
                 </div>
+              ) : (
+                activeVariant && (
+                  <div className="inline-flex rounded-full border border-[#FF6B00]/45 bg-[#FF6B00]/12 px-3 py-0.5 text-xs font-bold text-[#FF6B00]">
+                    {activeVariant.name}
+                  </div>
+                )
               )}
             </div>
 
+            {isArpeggioExercise && (
+              <div className="flex w-full max-w-2xl flex-wrap items-center justify-center gap-1.5">
+                {ARPEGGIO_PROGRESSIONS.map((prog) => {
+                  const active = prog.id === selectedArpeggioProgressionId;
+                  return (
+                    <button
+                      key={prog.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedArpeggioProgressionId(prog.id);
+                        setDemoReplayKey((k) => k + 1);
+                      }}
+                      className={`rounded-full border px-2.5 py-1 text-[11px] font-bold transition ${
+                        active
+                          ? 'border-white bg-white text-black'
+                          : 'border-white/15 bg-black text-white/60 hover:border-white/40 hover:text-white'
+                      }`}
+                    >
+                      {prog.shortLabel}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
             <FretboardViewer
-              notes={activeVariant?.fretboardNotes ?? currentExercise.fretboardNotes}
-              demoSequence={activeVariant?.demoSequence ?? currentExercise.demoSequence}
+              notes={effectiveFretboardNotes}
+              demoSequence={effectiveDemoSequence}
               variant="stage"
               demoMode="slow-intro"
               metronomeSound={metronome.soundId}
@@ -795,10 +859,37 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
               </div>
 
               {/* Continuous Live Animated Fretboard Locked to Web Audio Metronome Clock */}
-              <div className="w-full">
+              <div className="w-full space-y-2">
+                {arpeggioData && (
+                  <div className="space-y-1.5 text-center">
+                    <div className="inline-flex rounded-full border border-[#FF6B00]/45 bg-[#FF6B00]/12 px-3 py-0.5 text-[11px] font-black text-[#FF6B00] tabular-nums">
+                      Formula Gradi: {arpeggioData.pattern.formulaText}
+                    </div>
+                    <div className="flex flex-wrap items-center justify-center gap-1">
+                      {ARPEGGIO_PROGRESSIONS.map((prog) => {
+                        const active = prog.id === selectedArpeggioProgressionId;
+                        return (
+                          <button
+                            key={prog.id}
+                            type="button"
+                            onClick={() => setSelectedArpeggioProgressionId(prog.id)}
+                            className={`rounded-full border px-2 py-0.5 text-[10px] font-bold transition ${
+                              active
+                                ? 'border-white bg-white text-black'
+                                : 'border-white/15 bg-black text-white/55 hover:border-white/40 hover:text-white'
+                            }`}
+                          >
+                            {prog.shortLabel}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 <FretboardViewer
-                  notes={activeVariant?.fretboardNotes ?? currentExercise.fretboardNotes}
-                  demoSequence={activeVariant?.demoSequence ?? currentExercise.demoSequence}
+                  notes={effectiveFretboardNotes}
+                  demoSequence={effectiveDemoSequence}
                   variant="compact"
                   demoMode="live-loop"
                   externalStepTick={isSetPaused ? null : metronome.currentSubStep}
