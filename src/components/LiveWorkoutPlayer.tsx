@@ -28,7 +28,6 @@ import {
 import {
   CLEANLINESS_LABELS,
   calculateGoldilocksNextBpm,
-  calculateGoldilocksTargetBpm,
   calculateWarmupBpm,
   computeExerciseScore,
   computeWeightedExerciseBpm,
@@ -436,19 +435,12 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
       [currentExercise.id]: updatedExVariantBpms,
     }));
 
-    const vars = currentExercise.variants ?? [];
-    let nextVariant = activeVariant;
-    // Anti-boredom rotation: rotate to a fresh variant when clean/edge (>= 3);
-    // keep the same variant when sloppy (<= 2) to repair motor control first.
-    if (hasMoreSets && vars.length > 1 && activeVariant && score >= 3) {
-      const currIdx = vars.findIndex((v) => v.id === activeVariant.id);
-      nextVariant = vars[(currIdx + 1) % vars.length];
-    }
-
+    // Keep the exact same variant for all sets of this exercise within the workout;
+    // variant rotation happens automatically across different workouts via pickNextRecommendedVariant.
     const updatedExerciseForCalc: Exercise = {
       ...currentExercise,
       variantBpms: updatedExVariantBpms,
-      activeVariantId: nextVariant?.id ?? activeVariant?.id,
+      activeVariantId: activeVariant?.id,
     };
 
     const syntheticHistory: WorkoutSessionLog[] = [
@@ -468,7 +460,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     const newWeighted = computeWeightedExerciseBpm(
       updatedExerciseForCalc,
       syntheticHistory,
-      nextVariant?.id
+      activeVariant?.id
     );
 
     const prevBest =
@@ -481,26 +473,14 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
       [currentExercise.id]: {
         targetBpm: newWeighted.weightedBpm,
         bestCleanBpm: newBest,
-        activeVariantId: nextVariant?.id,
+        activeVariantId: activeVariant?.id,
         variantBpms: updatedExVariantBpms,
       },
     }));
 
     if (hasMoreSets) {
       setSetNumber((s) => s + 1);
-      if (nextVariant && nextVariant.id !== activeVariant?.id) {
-        setSelectedVariantId(nextVariant.id);
-        const nextVarEntry = newWeighted.byVariant.find(
-          (b) => b.variantId === nextVariant!.id
-        );
-        const targetNextVarBpm =
-          nextVarEntry && nextVarEntry.isPracticed
-            ? calculateGoldilocksTargetBpm(nextVarEntry.bpm)
-            : nextBpmForScore;
-        metronome.setBpm(targetNextVarBpm);
-      } else {
-        metronome.setBpm(nextBpmForScore);
-      }
+      metronome.setBpm(nextBpmForScore);
       setRestRemainingSec(currentItem.restSec);
       setPhase('rest');
     } else if (hasMoreExercises) {
