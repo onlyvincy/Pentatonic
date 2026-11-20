@@ -1,29 +1,21 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ArrowLeft,
-  ArrowRight,
-  Check,
-  Play,
-  Sparkles,
-  X,
-} from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Sparkles, X } from 'lucide-react';
 import {
   DiagnosticQuizAnswers,
   Exercise,
-  PainPointId,
+  PathId,
   PlayerLevelId,
   ScientificPlanPrescription,
-  SecondaryBottleneckId,
   SessionDurationPreset,
 } from '../types/practice';
 import {
-  BOTTLENECK_OPTIONS,
   LEVEL_OPTIONS,
-  PAIN_POINT_OPTIONS,
+  PATH_OPTIONS,
   SESSION_BUDGET_OPTIONS,
   WEEKLY_DAYS_OPTIONS,
   generateScientificPrescription,
 } from '../utils/scientificPrescription';
+import { PathIllustration } from './PathIllustrations';
 
 interface OnboardingFlowProps {
   exercises: Exercise[];
@@ -35,19 +27,17 @@ interface OnboardingFlowProps {
 }
 
 interface DraftQuizAnswers {
-  primaryPainPoint: PainPointId | null;
-  secondaryBottleneck: SecondaryBottleneckId | null;
+  pathId: PathId | null;
   level: PlayerLevelId | null;
-  weeklyDays: 3 | 5 | 7 | null;
-  sessionPreset: SessionDurationPreset | null;
+  weeklyDays: 3 | 5 | 7;
+  sessionPreset: SessionDurationPreset;
 }
 
-const EMPTY_DRAFT: DraftQuizAnswers = {
-  primaryPainPoint: null,
-  secondaryBottleneck: null,
+const DEFAULT_DRAFT: DraftQuizAnswers = {
+  pathId: null,
   level: null,
-  weeklyDays: null,
-  sessionPreset: null,
+  weeklyDays: 5,
+  sessionPreset: 15,
 };
 
 export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
@@ -55,8 +45,8 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   onFinishQuiz,
   onCancel,
 }) => {
-  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);
-  const [draft, setDraft] = useState<DraftQuizAnswers>(EMPTY_DRAFT);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [draft, setDraft] = useState<DraftQuizAnswers>(DEFAULT_DRAFT);
   const [animatingChoice, setAnimatingChoice] = useState<string | null>(null);
   const [isTransitioningOut, setIsTransitioningOut] = useState(false);
 
@@ -71,42 +61,39 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     return () => clearPendingTimers();
   }, [clearPendingTimers]);
 
-  const resolvedAnswers: DiagnosticQuizAnswers = useMemo(
-    () => ({
-      primaryPainPoint: draft.primaryPainPoint ?? 'speed_wall',
-      secondaryBottleneck: draft.secondaryBottleneck ?? 'string_crossing',
+  const resolvedAnswers: DiagnosticQuizAnswers = useMemo(() => {
+    const pathId = draft.pathId ?? 'solista';
+    return {
+      pathId,
+      primaryPainPoint: pathId === 'rhythm' ? 'timing_drift' : 'speed_wall',
+      secondaryBottleneck:
+        pathId === 'rhythm' ? 'rhythm_stiffness' : 'string_crossing',
       level: draft.level ?? 'intermediate',
-      weeklyDays: draft.weeklyDays ?? 5,
-      sessionPreset: draft.sessionPreset ?? 15,
-    }),
-    [draft]
-  );
+      weeklyDays: draft.weeklyDays,
+      sessionPreset: draft.sessionPreset,
+    };
+  }, [draft]);
 
   const generatedPrescription = useMemo(
     () => generateScientificPrescription(resolvedAnswers, exercises),
     [resolvedAnswers, exercises]
   );
 
-  const exerciseMap = useMemo(
-    () => new Map(exercises.map((e) => [e.id, e])),
-    [exercises]
-  );
-
   const transitionToStep = useCallback(
-    (nextStep: 1 | 2 | 3 | 4 | 5, chosenKey?: string) => {
+    (nextStep: 1 | 2 | 3, chosenKey?: string) => {
       clearPendingTimers();
       if (chosenKey) {
         setAnimatingChoice(chosenKey);
       }
 
-      const reactDelay = chosenKey ? 220 : 0;
+      const reactDelay = chosenKey ? 200 : 0;
       const t1 = window.setTimeout(() => {
         setIsTransitioningOut(true);
         const t2 = window.setTimeout(() => {
           setStep(nextStep);
           setAnimatingChoice(null);
           setIsTransitioningOut(false);
-        }, 150);
+        }, 140);
         timersRef.current.push(t2);
       }, reactDelay);
 
@@ -115,38 +102,32 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     [clearPendingTimers]
   );
 
-  const handleSelectStep1 = (value: PainPointId) => {
+  const handleSelectPath = (pathId: PathId) => {
     if (isTransitioningOut || animatingChoice) return;
-    setDraft((prev) => ({ ...prev, primaryPainPoint: value }));
-    transitionToStep(2, value);
+    setDraft((prev) => ({ ...prev, pathId }));
+    transitionToStep(2, pathId);
   };
 
-  const handleSelectStep2 = (value: SecondaryBottleneckId) => {
+  const handleSelectLevel = (level: PlayerLevelId) => {
     if (isTransitioningOut || animatingChoice) return;
-    setDraft((prev) => ({ ...prev, secondaryBottleneck: value }));
-    transitionToStep(3, value);
+    setDraft((prev) => ({ ...prev, level }));
+    transitionToStep(3, level);
   };
 
-  const handleSelectStep3 = (value: PlayerLevelId) => {
-    if (isTransitioningOut || animatingChoice) return;
-    setDraft((prev) => ({ ...prev, level: value }));
-    transitionToStep(4, value);
+  const stepHeaders: Record<1 | 2 | 3, { title: string; subtitle: string }> = {
+    1: {
+      title: 'Scegli il tuo percorso',
+      subtitle: 'Allenerai tutti i fondamentali, con focus mirato sul tuo stile.',
+    },
+    2: {
+      title: 'A che livello sei?',
+      subtitle: 'Adatteremo accordi, velocità e difficoltà senza farti sforzare.',
+    },
+    3: {
+      title: 'Il tuo ritmo settimanale',
+      subtitle: 'Nessuna pressione: scegli quanto tempo dedicare di solito.',
+    },
   };
-
-  const handleGoToStep5 = () => {
-    if (!draft.weeklyDays || !draft.sessionPreset || isTransitioningOut) return;
-    transitionToStep(5, 'create-plan');
-  };
-
-  const stepHeaders: Record<1 | 2 | 3 | 4 | 5, string> = {
-    1: 'Cosa vuoi risolvere per prima cosa?',
-    2: 'Cosa vorresti fare senza fatica?',
-    3: 'Come suoni oggi?',
-    4: 'Quanto tempo hai di solito?',
-    5: generatedPrescription.profileTitle,
-  };
-
-  const canProceedStep4 = draft.weeklyDays !== null && draft.sessionPreset !== null;
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col overflow-y-auto bg-black text-white">
@@ -155,10 +136,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
           {step > 1 ? (
             <button
               type="button"
-              onClick={() => {
-                const prevStep = (step - 1) as 1 | 2 | 3 | 4 | 5;
-                transitionToStep(prevStep);
-              }}
+              onClick={() => transitionToStep((step - 1) as 1 | 2 | 3)}
               className="flex h-8 w-8 items-center justify-center rounded-full bg-black border border-white/15 text-white hover:border-white/40 active:scale-90 transition"
               aria-label="Torna indietro"
             >
@@ -171,14 +149,14 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
               className="h-8 w-8 rounded-xl shrink-0"
             />
           )}
-          <span className="text-[11px] font-bold uppercase tracking-widest text-white/55">
-            {step} / 5
+          <span className="text-[11px] font-bold uppercase tracking-widest text-white/55 tabular-nums">
+            {step} / 3
           </span>
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1 w-28">
-            {[1, 2, 3, 4, 5].map((n) => (
+          <div className="flex items-center gap-1.5 w-24">
+            {[1, 2, 3].map((n) => (
               <div
                 key={n}
                 className={`h-1 flex-1 rounded-full transition-all duration-300 ${
@@ -191,7 +169,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
             <button
               type="button"
               onClick={onCancel}
-              aria-label="Chiudi quiz"
+              aria-label="Chiudi"
               className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-black text-white/60 hover:text-white active:scale-90 transition"
             >
               <X className="h-4 w-4" />
@@ -209,122 +187,84 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
               : 'animate-quiz-step'
           }`}
         >
-          {/* Compact 1-line Coach Plek Prompt */}
-          <div className="flex items-center gap-3.5 rounded-2xl bg-black border border-white/15 p-4">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-black border border-[#FF6B00]/50">
-              <svg viewBox="0 0 40 40" className="h-7 w-7">
-                <path
-                  d="M20 4C11 4 6 10 6 18C6 27 16 36 20 37C24 36 34 27 34 18C34 10 29 4 20 4Z"
-                  fill="#FF6B00"
-                />
-                <circle cx="15" cy="16" r="2.3" fill="#000000" />
-                <circle cx="25" cy="16" r="2.3" fill="#000000" />
-                <path
-                  d="M15 23C17 25.5 23 25.5 25 23"
-                  stroke="#000000"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  fill="none"
-                />
-              </svg>
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-base sm:text-lg font-black text-white leading-snug">
-                {stepHeaders[step]}
-              </h1>
-              {step === 5 && (
-                <p className="mt-0.5 text-xs text-white/60">
-                  {generatedPrescription.diagnosisSummary}
-                </p>
-              )}
-            </div>
+          <div className="space-y-1 px-0.5">
+            <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white">
+              {stepHeaders[step].title}
+            </h1>
+            <p className="text-xs sm:text-sm text-white/55">
+              {stepHeaders[step].subtitle}
+            </p>
           </div>
 
-          {/* STEP 1 */}
+          {/* STEP 1: PERCORSO SOLISTA vs PERCORSO RHYTHM */}
           {step === 1 && (
-            <div className="space-y-2.5">
-              {PAIN_POINT_OPTIONS.map((opt) => {
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              {PATH_OPTIONS.map((opt) => {
                 const isAnimating = animatingChoice === opt.value;
-                const isSelected = isAnimating || draft.primaryPainPoint === opt.value;
+                const isSelected = isAnimating || draft.pathId === opt.value;
                 const isDimmed = animatingChoice !== null && !isAnimating;
+
                 return (
                   <button
                     key={opt.value}
                     type="button"
-                    onClick={() => handleSelectStep1(opt.value)}
-                    className={`flex w-full items-center justify-between gap-4 rounded-2xl border p-4 text-left transition-all duration-150 active:scale-[0.97] ${
+                    onClick={() => handleSelectPath(opt.value)}
+                    className={`group flex flex-col justify-between overflow-hidden rounded-3xl border p-4 text-left transition-all duration-150 active:scale-[0.98] ${
                       isSelected
-                        ? 'bg-white text-black border-white scale-[0.985] shadow-[0_0_24px_rgba(255,255,255,0.2)]'
-                        : 'bg-black text-white border-white/15 hover:border-white/45'
+                        ? 'border-[#FF6B00] bg-[#0B0B0B] shadow-[0_0_28px_rgba(255,107,0,0.22)]'
+                        : 'border-white/15 bg-black hover:border-white/45'
                     } ${isDimmed ? 'opacity-40' : ''}`}
                   >
-                    <div className="space-y-0.5">
-                      <div className="text-sm sm:text-base font-black">
-                        {opt.title}
+                    <div className="mb-3 w-full overflow-hidden rounded-2xl border border-white/10 bg-black/80 px-2 py-2">
+                      <PathIllustration
+                        pathId={opt.value}
+                        className="mx-auto h-32 w-full"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <h2 className="text-lg font-black text-white">
+                          {opt.title}
+                        </h2>
+                        <span
+                          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition ${
+                            isSelected
+                              ? 'border-[#FF6B00] bg-[#FF6B00] text-black'
+                              : 'border-white/15 text-white/50 group-hover:border-white/40 group-hover:text-white'
+                          }`}
+                        >
+                          {isSelected ? (
+                            <Check className="h-3.5 w-3.5 stroke-[3]" />
+                          ) : (
+                            <ArrowRight className="h-3.5 w-3.5" />
+                          )}
+                        </span>
                       </div>
-                      <p
-                        className={`text-xs transition-colors ${
-                          isSelected ? 'text-black/75' : 'text-white/55'
-                        }`}
-                      >
+
+                      <p className="text-xs text-white/60 leading-relaxed">
                         {opt.subtitle}
                       </p>
+
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {opt.focusBadges.map((badge) => (
+                          <span
+                            key={badge}
+                            className="rounded-full border border-white/15 bg-black px-2.5 py-0.5 text-[10px] font-bold text-white/75"
+                          >
+                            {badge}
+                          </span>
+                        ))}
+                      </div>
                     </div>
-                    {isSelected ? (
-                      <Check className="h-4 w-4 shrink-0 stroke-[3]" />
-                    ) : (
-                      <ArrowRight className="h-4 w-4 shrink-0 text-white/50" />
-                    )}
                   </button>
                 );
               })}
             </div>
           )}
 
-          {/* STEP 2 */}
+          {/* STEP 2: LIVELLO */}
           {step === 2 && (
-            <div className="space-y-2.5">
-              {BOTTLENECK_OPTIONS.map((opt) => {
-                const isAnimating = animatingChoice === opt.value;
-                const isSelected =
-                  isAnimating || draft.secondaryBottleneck === opt.value;
-                const isDimmed = animatingChoice !== null && !isAnimating;
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => handleSelectStep2(opt.value)}
-                    className={`flex w-full items-center justify-between gap-4 rounded-2xl border p-4 text-left transition-all duration-150 active:scale-[0.97] ${
-                      isSelected
-                        ? 'bg-white text-black border-white scale-[0.985] shadow-[0_0_24px_rgba(255,255,255,0.2)]'
-                        : 'bg-black text-white border-white/15 hover:border-white/45'
-                    } ${isDimmed ? 'opacity-40' : ''}`}
-                  >
-                    <div className="space-y-0.5">
-                      <div className="text-sm sm:text-base font-black">
-                        {opt.title}
-                      </div>
-                      <p
-                        className={`text-xs transition-colors ${
-                          isSelected ? 'text-black/75' : 'text-white/55'
-                        }`}
-                      >
-                        {opt.subtitle}
-                      </p>
-                    </div>
-                    {isSelected ? (
-                      <Check className="h-4 w-4 shrink-0 stroke-[3]" />
-                    ) : (
-                      <ArrowRight className="h-4 w-4 shrink-0 text-white/50" />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          {/* STEP 3 */}
-          {step === 3 && (
             <div className="space-y-2.5">
               {LEVEL_OPTIONS.map((opt) => {
                 const isAnimating = animatingChoice === opt.value;
@@ -334,10 +274,10 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                   <button
                     key={opt.value}
                     type="button"
-                    onClick={() => handleSelectStep3(opt.value)}
-                    className={`flex w-full items-center justify-between gap-4 rounded-2xl border p-4 text-left transition-all duration-150 active:scale-[0.97] ${
+                    onClick={() => handleSelectLevel(opt.value)}
+                    className={`flex w-full items-center justify-between gap-4 rounded-2xl border p-4 text-left transition-all duration-150 active:scale-[0.98] ${
                       isSelected
-                        ? 'bg-white text-black border-white scale-[0.985] shadow-[0_0_24px_rgba(255,255,255,0.2)]'
+                        ? 'bg-white text-black border-white shadow-[0_0_24px_rgba(255,255,255,0.18)]'
                         : 'bg-black text-white border-white/15 hover:border-white/45'
                     } ${isDimmed ? 'opacity-40' : ''}`}
                   >
@@ -364,9 +304,29 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
             </div>
           )}
 
-          {/* STEP 4: Clean Compact Grid with Zero Pre-Selection */}
-          {step === 4 && (
+          {/* STEP 3: RITMO SETTIMANALE + ATTIVA PERCORSO */}
+          {step === 3 && (
             <div className="space-y-4">
+              <div className="flex items-center gap-3.5 rounded-2xl border border-white/15 bg-black p-3">
+                <div className="h-14 w-20 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-black">
+                  <PathIllustration
+                    pathId={resolvedAnswers.pathId ?? 'solista'}
+                    className="h-full w-full"
+                  />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-black text-white">
+                    {generatedPrescription.profileTitle}
+                  </div>
+                  <div className="text-xs text-white/55">
+                    {
+                      LEVEL_OPTIONS.find((l) => l.value === resolvedAnswers.level)
+                        ?.title
+                    }
+                  </div>
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <div className="text-xs font-bold uppercase tracking-wider text-white/60">
                   Giorni a settimana
@@ -386,7 +346,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                         }
                         className={`rounded-xl border p-3 text-center transition-all duration-150 active:scale-95 ${
                           selected
-                            ? 'bg-white text-black border-white scale-[0.98]'
+                            ? 'bg-white text-black border-white'
                             : 'bg-black text-white border-white/15 hover:border-white/40'
                         }`}
                       >
@@ -423,7 +383,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                         }
                         className={`rounded-xl border p-3 text-center transition-all duration-150 active:scale-95 ${
                           selected
-                            ? 'bg-white text-black border-white scale-[0.98]'
+                            ? 'bg-white text-black border-white'
                             : 'bg-black text-white border-white/15 hover:border-white/40'
                         }`}
                       >
@@ -443,69 +403,12 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
 
               <button
                 type="button"
-                disabled={!canProceedStep4}
-                onClick={handleGoToStep5}
-                className={`flex min-h-[46px] w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-black transition-all duration-150 active:scale-[0.98] ${
-                  canProceedStep4
-                    ? 'bg-[#FF6B00] text-black hover:bg-[#ff7d1f]'
-                    : 'border border-white/15 bg-black text-white/35 cursor-not-allowed'
-                }`}
+                onClick={() => onFinishQuiz(generatedPrescription, false)}
+                className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-[#FF6B00] px-5 py-3 text-sm font-black text-black hover:bg-[#ff7d1f] active:scale-[0.98] transition"
               >
                 <Sparkles className="h-4 w-4" />
-                Crea il Mio Piano
+                Attiva Percorso
               </button>
-            </div>
-          )}
-
-          {/* STEP 5: Clean Minimal Summary */}
-          {step === 5 && (
-            <div className="space-y-3">
-              <div className="space-y-2">
-                {generatedPrescription.doses.map((dose) => {
-                  const ex = exerciseMap.get(dose.exerciseId);
-                  if (!ex) return null;
-                  return (
-                    <div
-                      key={dose.exerciseId}
-                      className="flex items-center justify-between gap-3 rounded-2xl bg-black border border-white/15 px-4 py-3"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-black text-white">
-                          {ex.pillarName || ex.title}
-                        </div>
-                        <div className="text-xs text-white/55">{ex.title}</div>
-                      </div>
-                      <div className="shrink-0 text-right tabular-nums">
-                        <span className="text-xs font-black text-white">
-                          {dose.weeklyMinSets} min
-                        </span>
-                        <span className="mx-1 text-white/30">•</span>
-                        <span className="text-[11px] font-semibold text-white/55">
-                          {dose.weeklyOptimalSets} ottimali
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="space-y-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => onFinishQuiz(generatedPrescription, true)}
-                  className="flex min-h-[46px] w-full items-center justify-center gap-2 rounded-xl bg-[#FF6B00] px-5 py-3 text-sm font-black text-black hover:bg-[#ff7d1f] active:scale-[0.98] transition"
-                >
-                  <Play className="h-4 w-4 fill-current" />
-                  Inizia Subito
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onFinishQuiz(generatedPrescription, false)}
-                  className="flex min-h-[42px] w-full items-center justify-center rounded-xl bg-black border border-white/15 px-5 py-2.5 text-xs font-bold text-white hover:border-white/40 active:scale-[0.98] transition"
-                >
-                  Vai a Oggi
-                </button>
-              </div>
             </div>
           )}
         </div>

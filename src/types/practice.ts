@@ -24,7 +24,10 @@ export type SecondaryBottleneckId =
 
 export type PlayerLevelId = 'foundation' | 'intermediate' | 'advanced';
 
+export type PathId = 'solista' | 'rhythm';
+
 export interface DiagnosticQuizAnswers {
+  pathId?: PathId;
   primaryPainPoint: PainPointId;
   secondaryBottleneck: SecondaryBottleneckId;
   level: PlayerLevelId;
@@ -85,6 +88,8 @@ export interface ExerciseVariant {
   shortLabel: string;
   /** Difficulty multiplier (1.00 = standard, >1.00 = harder biomechanical permutation) used in weighted BPM normalization */
   difficultyWeight: number;
+  minLevel?: PlayerLevelId;
+  maxLevel?: PlayerLevelId;
   fretboardNotes: FretNote[];
   demoSequence: DemoStep[];
 }
@@ -244,5 +249,6 @@ export interface ScaledWorkoutPlan {
   modeDescription: string;
   isStandardized: boolean;
   estimatedMinutes: number;
+  playerLevel?: PlayerLevelId;
   items: ScaledWorkoutItem[];
 }

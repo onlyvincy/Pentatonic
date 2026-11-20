@@ -459,13 +459,23 @@ function createPluckBuffer(
  */
 export function playGuitarFrequency(
   freq: number,
-  options?: { durationSec?: number; volume?: number; delaySec?: number }
+  options?: {
+    durationSec?: number;
+    volume?: number;
+    delaySec?: number;
+    bendSemitones?: number;
+    palmMute?: boolean;
+  }
 ): void {
   try {
     const ctx = getAudioContext();
     if (!ctx) return;
 
-    const durationSec = options?.durationSec ?? 1.25;
+    const palmMute = Boolean(options?.palmMute);
+    const bendSemitones = options?.bendSemitones ?? 0;
+    const durationSec = palmMute
+      ? Math.min(options?.durationSec ?? 0.2, 0.2)
+      : options?.durationSec ?? 1.25;
     const volume = options?.volume ?? 0.52;
     const startTime = ctx.currentTime + (options?.delaySec ?? 0);
 
@@ -474,17 +484,44 @@ export function playGuitarFrequency(
 
     if (anchor && anchor.buffer) {
       source.buffer = anchor.buffer;
-      source.playbackRate.setValueAtTime(freq / anchor.baseFreq, startTime);
+      const baseRate = freq / anchor.baseFreq;
+      source.playbackRate.setValueAtTime(baseRate, startTime);
+      if (bendSemitones > 0) {
+        const targetRate = baseRate * Math.pow(2, bendSemitones / 12);
+        source.playbackRate.setValueAtTime(baseRate, startTime + 0.025);
+        source.playbackRate.exponentialRampToValueAtTime(
+          targetRate,
+          startTime + 0.2
+        );
+      }
 
       const gain = ctx.createGain();
-      gain.gain.setValueAtTime(volume * 1.15, startTime);
-      gain.gain.setValueAtTime(
-        volume * 1.15,
-        startTime + Math.max(0.15, durationSec * 0.65)
-      );
+      gain.gain.setValueAtTime(volume * (palmMute ? 1.05 : 1.15), startTime);
+      if (!palmMute) {
+        gain.gain.setValueAtTime(
+          volume * 1.15,
+          startTime + Math.max(0.15, durationSec * 0.65)
+        );
+      }
       gain.gain.exponentialRampToValueAtTime(0.001, startTime + durationSec);
 
-      source.connect(gain);
+      if (palmMute) {
+        const thump = ctx.createBiquadFilter();
+        thump.type = 'peaking';
+        thump.frequency.setValueAtTime(165, startTime);
+        thump.Q.setValueAtTime(1.6, startTime);
+        thump.gain.setValueAtTime(5.0, startTime);
+
+        const lp = ctx.createBiquadFilter();
+        lp.type = 'lowpass';
+        lp.frequency.setValueAtTime(680, startTime);
+
+        source.connect(thump);
+        thump.connect(lp);
+        lp.connect(gain);
+      } else {
+        source.connect(gain);
+      }
       gain.connect(ctx.destination);
       source.start(startTime);
       source.stop(startTime + durationSec + 0.04);
@@ -492,24 +529,34 @@ export function playGuitarFrequency(
     }
 
     source.buffer = createPluckBuffer(ctx, freq, durationSec);
+    if (bendSemitones > 0) {
+      source.playbackRate.setValueAtTime(1, startTime + 0.025);
+      source.playbackRate.exponentialRampToValueAtTime(
+        Math.pow(2, bendSemitones / 12),
+        startTime + 0.2
+      );
+    }
 
     const bodyResonance = ctx.createBiquadFilter();
     bodyResonance.type = 'peaking';
-    bodyResonance.frequency.setValueAtTime(195, startTime);
-    bodyResonance.Q.setValueAtTime(2.2, startTime);
-    bodyResonance.gain.setValueAtTime(4.5, startTime);
+    bodyResonance.frequency.setValueAtTime(palmMute ? 165 : 195, startTime);
+    bodyResonance.Q.setValueAtTime(palmMute ? 1.6 : 2.2, startTime);
+    bodyResonance.gain.setValueAtTime(palmMute ? 5.5 : 4.5, startTime);
 
     const clarityPeak = ctx.createBiquadFilter();
     clarityPeak.type = 'peaking';
     clarityPeak.frequency.setValueAtTime(2400, startTime);
     clarityPeak.Q.setValueAtTime(1.4, startTime);
-    clarityPeak.gain.setValueAtTime(2.5, startTime);
+    clarityPeak.gain.setValueAtTime(palmMute ? -4.0 : 2.5, startTime);
 
     const lowpass = ctx.createBiquadFilter();
     lowpass.type = 'lowpass';
-    lowpass.frequency.setValueAtTime(Math.min(5800, freq * 10), startTime);
+    lowpass.frequency.setValueAtTime(
+      palmMute ? 680 : Math.min(5800, freq * 10),
+      startTime
+    );
     lowpass.frequency.exponentialRampToValueAtTime(
-      Math.max(1100, freq * 3),
+      palmMute ? 340 : Math.max(1100, freq * 3),
       startTime + durationSec
     );
 
@@ -536,7 +583,13 @@ export function playGuitarFrequency(
 export function playGuitarPluck(
   stringNum: 1 | 2 | 3 | 4 | 5 | 6,
   fret: number,
-  options?: { durationSec?: number; volume?: number; delaySec?: number }
+  options?: {
+    durationSec?: number;
+    volume?: number;
+    delaySec?: number;
+    bendSemitones?: number;
+    palmMute?: boolean;
+  }
 ): void {
   const freq = getGuitarFrequency(stringNum, fret);
   playGuitarFrequency(freq, options);
@@ -588,7 +641,8 @@ export function playMutedStrum(volume = 0.28): void {
 export function playGuitarStep(
   notes: { string: 1 | 2 | 3 | 4 | 5 | 6; fret: number }[],
   muted = false,
-  sustain = false
+  sustain = false,
+  technique?: string
 ): void {
   if (sustain) {
     return;
@@ -599,10 +653,20 @@ export function playGuitarStep(
     return;
   }
 
+  const tech = (technique || '').toLowerCase();
+  const palmMute = tech.includes('palm') || tech.includes('p.m.');
+  const bendSemitones = tech.includes('bend')
+    ? tech.includes('1/2') || tech.includes('½')
+      ? 1
+      : 2
+    : 0;
+
   if (notes.length === 1) {
     playGuitarPluck(notes[0].string, notes[0].fret, {
-      durationSec: 1.25,
-      volume: 0.54,
+      durationSec: palmMute ? 0.2 : 1.25,
+      volume: palmMute ? 0.48 : 0.54,
+      bendSemitones,
+      palmMute,
     });
     return;
   }
@@ -611,9 +675,10 @@ export function playGuitarStep(
   const perNoteVol = Math.min(0.36, 0.78 / ordered.length);
   ordered.forEach((n, idx) => {
     playGuitarPluck(n.string, n.fret, {
-      durationSec: 1.35,
+      durationSec: palmMute ? 0.2 : 1.35,
       volume: perNoteVol,
       delaySec: idx * 0.016,
+      palmMute,
     });
   });
 }

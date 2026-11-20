@@ -30,6 +30,7 @@ import {
   calculateGoldilocksNextBpm,
   calculateWarmupBpm,
   computeWeightedExerciseBpm,
+  getLevelFilteredVariants,
   pickNextRecommendedVariant,
 } from '../utils/overloadEngine';
 import { useMetronome } from '../hooks/useMetronome';
@@ -140,26 +141,31 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
         pickNextRecommendedVariant(
           first.exercise,
           sessionLogs,
-          first.preferredVariantId
+          first.preferredVariantId,
+          plan.playerLevel
         )?.id ?? null
       );
     }
   );
 
   const activeVariant: ExerciseVariant | undefined = useMemo(() => {
-    const vars = currentExercise?.variants;
-    if (!vars || vars.length === 0) return undefined;
+    if (!currentExercise) return undefined;
+    const vars = getLevelFilteredVariants(currentExercise, plan.playerLevel);
+    if (vars.length === 0) return undefined;
     return vars.find((v) => v.id === selectedVariantId) ?? vars[0];
-  }, [currentExercise, selectedVariantId]);
+  }, [currentExercise, selectedVariantId, plan.playerLevel]);
 
   const resolveVariantBpm = useCallback(
     (ex: Exercise, varId: string | undefined, fallbackBpm: number): number => {
       if (varId && variantBpmMap[ex.id]?.[varId]) {
         return variantBpmMap[ex.id][varId];
       }
-      return computeWeightedExerciseBpm(ex, sessionLogs, varId).nextSessionBpm || fallbackBpm;
+      return (
+        computeWeightedExerciseBpm(ex, sessionLogs, varId, plan.playerLevel)
+          .nextSessionBpm || fallbackBpm
+      );
     },
-    [variantBpmMap, sessionLogs]
+    [variantBpmMap, sessionLogs, plan.playerLevel]
   );
 
   const currentComfortBpm = useMemo(() => {
@@ -177,13 +183,18 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     const initVar = pickNextRecommendedVariant(
       first.exercise,
       sessionLogs,
-      first.preferredVariantId
+      first.preferredVariantId,
+      plan.playerLevel
     );
-    const comfort = computeWeightedExerciseBpm(first.exercise, sessionLogs, initVar?.id)
-      .nextSessionBpm;
+    const comfort = computeWeightedExerciseBpm(
+      first.exercise,
+      sessionLogs,
+      initVar?.id,
+      plan.playerLevel
+    ).nextSessionBpm;
     // Set 1 of every workout starts below capacity (-15%) to warm up cleanly
     return calculateWarmupBpm(comfort);
-  }, [plan.items, sessionLogs]);
+  }, [plan.items, plan.playerLevel, sessionLogs]);
 
   const [precountBeat, setPrecountBeat] = useState(4);
   const [setRemainingSec, setSetRemainingSec] = useState(
@@ -250,7 +261,8 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     const pickedVar = pickNextRecommendedVariant(
       currentExercise,
       sessionLogs,
-      currentItem.preferredVariantId
+      currentItem.preferredVariantId,
+      plan.playerLevel
     );
     setSelectedVariantId(pickedVar?.id ?? null);
     const comfortBpm = resolveVariantBpm(
@@ -460,7 +472,8 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     const newWeighted = computeWeightedExerciseBpm(
       updatedExerciseForCalc,
       syntheticHistory,
-      activeVariant?.id
+      activeVariant?.id,
+      plan.playerLevel
     );
 
     const prevBest =

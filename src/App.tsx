@@ -52,7 +52,8 @@ export function App() {
     const saved = loadPersistedState();
     if (!saved) return createInitialAppState();
     const seedById = new Map(SEED_EXERCISES.map((ex) => [ex.id, ex]));
-    const hydratedExercises = saved.exercises.map((ex) => {
+    const savedIds = new Set(saved.exercises.map((ex) => ex.id));
+    const hydratedSavedExercises = saved.exercises.map((ex) => {
       const seed = seedById.get(ex.id);
       if (!seed) return ex;
       return {
@@ -67,6 +68,13 @@ export function App() {
         activeVariantId: ex.activeVariantId ?? seed.activeVariantId,
       };
     });
+    const missingSeedExercises = SEED_EXERCISES.filter(
+      (seed) => !savedIds.has(seed.id)
+    );
+    const hydratedExercises = [
+      ...hydratedSavedExercises,
+      ...missingSeedExercises,
+    ];
     const hydratedPlan = saved.settings.scientificPlan
       ? generateScientificPrescription(
           saved.settings.scientificPlan.answers,
@@ -199,10 +207,12 @@ export function App() {
     exercise: Exercise,
     preferredVariantId?: string
   ) => {
+    const playerLevel = activePrescription.answers.level;
     const startTargetBpm = computeWeightedExerciseBpm(
       exercise,
       appState.sessionLogs,
-      preferredVariantId
+      preferredVariantId,
+      playerLevel
     ).nextSessionBpm;
 
     const singleWorkout: WorkoutTemplate = {
@@ -231,6 +241,7 @@ export function App() {
       modeDescription: exercise.description,
       isStandardized: false,
       estimatedMinutes: singleWorkout.estimatedMinutes,
+      playerLevel,
       items: [
         {
           exerciseId: exercise.id,

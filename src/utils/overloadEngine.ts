@@ -2,6 +2,7 @@ import {
   CleanlinessScore,
   Exercise,
   ExerciseVariant,
+  PlayerLevelId,
   ScaledWorkoutItem,
   ScaledWorkoutPlan,
   SessionDurationPreset,
@@ -253,6 +254,33 @@ export function calculateNextBpm(
   return calculateGoldilocksNextBpm(currentBpm, currentBpm, cleanliness, 2);
 }
 
+export function isVariantAllowedForLevel(
+  variant: ExerciseVariant,
+  level?: PlayerLevelId
+): boolean {
+  if (!level) return true;
+  if (variant.maxLevel === 'foundation' && level !== 'foundation') {
+    return false;
+  }
+  if (variant.minLevel === 'intermediate' && level === 'foundation') {
+    return false;
+  }
+  if (variant.minLevel === 'advanced' && level !== 'advanced') {
+    return false;
+  }
+  return true;
+}
+
+export function getLevelFilteredVariants(
+  exercise: Exercise,
+  level?: PlayerLevelId
+): ExerciseVariant[] {
+  const all = exercise.variants ?? [];
+  if (!level || all.length === 0) return all;
+  const filtered = all.filter((v) => isVariantAllowedForLevel(v, level));
+  return filtered.length > 0 ? filtered : all;
+}
+
 /**
  * Computes recency-weighted, difficulty-normalized BPM across all variants of an exercise.
  * Ensures practicing one variant at 90 BPM cleanly immediately steps that variant's next BPM up (92/95 BPM)
@@ -261,13 +289,14 @@ export function calculateNextBpm(
 export function computeWeightedExerciseBpm(
   exercise: Exercise,
   sessionLogs: WorkoutSessionLog[] = [],
-  preferredVariantId?: string
+  preferredVariantId?: string,
+  playerLevel?: PlayerLevelId
 ): WeightedVariantBpmSummary {
   const matchingSets: SetLog[] = sessionLogs
     .flatMap((s) => s.sets.filter((st) => st.exerciseId === exercise.id))
     .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
-  const variants = exercise.variants ?? [];
+  const variants = getLevelFilteredVariants(exercise, playerLevel);
 
   if (variants.length === 0) {
     if (matchingSets.length === 0) {
@@ -308,7 +337,11 @@ export function computeWeightedExerciseBpm(
   const setsByVariant = new Map<string, SetLog[]>();
   variants.forEach((v) => setsByVariant.set(v.id, []));
 
+  const allVariantIds = new Set((exercise.variants ?? []).map((v) => v.id));
   for (const st of matchingSets) {
+    if (st.variantId && allVariantIds.has(st.variantId) && !setsByVariant.has(st.variantId)) {
+      continue;
+    }
     const vid =
       st.variantId && setsByVariant.has(st.variantId) ? st.variantId : defaultVariantId;
     setsByVariant.get(vid)!.push(st);
@@ -392,8 +425,11 @@ export function computeWeightedExerciseBpm(
       ? exercise.baselineBpm
       : Math.round(weightedNumerator / Math.max(0.0001, weightedDenominator));
 
-  const targetVarId =
+  const rawTargetVarId =
     preferredVariantId ?? exercise.activeVariantId ?? variants[0].id;
+  const targetVarId = variants.some((v) => v.id === rawTargetVarId)
+    ? rawTargetVarId
+    : variants[0].id;
   const activeEntry =
     byVariant.find((b) => b.variantId === targetVarId) ?? byVariant[0];
 
@@ -414,15 +450,21 @@ export function computeWeightedExerciseBpm(
 export function pickNextRecommendedVariant(
   exercise: Exercise,
   sessionLogs: WorkoutSessionLog[] = [],
-  preferredVariantId?: string
+  preferredVariantId?: string,
+  playerLevel?: PlayerLevelId
 ): ExerciseVariant | undefined {
-  const variants = exercise.variants;
-  if (!variants || variants.length === 0) return undefined;
+  const variants = getLevelFilteredVariants(exercise, playerLevel);
+  if (variants.length === 0) return undefined;
   if (preferredVariantId) {
     const found = variants.find((v) => v.id === preferredVariantId);
     if (found) return found;
   }
-  const summary = computeWeightedExerciseBpm(exercise, sessionLogs);
+  const summary = computeWeightedExerciseBpm(
+    exercise,
+    sessionLogs,
+    undefined,
+    playerLevel
+  );
   const sorted = [...summary.byVariant].sort((a, b) => a.setsCount - b.setsCount);
   const targetId = sorted[0]?.variantId ?? variants[0].id;
   return variants.find((v) => v.id === targetId) ?? variants[0];

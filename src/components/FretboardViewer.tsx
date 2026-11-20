@@ -60,19 +60,64 @@ type StepArticulation =
   | 'hammer'
   | 'pull'
   | 'slide'
+  | 'bend'
+  | 'palmmute'
   | 'vibrato'
   | 'sustain'
   | 'muted';
 
 function getStepArticulation(step: DemoStep | null | undefined): StepArticulation {
-  if (!step || step.muted || step.notes.length === 0) return 'muted';
+  if (!step) return 'pick';
+  if (step.muted || (step.notes.length === 0 && !step.sustain)) return 'muted';
   const tech = (step.technique || '').toLowerCase();
+  if (tech.includes('bend')) return 'bend';
+  if (tech.includes('palm') || tech.includes('p.m.')) return 'palmmute';
   if (tech.includes('hammer')) return 'hammer';
   if (tech.includes('pull')) return 'pull';
   if (tech.includes('slide')) return 'slide';
   if (step.sustain && tech.includes('vibrato')) return 'vibrato';
   if (step.sustain) return 'sustain';
   return 'pick';
+}
+
+function getBarreInfo(
+  stepNotes: FretNote[]
+): { fret: number; minString: number; maxString: number } | null {
+  if (stepNotes.length < 2) return null;
+  const fretted = stepNotes.filter((n) => n.fret > 0);
+  if (fretted.length < 2) return null;
+
+  const indexFingerNotes = fretted.filter((n) => n.finger === '1');
+  if (indexFingerNotes.length >= 2) {
+    const byFret = new Map<number, FretNote[]>();
+    indexFingerNotes.forEach((n) => {
+      const list = byFret.get(n.fret) ?? [];
+      list.push(n);
+      byFret.set(n.fret, list);
+    });
+    for (const [fret, list] of byFret.entries()) {
+      if (list.length >= 2) {
+        const strings = list.map((n) => n.string);
+        return {
+          fret,
+          minString: Math.min(...strings),
+          maxString: Math.max(...strings),
+        };
+      }
+    }
+  }
+
+  const minFret = Math.min(...fretted.map((n) => n.fret));
+  const atMinFret = fretted.filter((n) => n.fret === minFret);
+  if (atMinFret.length >= 3) {
+    const strings = atMinFret.map((n) => n.string);
+    return {
+      fret: minFret,
+      minString: Math.min(...strings),
+      maxString: Math.max(...strings),
+    };
+  }
+  return null;
 }
 
 export const FretboardViewer: React.FC<FretboardViewerProps> = ({
@@ -159,7 +204,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
           });
         });
       } else {
-        playGuitarStep(step.notes, step.muted, step.sustain);
+        playGuitarStep(step.notes, step.muted, step.sustain, step.technique);
       }
     },
     [effectiveSteps, muteAudio, metronomeSound, customStringFreqs]
@@ -301,7 +346,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
     if (effectiveActiveStepIndex === null || muteAudio) return;
     const step = effectiveSteps[effectiveActiveStepIndex];
     if (step) {
-      playGuitarStep(step.notes, step.muted, step.sustain);
+      playGuitarStep(step.notes, step.muted, step.sustain, step.technique);
     }
   }, [
     usesExternalClock,
@@ -363,6 +408,50 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
   const activeArticulation = getStepArticulation(activeStep);
   const isSustainedStep = Boolean(activeStep?.sustain);
 
+  const effectiveActiveNotes = useMemo(() => {
+    if (!activeStep || activeStep.muted) return [];
+    if (activeStep.notes.length > 0) return activeStep.notes;
+    if (activeStep.sustain && effectiveActiveStepIndex !== null) {
+      for (let i = effectiveActiveStepIndex - 1; i >= 0; i--) {
+        const prev = effectiveSteps[i];
+        if (prev && !prev.muted && prev.notes.length > 0) {
+          return prev.notes;
+        }
+      }
+    }
+    return [];
+  }, [activeStep, effectiveActiveStepIndex, effectiveSteps]);
+
+  const hasBendSteps = useMemo(
+    () => effectiveSteps.some((s) => getStepArticulation(s) === 'bend'),
+    [effectiveSteps]
+  );
+
+  const activeBendNote = useMemo(() => {
+    if (activeArticulation !== 'bend' || effectiveActiveNotes.length === 0) {
+      return null;
+    }
+    const isHalf =
+      (activeStep?.technique || '').includes('1/2') ||
+      (activeStep?.technique || '').includes('½');
+    return {
+      note: effectiveActiveNotes[0],
+      isHalf,
+    };
+  }, [activeArticulation, effectiveActiveNotes, activeStep]);
+
+  const activeBarre = useMemo(() => {
+    if (effectiveActiveStepIndex !== null) {
+      const barre = getBarreInfo(effectiveActiveNotes);
+      return barre ? { ...barre, isActive: true } : null;
+    }
+    if (effectiveSteps.length > 0) {
+      const staticBarre = getBarreInfo(effectiveSteps[0].notes);
+      return staticBarre ? { ...staticBarre, isActive: false } : null;
+    }
+    return null;
+  }, [effectiveActiveStepIndex, effectiveActiveNotes, effectiveSteps]);
+
   const legatoConnections = useMemo(() => {
     const conns: {
       stepIndex: number;
@@ -420,50 +509,49 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
 
   const activeNoteKeys = useMemo(() => {
     const set = new Set<string>();
-    if (activeStep && !activeStep.muted) {
-      activeStep.notes.forEach((n) => set.add(`${n.string}-${n.fret}`));
-    }
+    effectiveActiveNotes.forEach((n) => set.add(`${n.string}-${n.fret}`));
     if (clickedNoteKey) {
       set.add(clickedNoteKey);
     }
     return set;
-  }, [activeStep, clickedNoteKey]);
+  }, [effectiveActiveNotes, clickedNoteKey]);
 
   const activeStringNumbers = useMemo(() => {
     const set = new Set<number>();
-    if (activeStep && !activeStep.muted) {
-      activeStep.notes.forEach((n) => set.add(n.string));
-    }
+    effectiveActiveNotes.forEach((n) => set.add(n.string));
     if (clickedNoteKey) {
       const s = Number(clickedNoteKey.split('-')[0]);
       if (!Number.isNaN(s)) set.add(s);
     }
     return set;
-  }, [activeStep, clickedNoteKey]);
+  }, [effectiveActiveNotes, clickedNoteKey]);
 
   // Tight targeted auto-zoom around the exercise's active frets so mobile views fit 100% on-screen
   const fretRange = useMemo(() => {
     if (interactive || notes.length === 0) {
       return { start: 1, end: 15 };
     }
-    const allFrets = [
+    const allFretsRaw = [
       ...notes.map((n) => n.fret),
       ...effectiveSteps.flatMap((s) => s.notes.map((n) => n.fret)),
-    ].filter((f) => f > 0);
-    if (allFrets.length === 0) {
+    ].filter((f) => f >= 0);
+    const hasOpen = allFretsRaw.some((f) => f === 0);
+    const positiveFrets = allFretsRaw.filter((f) => f > 0);
+    if (positiveFrets.length === 0 && !hasOpen) {
       return { start: 1, end: 5 };
     }
-    const minFret = Math.min(...allFrets);
-    const maxFret = Math.max(...allFrets);
-    const start = Math.max(1, minFret);
-    const end = Math.min(15, Math.max(start + 3, maxFret));
+    const minPos = positiveFrets.length > 0 ? Math.min(...positiveFrets) : 1;
+    const maxPos = positiveFrets.length > 0 ? Math.max(...positiveFrets) : 3;
+    const start = hasOpen && minPos <= 3 ? 0 : Math.max(1, minPos);
+    const end = Math.min(15, Math.max(start + 3, maxPos));
     return { start, end };
   }, [notes, effectiveSteps, interactive]);
 
   const fretCount = fretRange.end - fretRange.start + 1;
   const leftPad = 28;
   const rightPad = 12;
-  const topPad = !interactive && legatoConnections.length > 0 ? 36 : 22;
+  const topPad =
+    !interactive && (legatoConnections.length > 0 || hasBendSteps) ? 36 : 22;
   const bottomPad = 28;
   const fretWidth = interactive
     ? 44
@@ -526,7 +614,27 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
           strokeWidth={1}
         />
 
-        {/* Crisp white nut at fret 1 */}
+        {/* Open-string column tint & crisp white nut */}
+        {fretRange.start === 0 && (
+          <>
+            <rect
+              x={leftPad}
+              y={topPad - 10}
+              width={fretWidth}
+              height={5 * stringGap + 20}
+              rx={10}
+              fill="rgba(255,255,255,0.03)"
+            />
+            <rect
+              x={leftPad + fretWidth - 1.75}
+              y={topPad - 10}
+              width={3.5}
+              height={5 * stringGap + 20}
+              rx={1.5}
+              fill="#FFFFFF"
+            />
+          </>
+        )}
         {fretRange.start === 1 && (
           <rect
             x={leftPad - 2}
@@ -597,12 +705,59 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
           );
         })}
 
+        {/* Movable Barrè Clamp Indicator */}
+        {!interactive &&
+          activeBarre &&
+          activeBarre.fret >= fretRange.start &&
+          activeBarre.fret <= fretRange.end && (() => {
+            const barreCx =
+              leftPad +
+              (activeBarre.fret - fretRange.start) * fretWidth +
+              fretWidth / 2;
+            const barreTop =
+              topPad + (activeBarre.minString - 1) * stringGap - 13;
+            const barreBottom =
+              topPad + (activeBarre.maxString - 1) * stringGap + 13;
+            return (
+              <rect
+                x={barreCx - 13}
+                y={barreTop}
+                width={26}
+                height={Math.max(24, barreBottom - barreTop)}
+                rx={13}
+                fill={
+                  activeBarre.isActive
+                    ? 'rgba(255,107,0,0.22)'
+                    : 'rgba(255,255,255,0.08)'
+                }
+                stroke={
+                  activeBarre.isActive ? '#FF6B00' : 'rgba(255,255,255,0.32)'
+                }
+                strokeWidth={activeBarre.isActive ? 2 : 1.2}
+                pointerEvents="none"
+              />
+            );
+          })()}
+
         {/* Strings & Zoomed Interactive Notes */}
         {stringLabels.map((name, idx) => {
           const stringNum = (idx + 1) as 1 | 2 | 3 | 4 | 5 | 6;
           const y = topPad + idx * stringGap;
           const thickness = 0.85 + idx * 0.28;
           const isStringLit = activeStringNumbers.has(stringNum);
+          const isBentString =
+            !interactive &&
+            activeBendNote !== null &&
+            activeBendNote.note.string === stringNum &&
+            activeBendNote.note.fret >= fretRange.start &&
+            activeBendNote.note.fret <= fretRange.end;
+          const bendCx = isBentString
+            ? leftPad +
+              (activeBendNote!.note.fret - fretRange.start) * fretWidth +
+              fretWidth / 2
+            : 0;
+          const bendLift =
+            isBentString && activeBendNote ? (activeBendNote.isHalf ? 12 : 20) : 0;
 
           return (
             <g key={`${idx}-${name}`}>
@@ -616,16 +771,27 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
               >
                 {name}
               </text>
-              <line
-                x1={leftPad}
-                y1={y}
-                x2={leftPad + fretCount * fretWidth}
-                y2={y}
-                stroke={
-                  isStringLit ? 'rgba(255,107,0,0.88)' : 'rgba(255,255,255,0.24)'
-                }
-                strokeWidth={isStringLit ? thickness + 0.8 : thickness}
-              />
+              {isBentString ? (
+                <path
+                  d={`M ${leftPad} ${y} Q ${bendCx} ${y - bendLift * 1.45} ${
+                    leftPad + fretCount * fretWidth
+                  } ${y}`}
+                  fill="none"
+                  stroke="#FF6B00"
+                  strokeWidth={thickness + 1.2}
+                />
+              ) : (
+                <line
+                  x1={leftPad}
+                  y1={y}
+                  x2={leftPad + fretCount * fretWidth}
+                  y2={y}
+                  stroke={
+                    isStringLit ? 'rgba(255,107,0,0.88)' : 'rgba(255,255,255,0.24)'
+                  }
+                  strokeWidth={isStringLit ? thickness + 0.8 : thickness}
+                />
+              )}
 
               {Array.from({ length: fretCount }, (_, fIdx) => {
                 const fretNum = fretRange.start + fIdx;
@@ -638,6 +804,14 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                   (effectivePlayingVisual || effectiveActiveStepIndex !== null) &&
                   !isHighlighted &&
                   !isLegatoAnchor;
+
+                const isBentNote =
+                  isHighlighted &&
+                  isBentString &&
+                  activeBendNote?.note.fret === fretNum;
+                const isPalmMutedNote =
+                  isHighlighted && activeArticulation === 'palmmute';
+                const cyNote = isBentNote ? y - bendLift * 0.42 : y;
 
                 const textLabel =
                   labelMode === 'fingers'
@@ -686,26 +860,42 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                               activeArticulation === 'vibrato' ||
                               activeArticulation === 'sustain'
                                 ? 'animate-vibrato'
+                                : isPalmMutedNote
+                                ? 'animate-palm-mute'
                                 : undefined
                             }
                           >
+                            {isPalmMutedNote ? (
+                              <rect
+                                x={cx - litRadius - 5}
+                                y={cyNote - litRadius - 5}
+                                width={(litRadius + 5) * 2}
+                                height={(litRadius + 5) * 2}
+                                rx={9}
+                                fill="rgba(255,107,0,0.14)"
+                                stroke="#FF6B00"
+                                strokeWidth={1.8}
+                                strokeDasharray="4 2.5"
+                              />
+                            ) : (
+                              <circle
+                                cx={cx}
+                                cy={cyNote}
+                                r={litRadius + 6}
+                                fill={
+                                  isSustainedStep
+                                    ? 'rgba(255,255,255,0.16)'
+                                    : 'rgba(255,107,0,0.2)'
+                                }
+                                stroke={isSustainedStep ? '#FFFFFF' : '#FF6B00'}
+                                strokeWidth={isSustainedStep ? 2 : 1.5}
+                                strokeDasharray={isSustainedStep ? '4 3' : undefined}
+                                filter={`url(#${svgFilterId})`}
+                              />
+                            )}
                             <circle
                               cx={cx}
-                              cy={y}
-                              r={litRadius + 6}
-                              fill={
-                                isSustainedStep
-                                  ? 'rgba(255,255,255,0.16)'
-                                  : 'rgba(255,107,0,0.2)'
-                              }
-                              stroke={isSustainedStep ? '#FFFFFF' : '#FF6B00'}
-                              strokeWidth={isSustainedStep ? 2 : 1.5}
-                              strokeDasharray={isSustainedStep ? '4 3' : undefined}
-                              filter={`url(#${svgFilterId})`}
-                            />
-                            <circle
-                              cx={cx}
-                              cy={y}
+                              cy={cyNote}
                               r={litRadius}
                               fill="#FF6B00"
                               stroke="#FFFFFF"
@@ -733,7 +923,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                         )}
                         <text
                           x={cx}
-                          y={y + 4.2}
+                          y={cyNote + 4.2}
                           textAnchor="middle"
                           fontSize={isHighlighted ? 12.5 : 10.5}
                           fontWeight={800}
@@ -741,6 +931,31 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                         >
                           {textLabel}
                         </text>
+                        {isBentNote && (
+                          <g className="animate-bend-rise" pointerEvents="none">
+                            <path
+                              d={`M ${cx} ${cyNote - litRadius - 2} L ${cx} ${
+                                cyNote - litRadius - 17
+                              } M ${cx - 4} ${cyNote - litRadius - 12} L ${cx} ${
+                                cyNote - litRadius - 17
+                              } L ${cx + 4} ${cyNote - litRadius - 12}`}
+                              fill="none"
+                              stroke="#FF6B00"
+                              strokeWidth={2}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                            <text
+                              x={cx + 12}
+                              y={cyNote - litRadius - 8}
+                              fontSize={9}
+                              fontWeight={900}
+                              fill="#FF6B00"
+                            >
+                              {activeBendNote?.isHalf ? '½' : '1'}
+                            </text>
+                          </g>
+                        )}
                       </g>
                     )}
                   </g>
@@ -749,6 +964,32 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
             </g>
           );
         })}
+
+        {/* Palm Mute Bridge Damper Pill */}
+        {!interactive && activeArticulation === 'palmmute' && (
+          <g className="animate-palm-mute" pointerEvents="none">
+            <rect
+              x={leftPad + fretCount * fretWidth - 28}
+              y={topPad - 6}
+              width={24}
+              height={16}
+              rx={5}
+              fill="#000000"
+              stroke="#FF6B00"
+              strokeWidth={1.5}
+            />
+            <text
+              x={leftPad + fretCount * fretWidth - 16}
+              y={topPad + 5.5}
+              textAnchor="middle"
+              fontSize={9}
+              fontWeight={900}
+              fill="#FF6B00"
+            >
+              PM
+            </text>
+          </g>
+        )}
 
         {/* Ad-Hoc Legato & Expressivity Slur Arcs (Hammer-On / Pull-Off / Slide) */}
         {!interactive &&
@@ -857,10 +1098,18 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
           const slotLabel = BAR_8_LABELS[idx] ?? String(idx + 1);
           const isDownbeat = idx % 2 === 0;
           const art = getStepArticulation(step);
-          const isLegatoSlot =
-            art === 'hammer' || art === 'pull' || art === 'slide';
+          const isArticulatedSlot =
+            art === 'hammer' ||
+            art === 'pull' ||
+            art === 'slide' ||
+            art === 'bend' ||
+            art === 'palmmute';
           const symbol =
-            art === 'hammer'
+            art === 'bend'
+              ? '↑'
+              : art === 'palmmute'
+              ? 'PM'
+              : art === 'hammer'
               ? 'H'
               : art === 'pull'
               ? 'P'
@@ -880,7 +1129,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
               className={`min-w-0 flex flex-col items-center justify-center rounded-lg border py-1 text-[10px] font-bold tabular-nums ${
                 isActive
                   ? 'border-[#FF6B00] bg-[#FF6B00] text-black'
-                  : isLegatoSlot
+                  : isArticulatedSlot
                   ? 'border-[#FF6B00]/35 bg-black text-[#FF6B00]'
                   : isDownbeat
                   ? 'border-white/15 bg-black text-white/75'

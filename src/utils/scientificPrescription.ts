@@ -4,6 +4,7 @@ import {
   ExerciseWeeklyDose,
   FondamentaId,
   PainPointId,
+  PathId,
   PlayerLevelId,
   ScaledWorkoutItem,
   ScaledWorkoutPlan,
@@ -18,6 +19,7 @@ import {
   WeightedVariantBpmSummary,
   computeExerciseScore,
   computeWeightedExerciseBpm,
+  pickNextRecommendedVariant,
 } from './overloadEngine';
 
 export interface QuizOption<T extends string | number> {
@@ -25,6 +27,35 @@ export interface QuizOption<T extends string | number> {
   title: string;
   subtitle: string;
   badge?: string;
+}
+
+export interface PathOption {
+  value: PathId;
+  title: string;
+  subtitle: string;
+  focusBadges: string[];
+}
+
+export const PATH_OPTIONS: PathOption[] = [
+  {
+    value: 'solista',
+    title: 'Percorso Solista',
+    subtitle: 'Scioltezza mano sinistra, alternate picking, legato, bending ed espressività.',
+    focusBadges: ['Alternate Picking', 'Legato & Bending', 'Manico Libero'],
+  },
+  {
+    value: 'rhythm',
+    title: 'Percorso Rhythm',
+    subtitle: 'Palm muting, power chords veloci, accordi barrè mobili e timing.',
+    focusBadges: ['Palm Mute & Power', 'Barrè Mobili', 'Timing & Groove'],
+  },
+];
+
+export function resolvePathId(answers: DiagnosticQuizAnswers): PathId {
+  if (answers.pathId === 'solista' || answers.pathId === 'rhythm') {
+    return answers.pathId;
+  }
+  return answers.primaryPainPoint === 'timing_drift' ? 'rhythm' : 'solista';
 }
 
 export const PAIN_POINT_OPTIONS: QuizOption<PainPointId>[] = [
@@ -77,17 +108,17 @@ export const LEVEL_OPTIONS: QuizOption<PlayerLevelId>[] = [
   {
     value: 'foundation',
     title: 'Parto dalle basi',
-    subtitle: 'Faccio ancora fatica a suonare pulito e a tempo.',
+    subtitle: 'Accordi aperti, prime pentatoniche e pulizia sul tempo.',
   },
   {
     value: 'intermediate',
-    title: 'Suono già ma sono bloccato',
-    subtitle: 'Le cose lente vengono bene, ma appena accelero sporco tutto.',
+    title: 'Intermedio',
+    subtitle: 'Accordi barrè mobili, fraseggio e velocità sempre più pulita.',
   },
   {
     value: 'advanced',
-    title: 'Suono veloce ma voglio zero errori',
-    subtitle: 'Voglio pulizia totale anche nei passaggi più difficili.',
+    title: 'Avanzato',
+    subtitle: 'Controllo totale ad alta velocità, barrè mobili ed espressività.',
   },
 ];
 
@@ -132,56 +163,6 @@ export const SESSION_BUDGET_OPTIONS: QuizOption<SessionDurationPreset>[] = [
   },
 ];
 
-interface ProfileTemplate {
-  profileTitle: string;
-  diagnosisSummary: string;
-  scientificBasis: string;
-  primaryIds: [string, string];
-  fallbackAnchorId: string;
-}
-
-const PROFILE_TEMPLATES: Record<PainPointId, ProfileTemplate> = {
-  speed_wall: {
-    profileTitle: 'Velocità & Pulizia sugli Assoli',
-    diagnosisSummary:
-      'Sblocca la sincronia tra le due mani per correre senza sporcare le note.',
-    scientificBasis: '',
-    primaryIds: ['ex-picking-pg6', 'ex-pent-box1'],
-    fallbackAnchorId: 'ex-rhythm-gap',
-  },
-  left_hand_fatigue: {
-    profileTitle: 'Mano Sinistra Sciolta & Leggera',
-    diagnosisSummary:
-      'Rendi tutte e 4 le dita veloci e indipendenti senza stancarti.',
-    scientificBasis: '',
-    primaryIds: ['ex-legato-trill', 'ex-picking-spider'],
-    fallbackAnchorId: 'ex-rhythm-gap',
-  },
-  timing_drift: {
-    profileTitle: 'Sempre a Tempo su Basi e Gruppo',
-    diagnosisSummary:
-      'Costruisci un ritmo interno automatico anche quando la batteria si ferma.',
-    scientificBasis: '',
-    primaryIds: ['ex-rhythm-gap', 'ex-rhythm-funk16'],
-    fallbackAnchorId: 'ex-pent-box1',
-  },
-  neck_trapped: {
-    profileTitle: 'Libertà su Tutto il Manico',
-    diagnosisSummary:
-      'Improvvisa su tutta la tastiera senza restare chiuso in un solo box.',
-    scientificBasis: '',
-    primaryIds: ['ex-pent-diagonal', 'ex-pent-box1'],
-    fallbackAnchorId: 'ex-rhythm-gap',
-  },
-};
-
-const BOTTLENECK_EXERCISE_MAP: Record<SecondaryBottleneckId, string> = {
-  string_crossing: 'ex-pent-box1',
-  finger_tension: 'ex-picking-spider',
-  rhythm_stiffness: 'ex-rhythm-funk16',
-  box_isolation: 'ex-pent-diagonal',
-};
-
 const DOSE_COPY_BY_EXERCISE: Record<
   string,
   { coachMethod: string; scientificRationale: string }
@@ -214,16 +195,28 @@ const DOSE_COPY_BY_EXERCISE: Record<
     coachMethod: 'Polso sciolto',
     scientificRationale: 'Tieni il groove sugli accordi senza irrigidirti.',
   },
+  'ex-rhythm-palmmute': {
+    coachMethod: 'Muting & Attacco',
+    scientificRationale: 'Controlla il palmo sul ponte tra chug e power chords.',
+  },
+  'ex-rhythm-chords': {
+    coachMethod: 'Cambi & Barrè',
+    scientificRationale: 'Piazzamento istantaneo su forme mobili barrè o aperte.',
+  },
+  'ex-lead-bending': {
+    coachMethod: 'Intonazione & Vibrato',
+    scientificRationale: 'Centra il pitch nei bend rapidi e fai cantare il vibrato.',
+  },
 };
 
 export function generateScientificPrescription(
   answers: DiagnosticQuizAnswers,
   exercises: Exercise[]
 ): ScientificPlanPrescription {
-  const tpl = PROFILE_TEMPLATES[answers.primaryPainPoint];
+  const pathId = resolvePathId(answers);
   const exIdsAvailable = new Set(exercises.map((e) => e.id));
 
-  // Level & frequency volume scaling: MEV (Minimum Effective Volume) & MAV (Maximum Adaptive Volume)
+  // Level & frequency volume scaling
   const levelBonus =
     answers.level === 'advanced' ? 2 : answers.level === 'intermediate' ? 1 : 0;
   const freqBonus =
@@ -261,50 +254,107 @@ export function generateScientificPrescription(
     });
   };
 
-  // Primary deficiency core (#1 & #2)
-  addIfAvailable(
-    tpl.primaryIds[0],
-    'primario',
-    'Priorità 1',
-    6 + levelBonus + freqBonus,
-    9 + levelBonus + freqBonus * 2,
-    3,
-    90
-  );
-  addIfAvailable(
-    tpl.primaryIds[1],
-    'primario',
-    'Priorità 2',
-    5 + levelBonus,
-    8 + levelBonus + freqBonus,
-    3,
-    90
-  );
+  if (pathId === 'solista') {
+    const solistaPrimary = [
+      'ex-picking-pg6',
+      'ex-legato-trill',
+      'ex-lead-bending',
+      'ex-pent-box1',
+    ];
+    solistaPrimary.forEach((id, idx) => {
+      addIfAvailable(
+        id,
+        'primario',
+        `Focus ${idx + 1}`,
+        Math.min(8, 5 + levelBonus + freqBonus),
+        Math.min(12, 8 + levelBonus + freqBonus * 2),
+        3,
+        90
+      );
+    });
 
-  // Secondary bottleneck exercise
-  const secondaryId = BOTTLENECK_EXERCISE_MAP[answers.secondaryBottleneck];
-  addIfAvailable(
-    secondaryId,
-    'secondario',
-    'Supporto',
-    4 + freqBonus,
-    6 + levelBonus + freqBonus,
-    2,
-    90
-  );
+    const solistaSupport = ['ex-picking-spider', 'ex-pent-diagonal'];
+    solistaSupport.forEach((id) => {
+      addIfAvailable(
+        id,
+        'secondario',
+        'Supporto',
+        4 + Math.min(1, freqBonus),
+        6 + levelBonus + freqBonus,
+        2,
+        90
+      );
+    });
 
-  // Foundational timing / versatility anchor
-  addIfAvailable(
-    tpl.fallbackAnchorId,
-    'fondamentale',
-    'Base',
-    3 + Math.min(1, freqBonus),
-    5 + freqBonus,
-    2,
-    90
-  );
+    const solistaRhythmBase = [
+      'ex-rhythm-palmmute',
+      'ex-rhythm-chords',
+      'ex-rhythm-gap',
+      'ex-rhythm-funk16',
+    ];
+    solistaRhythmBase.forEach((id) => {
+      addIfAvailable(
+        id,
+        'fondamentale',
+        'Fondamenta',
+        2 + Math.min(1, freqBonus),
+        4 + Math.min(2, freqBonus),
+        2,
+        75
+      );
+    });
+  } else {
+    const rhythmPrimary = [
+      'ex-rhythm-palmmute',
+      'ex-rhythm-chords',
+      'ex-rhythm-gap',
+      'ex-rhythm-funk16',
+    ];
+    rhythmPrimary.forEach((id, idx) => {
+      addIfAvailable(
+        id,
+        'primario',
+        `Focus ${idx + 1}`,
+        Math.min(8, 5 + levelBonus + freqBonus),
+        Math.min(12, 8 + levelBonus + freqBonus * 2),
+        3,
+        90
+      );
+    });
 
-  // Include all remaining exercises across the 4 Fondamenta as baseline volume
+    const rhythmSupport = ['ex-picking-pg6', 'ex-picking-spider'];
+    rhythmSupport.forEach((id) => {
+      addIfAvailable(
+        id,
+        'secondario',
+        'Supporto',
+        3 + Math.min(1, freqBonus),
+        5 + levelBonus + freqBonus,
+        2,
+        90
+      );
+    });
+
+    const rhythmSoloBase = [
+      'ex-pent-box1',
+      'ex-legato-trill',
+      'ex-lead-bending',
+      'ex-pent-diagonal',
+    ];
+    rhythmSoloBase.forEach((id) => {
+      addIfAvailable(
+        id,
+        'fondamentale',
+        'Fondamenta',
+        2 + Math.min(1, freqBonus),
+        4 + Math.min(2, freqBonus),
+        2,
+        75
+      );
+    });
+  }
+
+  // Include any remaining custom or future exercises as baseline volume
   for (const ex of exercises) {
     addIfAvailable(
       ex.id,
@@ -336,13 +386,23 @@ export function generateScientificPrescription(
     };
   });
 
+  const profileTitle =
+    pathId === 'rhythm' ? 'Percorso Rhythm' : 'Percorso Solista';
+  const diagnosisSummary =
+    pathId === 'rhythm'
+      ? 'Focus su palm muting, power chords veloci, accordi barrè mobili e timing.'
+      : 'Focus su alternate picking, legato, bending e libertà su tutto il manico.';
+
   return {
     id: `plan-${Date.now()}`,
     createdAt: new Date().toISOString(),
-    answers,
-    profileTitle: tpl.profileTitle,
-    diagnosisSummary: tpl.diagnosisSummary,
-    scientificBasis: tpl.scientificBasis,
+    answers: {
+      ...answers,
+      pathId,
+    },
+    profileTitle,
+    diagnosisSummary,
+    scientificBasis: '',
     doses,
   };
 }
@@ -352,6 +412,8 @@ export function createDefaultScientificPrescription(
   activeProgramId?: string,
   preset: SessionDurationPreset = 15
 ): ScientificPlanPrescription {
+  const pathId: PathId =
+    activeProgramId === 'prog-rhythm' ? 'rhythm' : 'solista';
   const painByProgram: Record<string, PainPointId> = {
     'prog-picking': 'speed_wall',
     'prog-lefthand': 'left_hand_fatigue',
@@ -369,6 +431,7 @@ export function createDefaultScientificPrescription(
 
   return generateScientificPrescription(
     {
+      pathId,
       primaryPainPoint:
         (activeProgramId && painByProgram[activeProgramId]) || 'speed_wall',
       secondaryBottleneck:
@@ -493,7 +556,12 @@ export function computeWeeklyDoseProgress(
     const missingForMin = Math.max(0, dose.weeklyMinSets - completedSets);
     const missingForOptimal = Math.max(0, dose.weeklyOptimalSets - completedSets);
     const mastery = computeExerciseScore(exercise, sessionLogs);
-    const weightedSummary = computeWeightedExerciseBpm(exercise, sessionLogs);
+    const weightedSummary = computeWeightedExerciseBpm(
+      exercise,
+      sessionLogs,
+      undefined,
+      prescription.answers.level
+    );
     const minPct = Math.min(
       100,
       Math.round((completedSets / Math.max(1, dose.weeklyMinSets)) * 100)
@@ -554,21 +622,19 @@ export function computeWeeklyDoseProgress(
   };
 }
 
-const PRIORITY_FONDAMENTA_BY_PAIN: Record<PainPointId, FondamentaId> = {
-  speed_wall: 'picking',
-  left_hand_fatigue: 'legato',
-  timing_drift: 'rhythm',
-  neck_trapped: 'pentatonic',
-};
-
 export function computeFondamentaWeeklyGroups(
   prescription: ScientificPlanPrescription,
   exercises: Exercise[],
   sessionLogs: WorkoutSessionLog[]
 ): FondamentaWeeklyGroup[] {
   const weekly = computeWeeklyDoseProgress(prescription, exercises, sessionLogs);
-  const primaryFondamenta =
-    PRIORITY_FONDAMENTA_BY_PAIN[prescription.answers.primaryPainPoint];
+  const pathId = resolvePathId(prescription.answers);
+  const primaryFondamenta: FondamentaId =
+    pathId === 'rhythm' ? 'rhythm' : 'picking';
+  const pathOrder: FondamentaId[] =
+    pathId === 'rhythm'
+      ? ['rhythm', 'picking', 'legato', 'pentatonic']
+      : ['picking', 'legato', 'pentatonic', 'rhythm'];
 
   const bucket = new Map<FondamentaId, ExerciseWeeklyProgressItem[]>();
   (['picking', 'legato', 'pentatonic', 'rhythm'] as FondamentaId[]).forEach((fid) =>
@@ -620,15 +686,10 @@ export function computeFondamentaWeeklyGroups(
     });
   }
 
-  groups.sort((a, b) => {
-    if (a.isPrimaryFocus !== b.isPrimaryFocus) {
-      return a.isPrimaryFocus ? -1 : 1;
-    }
-    const defA = Math.max(0, a.weeklyMinSets - a.completedSets);
-    const defB = Math.max(0, b.weeklyMinSets - b.completedSets);
-    if (defA !== defB) return defB - defA;
-    return FONDAMENTA_CATALOG[a.fondamentaId].order - FONDAMENTA_CATALOG[b.fondamentaId].order;
-  });
+  groups.sort(
+    (a, b) =>
+      pathOrder.indexOf(a.fondamentaId) - pathOrder.indexOf(b.fondamentaId)
+  );
 
   return groups;
 }
@@ -691,9 +752,25 @@ export function buildSessionPlanFromPrescription(
   const baseSetsPerEx = Math.floor(totalSets / numExercises);
   const extraSetsCount = totalSets % numExercises;
 
+  const playerLevel = prescription.answers.level;
+
   const items: ScaledWorkoutItem[] = chosenProgressItems.map(
     (progItem, idx) => {
       const sets = baseSetsPerEx + (idx < extraSetsCount ? 1 : 0);
+      const pickedVar = pickNextRecommendedVariant(
+        progItem.exercise,
+        sessionLogs,
+        undefined,
+        playerLevel
+      );
+      const targetBpm = pickedVar
+        ? computeWeightedExerciseBpm(
+            progItem.exercise,
+            sessionLogs,
+            pickedVar.id,
+            playerLevel
+          ).nextSessionBpm
+        : progItem.weightedSummary.nextSessionBpm;
       const reason =
         progItem.missingForMin > 0
           ? `Mancano ${progItem.missingForMin} serie al Weekly Min`
@@ -707,7 +784,8 @@ export function buildSessionPlanFromPrescription(
         durationSec,
         restSec,
         exercise: progItem.exercise,
-        targetBpm: progItem.weightedSummary.nextSessionBpm,
+        targetBpm,
+        preferredVariantId: pickedVar?.id,
         pillarNumber: progItem.priorityRank,
         pillarLabel: progItem.dose.roleLabel,
         selectionReason: reason,
@@ -742,6 +820,7 @@ export function buildSessionPlanFromPrescription(
     modeDescription: prescription.diagnosisSummary,
     isStandardized: true,
     estimatedMinutes: syntheticWorkout.estimatedMinutes,
+    playerLevel,
     items,
   };
 }

@@ -12,8 +12,11 @@ import {
 import {
   computeFondamentaWeeklyGroups,
   computeWeeklyDoseProgress,
+  resolvePathId,
 } from '../utils/scientificPrescription';
+import { getLevelFilteredVariants } from '../utils/overloadEngine';
 import { FretboardViewer } from './FretboardViewer';
+import { PathIllustration } from './PathIllustrations';
 
 interface ProgramsAndBuilderProps {
   exercises: Exercise[];
@@ -163,6 +166,7 @@ export const ProgramsAndBuilder: React.FC<ProgramsAndBuilderProps> = ({
     : overallMinReached
     ? 'bg-white'
     : 'bg-[#FF6B00]';
+  const activePathId = resolvePathId(prescription.answers);
 
   return (
     <div className="space-y-8 pb-4">
@@ -189,7 +193,13 @@ export const ProgramsAndBuilder: React.FC<ProgramsAndBuilderProps> = ({
             </button>
           </div>
 
-          <div className="relative z-10 my-auto py-4">
+          <div className="relative z-10 my-auto flex flex-col items-start gap-4 py-2">
+            <div className="w-full overflow-hidden rounded-2xl border border-white/10 bg-black/80 px-2 py-2">
+              <PathIllustration
+                pathId={activePathId}
+                className="mx-auto h-32 sm:h-36 w-full"
+              />
+            </div>
             <h1 className="text-3xl sm:text-[34px] font-black tracking-tight leading-[1.08] text-white">
               {prescription.profileTitle}
             </h1>
@@ -309,11 +319,10 @@ export const ProgramsAndBuilder: React.FC<ProgramsAndBuilderProps> = ({
       {activeSelection && (() => {
         const { group, item } = activeSelection;
         const ex = item.exercise;
-        const variants = ex.variants ?? [];
+        const variants = getLevelFilteredVariants(ex, prescription.answers.level);
+        const requestedVarId = selectedVariantByEx[ex.id] || ex.activeVariantId;
         const activeVarId =
-          selectedVariantByEx[ex.id] ||
-          ex.activeVariantId ||
-          variants[0]?.id;
+          variants.find((v) => v.id === requestedVarId)?.id ?? variants[0]?.id;
         const selectedVariant = variants.find((v) => v.id === activeVarId);
         const selectedVariantEntry = item.weightedSummary.byVariant.find(
           (b) => b.variantId === activeVarId
