@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: #000000;
+    color: #FFFFFF;
+    font-family: "Space Grotesk", -apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, system-ui, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #000000;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #2C2C2E;
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #3A3A3C;
+  }
+}
+
+.tabular-nums {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.font-brand {
+  font-family: "Space Grotesk", -apple-system, BlinkMacSystemFont, sans-serif;
+  letter-spacing: 0.22em;
+  font-weight: 700;
+}
+
+@keyframes pulse-fast {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+.animate-pulse-fast {
+  animation: pulse-fast 0.9s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes quizStepIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-quiz-step {
+  animation: quizStepIn 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
