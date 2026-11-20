@@ -4,7 +4,6 @@ import {
   Play,
   RotateCcw,
   SlidersHorizontal,
-  UserPlus,
   X,
 } from 'lucide-react';
 import {
@@ -36,7 +35,6 @@ interface TodayDashboardProps {
     selectedExerciseIds?: string[]
   ) => void;
   onOpenDiagnosticQuiz: () => void;
-  onCreateCleanProfile: () => void;
 }
 
 const LAUNCHER_TIME_OPTIONS: {
@@ -61,7 +59,6 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   onSelectPreset,
   onStartPrescribedSession,
   onOpenDiagnosticQuiz,
-  onCreateCleanProfile,
 }) => {
   const nerd = useMemo(
     () => computeNerdTelemetry(exercises, sessionLogs, weeklyGoalDays, 'all'),
@@ -241,13 +238,6 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
               className="inline-flex items-center gap-1 rounded-full bg-black border border-white/15 px-2.5 py-0.5 text-[10px] font-bold text-white/60 hover:text-white hover:border-white/35 transition"
             >
               <RotateCcw className="h-2.5 w-2.5" /> Quiz
-            </button>
-            <button
-              type="button"
-              onClick={onCreateCleanProfile}
-              className="inline-flex items-center gap-1 rounded-full bg-black border border-white/15 px-2.5 py-0.5 text-[10px] font-bold text-white/60 hover:text-white hover:border-white/35 transition"
-            >
-              <UserPlus className="h-2.5 w-2.5 text-[#FF6B00]" /> Nuovo Profilo
             </button>
           </div>
 

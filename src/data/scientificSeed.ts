@@ -2659,28 +2659,7 @@ export const SEED_FEED_RECORDINGS: FeedRecording[] = [
 ];
 
 export function createInitialAppState(): AppState {
-  return {
-    exercises: SEED_EXERCISES,
-    workouts: SEED_WORKOUTS,
-    programs: SEED_PROGRAMS,
-    sessionLogs: SEED_SESSION_LOGS,
-    feedRecordings: SEED_FEED_RECORDINGS,
-    settings: {
-      shadowplayMode: 'audio',
-      visualMetronomeOnly: false,
-      autoRampPerSet: false,
-      weeklyGoalDays: 5,
-      activeProgramId: 'prog-picking',
-      selectedPreset: 15,
-      cloudSyncEnabled: false,
-      hasCompletedOnboarding: true,
-      scientificPlan: createDefaultScientificPrescription(
-        SEED_EXERCISES,
-        'prog-picking',
-        15
-      ),
-    },
-  };
+  return createCleanProfileAppState();
 }
 
 export function createCleanProfileAppState(): AppState {

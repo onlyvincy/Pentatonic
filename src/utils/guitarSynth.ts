@@ -120,6 +120,49 @@ export function setIosMicSessionActive(active: boolean): void {
   }
 }
 
+export function isIosMicSessionActive(): boolean {
+  return iosMicSessionActive;
+}
+
+/**
+ * Tears down any AudioContext/audio-session tainted by microphone capture on iOS Safari
+ * so subsequent metronome/demo playback opens a clean 'playback' context routed to main speakers.
+ */
+export function recoverPlaybackAfterMic(): void {
+  iosMicSessionActive = false;
+  configureIosPlaybackSession();
+
+  if (sharedCtx) {
+    const oldCtx = sharedCtx;
+    sharedCtx = null;
+    oldCtx.close().catch(() => {});
+  }
+  metronomeBusCtx = null;
+  metronomeBusGain = null;
+  cachedNoiseBuffer = null;
+  samplePreloadPromise = null;
+  SAMPLE_ANCHORS.forEach((a) => {
+    a.buffer = null;
+  });
+
+  if (iosKeepAliveAudio) {
+    try {
+      iosKeepAliveAudio.pause();
+    } catch {
+      // Ignore
+    }
+    iosKeepAliveAudio = null;
+  }
+  if (iosKeepAliveUrl) {
+    try {
+      URL.revokeObjectURL(iosKeepAliveUrl);
+    } catch {
+      // Ignore
+    }
+    iosKeepAliveUrl = null;
+  }
+}
+
 function createSilentWavUrl(): string {
   // 0.5s of 8kHz 8-bit unsigned mono PCM silence (128 = exact zero amplitude)
   const sampleRate = 8000;

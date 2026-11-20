@@ -22,7 +22,6 @@ import {
   SEED_EXERCISES,
   createCleanProfileAppState,
   createInitialAppState,
-  ensureSeededMediaBlobs,
 } from './data/scientificSeed';
 import {
   clearAllRecordingBlobs,
@@ -103,13 +102,6 @@ export function App() {
   const [showDiagnosticQuiz, setShowDiagnosticQuiz] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const appUpdate = useAppUpdate();
-
-  useEffect(() => {
-    if (appState.feedRecordings.some((r) => r.isSyntheticDemo)) {
-      ensureSeededMediaBlobs().catch(() => {});
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   useEffect(() => {
     savePersistedState(appState);
@@ -361,19 +353,12 @@ export function App() {
   };
 
   const handleResetDemoData = async () => {
-    const fresh = createInitialAppState();
-    setAppState(fresh);
-    await ensureSeededMediaBlobs();
-    showToast('Dati ripristinati');
-  };
-
-  const handleCreateCleanProfile = async () => {
     await clearAllRecordingBlobs();
     const clean = createCleanProfileAppState();
     setAppState(clean);
     setActiveLivePlan(null);
     setShowDiagnosticQuiz(true);
-    showToast('Nuovo profilo creato • Zero dati di test');
+    showToast('Dati azzerati');
   };
 
   const navItems: {
@@ -507,7 +492,6 @@ export function App() {
             onSelectPreset={(preset) => updateSettings({ selectedPreset: preset })}
             onStartPrescribedSession={handleStartPrescribedSession}
             onOpenDiagnosticQuiz={() => setShowDiagnosticQuiz(true)}
-            onCreateCleanProfile={handleCreateCleanProfile}
           />
         )}
 
@@ -538,7 +522,6 @@ export function App() {
               showToast('Backup importato');
             }}
             onResetDemoData={handleResetDemoData}
-            onCreateCleanProfile={handleCreateCleanProfile}
           />
         )}
 

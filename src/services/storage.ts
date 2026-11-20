@@ -1,6 +1,6 @@
 import { AppState } from '../types/practice';
 
-const STATE_KEY = 'pentatonic_app_state_v7';
+const STATE_KEY = 'pentatonic_app_state_v8';
 const DB_NAME = 'pentatonic_media_db';
 const DB_VERSION = 1;
 const STORE_NAME = 'recordings_blobs';

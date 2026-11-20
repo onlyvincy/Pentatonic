@@ -2,8 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, Mic, Volume2 } from 'lucide-react';
 import { DemoStep, FretNote } from '../types/practice';
 import {
-  getSharedAudioContext,
   playGuitarFrequency,
+  recoverPlaybackAfterMic,
   setIosMicSessionActive,
   unlockSharedAudioContext,
 } from '../utils/guitarSynth';
@@ -404,6 +404,7 @@ export const TunerAndCheatSheet: React.FC = () => {
   const [detected, setDetected] = useState<DetectedPitch | null>(null);
 
   const streamRef = useRef<MediaStream | null>(null);
+  const tunerCtxRef = useRef<AudioContext | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -432,14 +433,19 @@ export const TunerAndCheatSheet: React.FC = () => {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     }
+    if (tunerCtxRef.current) {
+      const ctxToClose = tunerCtxRef.current;
+      tunerCtxRef.current = null;
+      ctxToClose.close().catch(() => {});
+    }
     startingRef.current = false;
-    setIosMicSessionActive(false);
+    recoverPlaybackAfterMic();
     setIsListening(false);
   }, []);
 
   const analyzePitchFrame = useCallback(() => {
     const analyser = analyserRef.current;
-    const ctx = getSharedAudioContext();
+    const ctx = tunerCtxRef.current;
     if (!analyser || !ctx) return;
 
     const buf = new Float32Array(analyser.fftSize);
@@ -488,9 +494,9 @@ export const TunerAndCheatSheet: React.FC = () => {
       try {
         stream = await navigator.mediaDevices.getUserMedia({
           audio: {
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: false,
+            echoCancellation: { ideal: false },
+            noiseSuppression: { ideal: false },
+            autoGainControl: { ideal: false },
           },
         });
       } catch {
@@ -499,18 +505,28 @@ export const TunerAndCheatSheet: React.FC = () => {
 
       if (!mountedRef.current) {
         stream.getTracks().forEach((t) => t.stop());
-        setIosMicSessionActive(false);
+        recoverPlaybackAfterMic();
         return;
       }
 
-      await unlockSharedAudioContext();
-      const ctx = getSharedAudioContext();
-      if (!ctx) {
+      const AudioCtx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext?: typeof AudioContext })
+          .webkitAudioContext;
+      if (!AudioCtx) {
         stream.getTracks().forEach((t) => t.stop());
-        setIosMicSessionActive(false);
+        recoverPlaybackAfterMic();
         if (mountedRef.current) setMicBlocked(true);
         return;
       }
+
+      // Isolate Tuner capture in its own AudioContext so stopping the mic never breaks
+      // the shared playback AudioContext used by the metronome and demos.
+      const ctx = new AudioCtx();
+      if ((ctx.state as string) !== 'running') {
+        await ctx.resume().catch(() => {});
+      }
+      tunerCtxRef.current = ctx;
 
       const source = ctx.createMediaStreamSource(stream);
       const analyser = ctx.createAnalyser();
@@ -523,7 +539,7 @@ export const TunerAndCheatSheet: React.FC = () => {
       setIsListening(true);
       rafRef.current = window.requestAnimationFrame(analyzePitchFrame);
     } catch {
-      setIosMicSessionActive(false);
+      recoverPlaybackAfterMic();
       if (mountedRef.current) setMicBlocked(true);
     } finally {
       startingRef.current = false;

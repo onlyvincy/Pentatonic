@@ -1,8 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  BookmarkCheck,
   FastForward,
-  Mic,
   Pause,
   Play,
   RotateCcw,
@@ -26,7 +24,6 @@ import {
   WorkoutSessionLog,
 } from '../types/practice';
 import {
-  CLEANLINESS_LABELS,
   calculateGoldilocksNextBpm,
   calculateWarmupBpm,
   computeWeightedExerciseBpm,
@@ -34,15 +31,15 @@ import {
   pickNextRecommendedVariant,
 } from '../utils/overloadEngine';
 import { useMetronome } from '../hooks/useMetronome';
-import { CapturedTake, useShadowplayRecorder } from '../hooks/useShadowplayRecorder';
 import { useWakeLock } from '../hooks/useWakeLock';
 import {
   METRONOME_SOUNDS,
+  isIosMicSessionActive,
   playSoftMetronomeTick,
+  recoverPlaybackAfterMic,
   unlockSharedAudioContext,
 } from '../utils/guitarSynth';
 import { FretboardViewer } from './FretboardViewer';
-import { saveRecordingBlob } from '../services/storage';
 
 interface LiveWorkoutPlayerProps {
   plan: ScaledWorkoutPlan;
@@ -77,9 +74,6 @@ type PlayerPhase =
 interface SessionSetEntry {
   setLog: SetLog;
   exerciseTitle: string;
-  baselineBpm: number;
-  isBenchmark: boolean;
-  take: CapturedTake | null;
 }
 
 const RATING_TEXT: Record<CleanlinessScore, string> = {
@@ -205,23 +199,9 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     currentItem?.restSec ?? 15
   );
 
-  const [capturedTake, setCapturedTake] = useState<CapturedTake | null>(null);
   const [loggedSets, setLoggedSets] = useState<SetLog[]>([]);
   const [sessionSetEntries, setSessionSetEntries] = useState<SessionSetEntry[]>([]);
-  const [savedSetIds, setSavedSetIds] = useState<Set<string>>(() => new Set());
-  const [expandedAudioSetId, setExpandedAudioSetId] = useState<string | null>(null);
-  const [isSavingSummary, setIsSavingSummary] = useState(false);
-  const [isMicEnabled, setIsMicEnabled] = useState(false);
-  const isMicEnabledRef = useRef(false);
-  const takeUrlsRef = useRef<string[]>([]);
   const sessionStartRef = useRef<number>(Date.now());
-
-  useEffect(() => {
-    return () => {
-      takeUrlsRef.current.forEach((u) => URL.revokeObjectURL(u));
-      takeUrlsRef.current = [];
-    };
-  }, []);
 
   const metronome = useMetronome({
     initialBpm: initialFirstBpm,
@@ -231,12 +211,13 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     visualOnly: initialVisualOnly,
   });
 
-  const shadowplay = useShadowplayRecorder();
-
-  // Bulletproof screen anti-sleep lock + pre-unlocked shared AudioContext
+  // Bulletproof screen anti-sleep lock + ensure pure 'playback' speaker session
   useWakeLock(true);
 
   useEffect(() => {
+    if (isIosMicSessionActive()) {
+      recoverPlaybackAfterMic();
+    }
     unlockSharedAudioContext().catch(() => {});
   }, []);
 
@@ -290,12 +271,6 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     setPhase('playing');
     setIsSetPaused(false);
     metronome.start();
-    if (isMicEnabledRef.current) {
-      shadowplay.startCapture('audio').finally(() => {
-        // Re-unlock shared AudioContext in case getUserMedia temporarily suspended playback
-        unlockSharedAudioContext().catch(() => {});
-      });
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -321,12 +296,8 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
-  const finishActiveSet = async () => {
+  const finishActiveSet = () => {
     metronome.stop();
-    const take = isMicEnabledRef.current
-      ? await shadowplay.stopCapture(metronome.bpm)
-      : null;
-    setCapturedTake(take);
     setPhase('rating');
   };
 
@@ -365,8 +336,6 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
   }, [phase]);
 
   const startNextAfterRest = () => {
-    shadowplay.discardPreview();
-    setCapturedTake(null);
     setSetRemainingSec(currentItem?.durationSec ?? 60);
     if (setNumber === 1) {
       setDemoReplayKey((k) => k + 1);
@@ -392,15 +361,6 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     );
     const nextBpmForScore = feedback.nextBpm;
 
-    let retainedTake: CapturedTake | null = null;
-    if (capturedTake) {
-      const ownedUrl = URL.createObjectURL(capturedTake.blob);
-      takeUrlsRef.current.push(ownedUrl);
-      retainedTake = { ...capturedTake, url: ownedUrl };
-    }
-    shadowplay.discardPreview();
-    setCapturedTake(null);
-
     const hasMoreSets = setNumber < currentItem.sets;
     const hasMoreExercises = exerciseIdx < plan.items.length - 1;
 
@@ -424,9 +384,6 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
       {
         setLog: newSetLog,
         exerciseTitle: currentExercise.title,
-        baselineBpm: currentExercise.baselineBpm,
-        isBenchmark: Boolean(currentExercise.isBenchmark),
-        take: retainedTake,
       },
     ]);
 
@@ -506,48 +463,8 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     }
   };
 
-  const toggleSaveSetRecording = (setId: string) => {
-    setSavedSetIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(setId)) next.delete(setId);
-      else next.add(setId);
-      return next;
-    });
-  };
-
-  const handleFinishAndSaveWorkout = async () => {
-    if (isSavingSummary) return;
-    setIsSavingSummary(true);
-
-    const recordingsToPersist: FeedRecording[] = [];
-    const finalSets: SetLog[] = [];
-
-    for (const entry of sessionSetEntries) {
-      let savedRecordingId: string | undefined;
-      if (entry.take && savedSetIds.has(entry.setLog.id)) {
-        savedRecordingId = `rec-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-        await saveRecordingBlob(savedRecordingId, entry.take.blob);
-        recordingsToPersist.push({
-          id: savedRecordingId,
-          exerciseId: entry.setLog.exerciseId,
-          exerciseTitle: entry.exerciseTitle,
-          workoutTitle: plan.workout.title,
-          date: entry.setLog.timestamp,
-          bpm: entry.setLog.bpm,
-          baselineBpmAtTime: entry.baselineBpm,
-          cleanliness: entry.setLog.cleanliness,
-          mediaType: entry.take.mediaType,
-          durationSec: entry.take.durationSec,
-          note: `S${entry.setLog.setNumber} • ${entry.setLog.bpm} BPM (${CLEANLINESS_LABELS[entry.setLog.cleanliness].label})`,
-          isBenchmarkCheckpoint: entry.isBenchmark,
-        });
-      }
-      finalSets.push(
-        savedRecordingId
-          ? { ...entry.setLog, savedRecordingId }
-          : entry.setLog
-      );
-    }
+  const handleFinishAndSaveWorkout = () => {
+    const finalSets: SetLog[] = sessionSetEntries.map((entry) => entry.setLog);
 
     const elapsedMin = Math.max(
       1,
@@ -574,8 +491,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
       averageCleanliness: avgClean,
     };
 
-    shadowplay.releaseMicrophone();
-    onCompleteSession(sessionLog, recordingsToPersist, bpmOverrides);
+    onCompleteSession(sessionLog, [], bpmOverrides);
   };
 
   const formatMMSS = (sec: number) => {
@@ -604,8 +520,6 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
               type="button"
               onClick={() => {
                 metronome.stop();
-                shadowplay.discardPreview();
-                shadowplay.releaseMicrophone();
                 onCancel();
               }}
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black border border-white/15 text-white hover:border-white/40 transition"
@@ -624,41 +538,6 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
-            {(phase === 'demo' || phase === 'precount' || phase === 'playing') &&
-              (isMicEnabled && shadowplay.hasMicPermission ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    isMicEnabledRef.current = false;
-                    setIsMicEnabled(false);
-                    shadowplay.releaseMicrophone();
-                  }}
-                  aria-label="Disattiva registrazione microfono"
-                  className="flex h-8 w-8 items-center justify-center rounded-full border border-red-500/40 bg-black hover:border-red-500 transition"
-                >
-                  <span className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse-fast shadow-[0_0_8px_rgba(239,68,68,0.85)]" />
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    shadowplay.primeMicrophone().then((granted) => {
-                      if (!granted) return;
-                      isMicEnabledRef.current = true;
-                      setIsMicEnabled(true);
-                      if (phase === 'playing') {
-                        shadowplay.startCapture('audio').finally(() => {
-                          unlockSharedAudioContext().catch(() => {});
-                        });
-                      }
-                    });
-                  }}
-                  aria-label="Attiva registrazione microfono"
-                  className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-black text-white/50 hover:border-white/40 hover:text-white transition"
-                >
-                  <Mic className="h-3.5 w-3.5" />
-                </button>
-              ))}
             {(phase === 'precount' || phase === 'playing') && (
               <button
                 type="button"
@@ -989,7 +868,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
           </div>
         )}
 
-        {/* 5. FULL-SCREEN MINIMAL SUMMARY (WITH OPTIONAL END-OF-WORKOUT RECORDING SAVE) */}
+        {/* 5. FULL-SCREEN MINIMAL SUMMARY */}
         {phase === 'summary' && (
           <div className="mx-auto flex min-h-full w-full max-w-lg flex-col justify-between gap-6 px-4 py-6">
             <div className="space-y-4">
@@ -1008,87 +887,34 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
               </div>
 
               <div className="space-y-2">
-                {sessionSetEntries.map((entry) => {
-                  const isSaved = savedSetIds.has(entry.setLog.id);
-                  const isAudioOpen = expandedAudioSetId === entry.setLog.id;
-
-                  return (
-                    <div
-                      key={entry.setLog.id}
-                      className="rounded-xl border border-white/15 bg-black px-3.5 py-2.5 space-y-2"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-xs sm:text-sm font-bold text-white">
-                            {entry.exerciseTitle}
-                          </div>
-                          <div className="text-[11px] font-bold text-white/45 tabular-nums">
-                            S{entry.setLog.setNumber} · {entry.setLog.bpm} BPM
-                          </div>
-                        </div>
-
-                        <div className="flex shrink-0 items-center gap-2">
-                          <span className="rounded-full border border-white/15 px-2 py-0.5 text-[11px] font-black text-white tabular-nums">
-                            {entry.setLog.cleanliness}/5
-                          </span>
-
-                          {entry.take && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setExpandedAudioSetId((curr) =>
-                                    curr === entry.setLog.id ? null : entry.setLog.id
-                                  )
-                                }
-                                aria-label="Ascolta registrazione"
-                                className={`flex h-7 w-7 items-center justify-center rounded-full border transition ${
-                                  isAudioOpen
-                                    ? 'border-white bg-white text-black'
-                                    : 'border-white/15 bg-black text-white/65 hover:border-white/40 hover:text-white'
-                                }`}
-                              >
-                                <Play className="h-3 w-3 fill-current ml-0.5" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => toggleSaveSetRecording(entry.setLog.id)}
-                                className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-black transition ${
-                                  isSaved
-                                    ? 'border-[#FF6B00] bg-[#FF6B00] text-black'
-                                    : 'border-white/15 bg-black text-white/60 hover:border-white/40 hover:text-white'
-                                }`}
-                              >
-                                <BookmarkCheck className="h-3 w-3" />
-                                {isSaved ? 'Salvata' : 'Salva'}
-                              </button>
-                            </>
-                          )}
-                        </div>
+                {sessionSetEntries.map((entry) => (
+                  <div
+                    key={entry.setLog.id}
+                    className="flex items-center justify-between gap-2 rounded-xl border border-white/15 bg-black px-3.5 py-2.5"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-xs sm:text-sm font-bold text-white">
+                        {entry.exerciseTitle}
                       </div>
-
-                      {entry.take && isAudioOpen && (
-                        <audio
-                          src={entry.take.url}
-                          controls
-                          className="w-full h-8"
-                        />
-                      )}
+                      <div className="text-[11px] font-bold text-white/45 tabular-nums">
+                        S{entry.setLog.setNumber} · {entry.setLog.bpm} BPM
+                      </div>
                     </div>
-                  );
-                })}
+
+                    <span className="shrink-0 rounded-full border border-white/15 px-2 py-0.5 text-[11px] font-black text-white tabular-nums">
+                      {entry.setLog.cleanliness}/5
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
 
             <button
               type="button"
-              disabled={isSavingSummary}
               onClick={handleFinishAndSaveWorkout}
-              className="w-full rounded-xl bg-[#FF6B00] px-5 py-3.5 text-sm font-black text-black hover:bg-[#ff7d1f] disabled:opacity-50 transition"
+              className="w-full rounded-xl bg-[#FF6B00] px-5 py-3.5 text-sm font-black text-black hover:bg-[#ff7d1f] transition"
             >
-              {savedSetIds.size > 0
-                ? `Fine (${savedSetIds.size} clip)`
-                : 'Fine'}
+              Fine
             </button>
           </div>
         )}
@@ -1151,8 +977,6 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
             <button
               type="button"
               onClick={() => {
-                shadowplay.discardPreview();
-                setCapturedTake(null);
                 setSetRemainingSec(currentItem.durationSec);
                 setPrecountBeat(4);
                 setPhase('precount');

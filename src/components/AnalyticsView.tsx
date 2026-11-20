@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Download, RotateCcw, Upload, UserPlus } from 'lucide-react';
+import { Download, RotateCcw, Upload } from 'lucide-react';
 import {
   AppState,
   Exercise,
@@ -25,7 +25,6 @@ interface AnalyticsViewProps {
   onDeleteRecording: (recordingId: string) => void;
   onImportState: (imported: AppState) => void;
   onResetDemoData: () => void;
-  onCreateCleanProfile: () => void;
 }
 
 export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
@@ -38,7 +37,6 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   onDeleteRecording,
   onImportState,
   onResetDemoData,
-  onCreateCleanProfile,
 }) => {
   const [selectedExId, setSelectedExId] = useState<string>('all');
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
@@ -360,25 +358,15 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             className="flex items-center gap-1.5 rounded-full bg-black border border-white/15 px-3 py-1.5 text-[11px] font-bold text-white/60 hover:text-white transition"
           >
             <RotateCcw className="h-3 w-3" />
-            Ripristina
+            Azzera
           </button>
         </div>
 
-        <div className="flex items-center gap-2 ml-auto">
-          {syncMessage && (
-            <span className="text-[11px] font-bold text-white/75">
-              {syncMessage}
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={onCreateCleanProfile}
-            className="inline-flex items-center gap-1.5 rounded-full bg-[#FF6B00] px-3.5 py-1.5 text-[11px] font-black text-black hover:bg-[#ff7d1f] transition"
-          >
-            <UserPlus className="h-3.5 w-3.5" />
-            Nuovo Profilo
-          </button>
-        </div>
+        {syncMessage && (
+          <span className="text-[11px] font-bold text-white/75 ml-auto">
+            {syncMessage}
+          </span>
+        )}
       </section>
     </div>
   );
