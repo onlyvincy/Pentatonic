@@ -29,7 +29,6 @@ import {
   CLEANLINESS_LABELS,
   calculateGoldilocksNextBpm,
   calculateWarmupBpm,
-  computeExerciseScore,
   computeWeightedExerciseBpm,
   pickNextRecommendedVariant,
 } from '../utils/overloadEngine';
@@ -220,11 +219,6 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
   });
 
   const shadowplay = useShadowplayRecorder();
-
-  const currentMastery = useMemo(() => {
-    if (!currentExercise) return null;
-    return computeExerciseScore(currentExercise, sessionLogs);
-  }, [currentExercise, sessionLogs]);
 
   // Bulletproof screen anti-sleep lock + pre-unlocked shared AudioContext
   useWakeLock(true);
@@ -601,33 +595,21 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
               <X className="h-4 w-4" />
             </button>
             <div className="min-w-0">
-              <div className="flex items-center gap-2 text-[11px] font-bold text-white/55">
-                <span>
-                  S{setNumber}/{currentItem.sets}
-                </span>
-                {currentMastery && (
-                  <span className="rounded-full border border-[#FF6B00]/50 px-2 py-0.5 text-[10px] font-black text-[#FF6B00] tabular-nums">
-                    Lv. {currentMastery.level} ({currentMastery.levelProgressPct}%)
-                  </span>
-                )}
-                {activeVariant && (
-                  <span className="truncate text-[10px] font-bold text-white/75">
-                    • {activeVariant.shortLabel}
-                  </span>
-                )}
+              <div className="text-[11px] font-bold text-white/45 tabular-nums leading-tight">
+                S{setNumber}/{currentItem.sets}
               </div>
-              <h2 className="text-sm font-bold text-white truncate">
+              <h2 className="text-sm font-bold text-white truncate leading-tight">
                 {currentExercise.title}
               </h2>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             {shadowplay.isRecording && !shadowplay.isFallbackStream ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 px-2.5 py-0.5 text-[10px] font-bold text-white animate-pulse-fast">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#FF6B00]" />
-                REC
-              </span>
+              <span
+                aria-label="Registrazione attiva"
+                className="h-2.5 w-2.5 shrink-0 rounded-full bg-red-500 animate-pulse-fast shadow-[0_0_8px_rgba(239,68,68,0.85)]"
+              />
             ) : !shadowplay.hasMicPermission &&
               (phase === 'demo' || phase === 'precount' || phase === 'playing') ? (
               <button
@@ -642,10 +624,9 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
                   });
                 }}
                 aria-label="Attiva microfono"
-                className="inline-flex items-center gap-1 rounded-full border border-[#FF6B00]/60 bg-[#FF6B00]/10 px-2.5 py-1 text-[10px] font-bold text-[#FF6B00] hover:bg-[#FF6B00]/20 transition"
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-[#FF6B00]/60 bg-[#FF6B00]/10 text-[#FF6B00] hover:bg-[#FF6B00]/20 transition"
               >
-                <Mic className="h-3 w-3" />
-                Mic
+                <Mic className="h-3.5 w-3.5" />
               </button>
             ) : null}
             {(phase === 'precount' || phase === 'playing') && (
@@ -655,23 +636,21 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
                   unlockSharedAudioContext().catch(() => {});
                   metronome.setVisualOnly(!metronome.visualOnly);
                 }}
-                aria-label="Attiva o disattiva audio metronomo"
-                className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-bold transition ${
+                aria-label={
                   metronome.visualOnly
-                    ? 'border-[#FF6B00]/60 bg-black text-[#FF6B00]'
-                    : 'border-white/20 bg-black text-white hover:border-white/50'
+                    ? 'Attiva audio metronomo'
+                    : 'Silenzia audio metronomo'
+                }
+                className={`flex h-8 w-8 items-center justify-center rounded-full border transition ${
+                  metronome.visualOnly
+                    ? 'border-white/15 bg-black text-white/40 hover:text-white'
+                    : 'border-white/20 bg-black text-[#FF6B00] hover:border-white/50'
                 }`}
               >
                 {metronome.visualOnly ? (
-                  <>
-                    <VolumeX className="h-3 w-3" />
-                    Muto
-                  </>
+                  <VolumeX className="h-3.5 w-3.5" />
                 ) : (
-                  <>
-                    <Volume2 className="h-3 w-3 text-[#FF6B00]" />
-                    Click ON
-                  </>
+                  <Volume2 className="h-3.5 w-3.5" />
                 )}
               </button>
             )}
