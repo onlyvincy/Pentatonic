@@ -596,9 +596,13 @@ export const TunerAndCheatSheet: React.FC = () => {
   return (
     <div className="w-full min-w-0 max-w-full overflow-hidden space-y-4">
       {/* ULTRA-MINIMAL LIVE TUNER (AUTO-ACTIVE) */}
-      <section className="w-full min-w-0 max-w-full overflow-hidden rounded-2xl bg-black border border-white/15 p-4 sm:p-5 space-y-5">
+      <section className="relative w-full min-w-0 max-w-full overflow-hidden rounded-3xl bg-black border border-white/15 p-4 sm:p-5 space-y-5">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -top-20 left-1/2 h-40 w-48 -translate-x-1/2 rounded-full bg-[#FF6B00]/12 blur-3xl"
+        />
         {/* Top Row: Single Active Tuning Pill + Live Dot */}
-        <div className="flex items-center justify-between gap-2">
+        <div className="relative z-10 flex items-center justify-between gap-2">
           <div className="relative">
             <button
               type="button"
@@ -758,7 +762,7 @@ export const TunerAndCheatSheet: React.FC = () => {
       </section>
 
       {/* MINIMAL SCALE & ACCORDI */}
-      <section className="w-full min-w-0 max-w-full overflow-hidden rounded-2xl bg-black border border-white/15 p-4 space-y-3">
+      <section className="w-full min-w-0 max-w-full overflow-hidden rounded-3xl bg-black border border-white/15 p-4 space-y-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex rounded-full bg-black border border-white/15 p-0.5">
             <button
@@ -820,48 +824,153 @@ export const TunerAndCheatSheet: React.FC = () => {
         )}
 
         {cheatMode === 'chords' && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 w-full min-w-0">
-            {activeTuning.chords.map((chord) => (
-              <div
-                key={chord.id}
-                className="min-w-0 max-w-full overflow-hidden rounded-xl bg-black border border-white/15 p-3 space-y-2"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <h3 className="text-sm font-black text-white">
-                    {chord.name}
-                  </h3>
-                  <button
-                    type="button"
-                    onClick={() => handleStrumChord(chord)}
-                    aria-label={`Ascolta ${chord.name}`}
-                    className="inline-flex items-center gap-1 rounded-full border border-[#FF6B00]/60 bg-black px-2.5 py-1 text-[10px] font-black text-[#FF6B00] hover:bg-[#FF6B00] hover:text-black transition"
-                  >
-                    <Volume2 className="h-3 w-3" />
-                  </button>
-                </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 w-full min-w-0">
+            {activeTuning.chords.map((chord) => {
+              const posFrets = chord.frets.filter((f) => f > 0);
+              const minF = posFrets.length > 0 ? Math.min(...posFrets) : 1;
+              const maxF = posFrets.length > 0 ? Math.max(...posFrets) : 3;
+              const startF = maxF <= 4 ? 1 : minF;
+              const span = Math.max(4, maxF - startF + 1);
 
-                <div className="grid grid-cols-6 gap-1 rounded-lg border border-white/10 bg-black p-1.5 text-center tabular-nums">
-                  {chord.frets.map((fretVal, idx) => (
-                    <div key={idx} className="flex flex-col items-center">
-                      <span className="text-[9px] font-bold text-white/40">
-                        {activeTuning.strings6To1[idx].shortName}
-                      </span>
-                      <span
-                        className={`text-xs font-black ${
-                          fretVal === 0
-                            ? 'text-[#FF6B00]'
-                            : fretVal < 0
-                            ? 'text-white/25'
-                            : 'text-white'
-                        }`}
+              const svgW = 128;
+              const svgH = 86;
+              const padL = 22;
+              const padR = 14;
+              const padT = 18;
+              const padB = 10;
+              const strSpacing = (svgW - padL - padR) / 5;
+              const fretSpacing = (svgH - padT - padB) / span;
+
+              return (
+                <div
+                  key={chord.id}
+                  className="min-w-0 max-w-full overflow-hidden rounded-2xl bg-[#060606] border border-white/15 p-3 space-y-2"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="text-sm font-black text-white truncate">
+                      {chord.name}
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => handleStrumChord(chord)}
+                      aria-label={`Ascolta ${chord.name}`}
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/15 bg-black text-[#FF6B00] hover:border-[#FF6B00] hover:bg-[#FF6B00] hover:text-black transition"
+                    >
+                      <Volume2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+
+                  {/* Clean Vector Mini Chord Diagram (Zero Finger Numbers) */}
+                  <svg
+                    viewBox={`0 0 ${svgW} ${svgH}`}
+                    className="w-full h-auto block"
+                    aria-hidden="true"
+                  >
+                    {startF > 1 && (
+                      <text
+                        x={9}
+                        y={padT + fretSpacing * 0.65}
+                        textAnchor="middle"
+                        fontSize={8.5}
+                        fontWeight={800}
+                        fill="#FF6B00"
+                        className="tabular-nums"
                       >
-                        {fretVal < 0 ? '×' : fretVal}
-                      </span>
-                    </div>
-                  ))}
+                        {startF}
+                      </text>
+                    )}
+
+                    {/* Nut or Top Fret Bar */}
+                    <line
+                      x1={padL}
+                      y1={padT}
+                      x2={svgW - padR}
+                      y2={padT}
+                      stroke={
+                        startF === 1 ? '#FFFFFF' : 'rgba(255,255,255,0.22)'
+                      }
+                      strokeWidth={startF === 1 ? 2.6 : 1}
+                    />
+
+                    {/* Horizontal Fret Wires */}
+                    {Array.from({ length: span }, (_, fIdx) => {
+                      const y = padT + (fIdx + 1) * fretSpacing;
+                      return (
+                        <line
+                          key={fIdx}
+                          x1={padL}
+                          y1={y}
+                          x2={svgW - padR}
+                          y2={y}
+                          stroke="rgba(255,255,255,0.14)"
+                          strokeWidth={1}
+                        />
+                      );
+                    })}
+
+                    {/* 6 Vertical Strings + Clean Dots */}
+                    {chord.frets.map((fretVal, sIdx) => {
+                      const x = padL + sIdx * strSpacing;
+                      const yEnd = svgH - padB;
+                      return (
+                        <g key={sIdx}>
+                          <line
+                            x1={x}
+                            y1={padT}
+                            x2={x}
+                            y2={yEnd}
+                            stroke={
+                              fretVal < 0
+                                ? 'rgba(255,255,255,0.12)'
+                                : 'rgba(255,255,255,0.26)'
+                            }
+                            strokeWidth={1.3 - sIdx * 0.08}
+                          />
+
+                          {fretVal < 0 && (
+                            <text
+                              x={x}
+                              y={padT - 5}
+                              textAnchor="middle"
+                              fontSize={8.5}
+                              fontWeight={800}
+                              fill="rgba(255,255,255,0.3)"
+                            >
+                              ×
+                            </text>
+                          )}
+
+                          {fretVal === 0 && (
+                            <circle
+                              cx={x}
+                              cy={padT - 8}
+                              r={3}
+                              fill="none"
+                              stroke="#FF6B00"
+                              strokeWidth={1.4}
+                            />
+                          )}
+
+                          {fretVal > 0 && (
+                            <circle
+                              cx={x}
+                              cy={
+                                padT +
+                                (fretVal - startF + 0.5) * fretSpacing
+                              }
+                              r={4.2}
+                              fill="#FF6B00"
+                              stroke="#FFFFFF"
+                              strokeWidth={1.2}
+                            />
+                          )}
+                        </g>
+                      );
+                    })}
+                  </svg>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>

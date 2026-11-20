@@ -49,7 +49,7 @@ interface FretboardViewerProps {
   onToggleNote?: (stringNum: 1 | 2 | 3 | 4 | 5 | 6, fret: number) => void;
 }
 
-type LabelMode = 'fingers' | 'intervals';
+type LabelMode = 'none' | 'fingers' | 'intervals';
 
 const DEFAULT_STRING_NAMES = ['e', 'B', 'G', 'D', 'A', 'E'] as const;
 const INLAY_FRETS = [3, 5, 7, 9, 12, 15];
@@ -139,7 +139,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
   replayKey = 0,
   onToggleNote,
 }) => {
-  const [labelMode, setLabelMode] = useState<LabelMode>('fingers');
+  const [userLabelMode, setUserLabelMode] = useState<LabelMode | null>(null);
   const [isPlayingDemo, setIsPlayingDemo] = useState(false);
   const [activeStepIndex, setActiveStepIndex] = useState<number | null>(null);
   const [clickedNoteKey, setClickedNoteKey] = useState<string | null>(null);
@@ -154,6 +154,18 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
     if (demoSequence && demoSequence.length > 0) return demoSequence;
     return notes.map((n) => ({ notes: [n] }));
   }, [demoSequence, notes]);
+
+  const isChordPattern = useMemo(
+    () => effectiveSteps.some((s) => s.notes.length > 1),
+    [effectiveSteps]
+  );
+
+  useEffect(() => {
+    setUserLabelMode(null);
+  }, [notes, demoSequence]);
+
+  const labelMode: LabelMode =
+    userLabelMode ?? (isChordPattern ? 'none' : 'fingers');
 
   // Steady didactic half-time tempo in 1/8 subdivision (2 notes per metronome beat)
   const slowBpm = 56;
@@ -507,6 +519,13 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
     ? `${activeLegatoConn.string}-${activeLegatoConn.fromFret}`
     : null;
 
+  const previewChordKeys = useMemo(() => {
+    if (!isChordPattern || effectiveSteps.length === 0) return null;
+    const set = new Set<string>();
+    effectiveSteps[0].notes.forEach((n) => set.add(`${n.string}-${n.fret}`));
+    return set;
+  }, [isChordPattern, effectiveSteps]);
+
   const activeNoteKeys = useMemo(() => {
     const set = new Set<string>();
     effectiveActiveNotes.forEach((n) => set.add(`${n.string}-${n.fret}`));
@@ -800,6 +819,12 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                 const note = noteMap.get(noteKey);
                 const isHighlighted = activeNoteKeys.has(noteKey);
                 const isLegatoAnchor = legatoAnchorKey === noteKey;
+                const isIdleDimmedChordNote =
+                  isChordPattern &&
+                  effectiveActiveStepIndex === null &&
+                  !effectivePlayingVisual &&
+                  previewChordKeys !== null &&
+                  !previewChordKeys.has(noteKey);
                 const isDimmed =
                   (effectivePlayingVisual || effectiveActiveStepIndex !== null) &&
                   !isHighlighted &&
@@ -813,13 +838,44 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                   isHighlighted && activeArticulation === 'palmmute';
                 const cyNote = isBentNote ? y - bendLift * 0.42 : y;
 
-                const textLabel =
-                  labelMode === 'fingers'
-                    ? note?.finger || '•'
-                    : note?.label || (note?.isRoot ? 'R' : '•');
+                const showEmptyChordDot =
+                  labelMode === 'none' ||
+                  isIdleDimmedChordNote ||
+                  (isChordPattern && isDimmed);
+                const textLabel = showEmptyChordDot
+                  ? ''
+                  : labelMode === 'fingers'
+                  ? note?.finger || '•'
+                  : note?.label || (note?.isRoot ? 'R' : '•');
 
-                const baseRadius = interactive ? 9 : fretCount <= 4 ? 12 : 11;
-                const litRadius = interactive ? 12 : fretCount <= 4 ? 16 : 14.5;
+                const baseRadius = interactive
+                  ? 9
+                  : isChordPattern
+                  ? fretCount <= 4
+                    ? 10
+                    : 9
+                  : fretCount <= 4
+                  ? 12
+                  : 11;
+                const litRadius = interactive
+                  ? 12
+                  : isChordPattern
+                  ? fretCount <= 4
+                    ? 13
+                    : 11.5
+                  : fretCount <= 4
+                  ? 16
+                  : 14.5;
+
+                const noteOpacity = isIdleDimmedChordNote
+                  ? 0.08
+                  : isDimmed
+                  ? isChordPattern
+                    ? 0.08
+                    : 0.24
+                  : isLegatoAnchor
+                  ? 0.72
+                  : 1;
 
                 return (
                   <g
@@ -840,7 +896,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                     {note && (
                       <g
                         style={{
-                          opacity: isDimmed ? 0.24 : isLegatoAnchor ? 0.72 : 1,
+                          opacity: noteOpacity,
                         }}
                       >
                         {isLegatoAnchor && !isHighlighted && (
@@ -921,16 +977,18 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                             }
                           />
                         )}
-                        <text
-                          x={cx}
-                          y={cyNote + 4.2}
-                          textAnchor="middle"
-                          fontSize={isHighlighted ? 12.5 : 10.5}
-                          fontWeight={800}
-                          fill={isHighlighted ? '#000000' : '#FFFFFF'}
-                        >
-                          {textLabel}
-                        </text>
+                        {textLabel && (
+                          <text
+                            x={cx}
+                            y={cyNote + 4.2}
+                            textAnchor="middle"
+                            fontSize={isHighlighted ? 12 : 10.5}
+                            fontWeight={800}
+                            fill={isHighlighted ? '#000000' : '#FFFFFF'}
+                          >
+                            {textLabel}
+                          </text>
+                        )}
                         {isBentNote && (
                           <g className="animate-bend-rise" pointerEvents="none">
                             <path
@@ -1242,7 +1300,13 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
         <div className="flex rounded-full bg-black border border-white/15 p-0.5">
           <button
             type="button"
-            onClick={() => setLabelMode('fingers')}
+            onClick={() =>
+              setUserLabelMode((curr) => {
+                const effective = curr ?? (isChordPattern ? 'none' : 'fingers');
+                if (effective === 'fingers' && isChordPattern) return 'none';
+                return 'fingers';
+              })
+            }
             className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold transition ${
               labelMode === 'fingers'
                 ? 'bg-white text-black'
@@ -1253,7 +1317,13 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
           </button>
           <button
             type="button"
-            onClick={() => setLabelMode('intervals')}
+            onClick={() =>
+              setUserLabelMode((curr) => {
+                const effective = curr ?? (isChordPattern ? 'none' : 'fingers');
+                if (effective === 'intervals' && isChordPattern) return 'none';
+                return 'intervals';
+              })
+            }
             className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold transition ${
               labelMode === 'intervals'
                 ? 'bg-white text-black'

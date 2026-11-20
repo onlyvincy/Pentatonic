@@ -119,7 +119,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
     <div className="space-y-3.5">
       {/* Compact 3-Metric Strip */}
       <section className="grid grid-cols-3 gap-2.5">
-        <div className="rounded-2xl bg-black border border-white/15 p-3.5">
+        <div className="rounded-3xl bg-[#060606] border border-white/15 p-3.5">
           <div className="text-[11px] font-bold text-white/50">BPM Pulito</div>
           <div className="mt-1 text-xl sm:text-2xl font-black text-white tabular-nums">
             {nerd.currentAvgCleanBpm}
@@ -130,7 +130,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
           </div>
         </div>
 
-        <div className="rounded-2xl bg-black border border-white/15 p-3.5">
+        <div className="rounded-3xl bg-[#060606] border border-white/15 p-3.5">
           <div className="text-[11px] font-bold text-white/50">Sessioni 28g</div>
           <div className="mt-1 text-xl sm:text-2xl font-black text-white tabular-nums">
             {nerd.uniqueDays28d}
@@ -140,7 +140,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
           </div>
         </div>
 
-        <div className="rounded-2xl bg-black border border-white/15 p-3.5">
+        <div className="rounded-3xl bg-[#060606] border border-white/15 p-3.5">
           <div className="text-[11px] font-bold text-white/50">Serie Pulite</div>
           <div className="mt-1 text-xl sm:text-2xl font-black text-white tabular-nums">
             {nerd.cleanExecutionRatio}%
@@ -152,8 +152,12 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
       </section>
 
       {/* Clean Responsive BPM Evolution Chart */}
-      <section className="rounded-2xl bg-black border border-white/15 p-4 space-y-3">
-        <div className="flex items-center justify-between gap-2">
+      <section className="relative overflow-hidden rounded-3xl bg-black border border-white/15 p-4 space-y-3">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -top-20 left-1/2 h-40 w-56 -translate-x-1/2 rounded-full bg-[#FF6B00]/10 blur-3xl"
+        />
+        <div className="relative z-10 flex items-center justify-between gap-2">
           <h2 className="text-sm font-bold text-white">BPM Pulito</h2>
           <select
             value={selectedExId}
@@ -277,7 +281,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
       </section>
 
       {/* Minimal Per-Exercise BPM Bar List */}
-      <section className="rounded-2xl bg-black border border-white/15 p-4 space-y-3">
+      <section className="rounded-3xl bg-black border border-white/15 p-4 space-y-3">
         {nerd.pillarStats.map((p) => {
           const targetGoal = Math.max(
             p.bestCleanBpm + 10,

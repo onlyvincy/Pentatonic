@@ -18,6 +18,10 @@ import {
   buildSessionPlanFromPrescription,
   computeWeeklyDoseProgress,
 } from '../utils/scientificPrescription';
+import {
+  CoachVectorEmblem,
+  IniziaButtonIllustration,
+} from './PathIllustrations';
 
 interface TodayDashboardProps {
   exercises: Exercise[];
@@ -204,9 +208,13 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* Compact Week Strip + Coach Plek (Pitch Black + White Border; Orange ONLY on Plek Logo) */}
-      <section className="rounded-2xl bg-black border border-white/15 p-3 space-y-2.5">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/15 pb-2">
+      {/* Compact Week Strip + Coach Plek (Pitch Black + White Border; Orange Vector Accents) */}
+      <section className="relative overflow-hidden rounded-3xl bg-black border border-white/15 p-3.5 space-y-2.5">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -top-20 left-1/2 h-36 w-48 -translate-x-1/2 rounded-full bg-[#FF6B00]/10 blur-3xl"
+        />
+        <div className="relative z-10 flex flex-wrap items-center justify-between gap-2 border-b border-white/15 pb-2.5">
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-bold uppercase tracking-wider text-white/55">
               La tua settimana
@@ -253,29 +261,15 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
           </div>
         </div>
 
-        <div className="flex items-start gap-3">
-          {/* Coach Plek Logo (Orange accent) */}
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-black border border-[#FF6B00]/50">
-            <svg viewBox="0 0 40 40" className="h-6 w-6">
-              <path
-                d="M20 4C11 4 6 10 6 18C6 27 16 36 20 37C24 36 34 27 34 18C34 10 29 4 20 4Z"
-                fill="#FF6B00"
-              />
-              <circle cx="15" cy="16" r="2.3" fill="#000000" />
-              <circle cx="25" cy="16" r="2.3" fill="#000000" />
-              <path
-                d="M15 23C17 25.5 23 25.5 25 23"
-                stroke="#000000"
-                strokeWidth="2.2"
-                strokeLinecap="round"
-                fill="none"
-              />
-            </svg>
+        <div className="relative z-10 flex items-start gap-3">
+          {/* Vector Coach Emblem */}
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#080808] border border-white/15">
+            <CoachVectorEmblem className="h-6 w-6" />
           </div>
 
           <div className="min-w-0 flex-1">
-            <span className="text-[10px] font-black uppercase tracking-[0.14em] text-white/50">
-              COACH PLEK
+            <span className="text-[10px] font-black uppercase tracking-[0.14em] text-[#FF6B00]">
+              {prescription.profileTitle}
             </span>
             <h1 className="text-sm font-bold text-white leading-snug">
               {plekHeadline}
@@ -287,7 +281,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
         </div>
       </section>
 
-      {/* ABOVE THE FOLD: Large Circular Animated Hold-to-Start "Inizia" Button */}
+      {/* ABOVE THE FOLD: Large Circular Dark-Vector Hold-to-Start "Inizia" Button */}
       <section className="flex flex-col items-center justify-center py-2">
         <div className="relative flex items-center justify-center">
           <svg
@@ -300,23 +294,22 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
               cy="110"
               r={ringRadius}
               fill="none"
-              stroke="rgba(255,255,255,0.16)"
-              strokeWidth="3"
+              stroke="rgba(255,255,255,0.14)"
+              strokeWidth="2.5"
             />
             <circle
               cx="110"
               cy="110"
               r={ringRadius}
               fill="none"
-              stroke="#FFFFFF"
-              strokeWidth="5"
+              stroke="#FF6B00"
+              strokeWidth="4.5"
               strokeLinecap="round"
               strokeDasharray={ringCircumference}
               strokeDashoffset={ringDashOffset}
             />
           </svg>
 
-          {/* Larger Round Orange Button — Black Electric Guitar Silhouette + Curved "INIZIA" */}
           <button
             type="button"
             onPointerDown={beginHold}
@@ -339,79 +332,26 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
             aria-label="Inizia"
             style={{
               transform: isHolding
-                ? `scale(${0.95 + holdProgress * 0.08})`
+                ? `scale(${0.96 + holdProgress * 0.06})`
                 : 'scale(1)',
               boxShadow: isHolding
-                ? `0 0 ${28 + holdProgress * 46}px rgba(255, 107, 0, ${0.42 + holdProgress * 0.48})`
-                : '0 0 32px rgba(255, 107, 0, 0.24)',
+                ? `0 0 ${28 + holdProgress * 44}px rgba(255, 107, 0, ${0.38 + holdProgress * 0.48})`
+                : '0 0 28px rgba(255, 107, 0, 0.16)',
             }}
-            className="absolute flex h-48 w-48 sm:h-50 sm:w-50 select-none touch-none items-center justify-center overflow-hidden rounded-full bg-[#FF6B00] text-black transition-transform duration-75 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            className="absolute flex h-48 w-48 sm:h-50 sm:w-50 select-none touch-none items-center justify-center overflow-hidden rounded-full border border-white/20 bg-[#060606] text-white transition-transform duration-75 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF6B00]"
           >
             <span
               aria-hidden="true"
               style={{
                 transform: `scale(${holdProgress})`,
-                opacity: isHolding ? 0.3 : 0,
+                opacity: isHolding ? 0.14 : 0,
               }}
-              className="pointer-events-none absolute inset-0 rounded-full bg-white transition-opacity duration-100"
+              className="pointer-events-none absolute inset-0 z-20 rounded-full bg-[#FF6B00] transition-opacity duration-100"
             />
-            <svg
-              viewBox="0 0 200 200"
-              className="pointer-events-none relative z-10 h-full w-full"
-              aria-hidden="true"
-            >
-              <defs>
-                <path
-                  id="inizia-bottom-arc"
-                  d="M 28,118 A 74,74 0 0,0 172,118"
-                  fill="none"
-                />
-              </defs>
-
-              {/* Central Large Black Electric Guitar Silhouette */}
-              <g transform="translate(100 84) rotate(-32) scale(0.96) translate(-100 -84)">
-                {/* Double-Cutaway Contoured Electric Guitar Body */}
-                <path
-                  d="M 95,74 C 90,74 87,64 81,64 C 75,64 73,74 77,84 C 81,92 84,96 81,103 C 75,113 69,122 72,134 C 75,144 87,148 100,148 C 114,148 125,143 128,132 C 130,120 123,112 118,102 C 115,96 116,90 120,82 C 123,75 119,69 114,70 C 109,71 107,79 105,79 L 104,74 Z"
-                  fill="#000000"
-                />
-                {/* Tapered Neck */}
-                <path d="M 96.5,37 L 103.5,37 L 104.8,76 L 95.2,76 Z" fill="#000000" />
-                {/* 6-Inline Angled Electric Headstock */}
-                <path
-                  d="M 96,37 L 95,21 C 95,14 103,11 108,15 C 111,18 110,25 106,29 L 104,37 Z"
-                  fill="#000000"
-                />
-                {/* Tuning Peg Silhouettes */}
-                <circle cx="92.5" cy="21" r="1.7" fill="#000000" />
-                <circle cx="92.5" cy="25.5" r="1.7" fill="#000000" />
-                <circle cx="93" cy="30" r="1.7" fill="#000000" />
-                <circle cx="93.5" cy="34.5" r="1.7" fill="#000000" />
-                {/* Pickup & Bridge Details in Negative Orange */}
-                <rect x="93.5" y="88" width="13" height="4" rx="1.5" fill="#FF6B00" />
-                <rect x="92.5" y="100" width="15" height="4.5" rx="1.5" fill="#FF6B00" />
-                <rect x="91" y="114" width="18" height="7" rx="2" fill="#FF6B00" />
-                <circle cx="117" cy="127" r="2.2" fill="#FF6B00" />
-                <circle cx="112" cy="134" r="2.2" fill="#FF6B00" />
-              </g>
-
-              {/* Arched "INIZIA" text curving along bottom circle contour */}
-              <text
-                fill="#000000"
-                fontSize="21"
-                fontWeight="900"
-                letterSpacing="0.24em"
-                className="font-brand uppercase"
-              >
-                <textPath
-                  href="#inizia-bottom-arc"
-                  startOffset="50%"
-                  textAnchor="middle"
-                >
-                  INIZIA
-                </textPath>
-              </text>
-            </svg>
+            <IniziaButtonIllustration
+              isHolding={isHolding}
+              holdProgress={holdProgress}
+            />
           </button>
         </div>
       </section>
