@@ -170,9 +170,9 @@ export function useShadowplayRecorder() {
     setIosMicSessionActive(true);
 
     const rawAudioConstraints: MediaTrackConstraints = {
-      echoCancellation: false,
-      noiseSuppression: false,
-      autoGainControl: false,
+      echoCancellation: { ideal: false },
+      noiseSuppression: { ideal: false },
+      autoGainControl: { ideal: false },
     };
 
     const req = navigator.mediaDevices
@@ -232,12 +232,12 @@ export function useShadowplayRecorder() {
       let stream: MediaStream | null = null;
       let usingFallback = false;
 
-      // Critical for guitar: disable WebRTC speech echoCancellation/noiseSuppression/AGC
-      // which cause severe robotic/metallic artifacts on sustained strings.
+      // Critical for guitar & iOS: use { ideal: false } so Safari disables VPIO
+      // speech echoCancellation/call-mode ducking without rejecting the constraint.
       const rawAudioConstraints: MediaTrackConstraints = {
-        echoCancellation: false,
-        noiseSuppression: false,
-        autoGainControl: false,
+        echoCancellation: { ideal: false },
+        noiseSuppression: { ideal: false },
+        autoGainControl: { ideal: false },
       };
 
       try {

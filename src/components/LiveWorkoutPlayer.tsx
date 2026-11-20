@@ -200,6 +200,8 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
   const [savedSetIds, setSavedSetIds] = useState<Set<string>>(() => new Set());
   const [expandedAudioSetId, setExpandedAudioSetId] = useState<string | null>(null);
   const [isSavingSummary, setIsSavingSummary] = useState(false);
+  const [isMicEnabled, setIsMicEnabled] = useState(false);
+  const isMicEnabledRef = useRef(false);
   const takeUrlsRef = useRef<string[]>([]);
   const sessionStartRef = useRef<number>(Date.now());
 
@@ -276,10 +278,12 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     setPhase('playing');
     setIsSetPaused(false);
     metronome.start();
-    shadowplay.startCapture('audio').finally(() => {
-      // Re-unlock shared AudioContext in case getUserMedia temporarily suspended playback
-      unlockSharedAudioContext().catch(() => {});
-    });
+    if (isMicEnabledRef.current) {
+      shadowplay.startCapture('audio').finally(() => {
+        // Re-unlock shared AudioContext in case getUserMedia temporarily suspended playback
+        unlockSharedAudioContext().catch(() => {});
+      });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -307,7 +311,9 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
 
   const finishActiveSet = async () => {
     metronome.stop();
-    const take = await shadowplay.stopCapture(metronome.bpm);
+    const take = isMicEnabledRef.current
+      ? await shadowplay.stopCapture(metronome.bpm)
+      : null;
     setCapturedTake(take);
     setPhase('rating');
   };
@@ -605,30 +611,41 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
-            {shadowplay.isRecording && !shadowplay.isFallbackStream ? (
-              <span
-                aria-label="Registrazione attiva"
-                className="h-2.5 w-2.5 shrink-0 rounded-full bg-red-500 animate-pulse-fast shadow-[0_0_8px_rgba(239,68,68,0.85)]"
-              />
-            ) : !shadowplay.hasMicPermission &&
-              (phase === 'demo' || phase === 'precount' || phase === 'playing') ? (
-              <button
-                type="button"
-                onClick={() => {
-                  shadowplay.primeMicrophone().then((granted) => {
-                    if (granted && phase === 'playing') {
-                      shadowplay.startCapture('audio').finally(() => {
-                        unlockSharedAudioContext().catch(() => {});
-                      });
-                    }
-                  });
-                }}
-                aria-label="Attiva microfono"
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-[#FF6B00]/60 bg-[#FF6B00]/10 text-[#FF6B00] hover:bg-[#FF6B00]/20 transition"
-              >
-                <Mic className="h-3.5 w-3.5" />
-              </button>
-            ) : null}
+            {(phase === 'demo' || phase === 'precount' || phase === 'playing') &&
+              (isMicEnabled && shadowplay.hasMicPermission ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    isMicEnabledRef.current = false;
+                    setIsMicEnabled(false);
+                    shadowplay.releaseMicrophone();
+                  }}
+                  aria-label="Disattiva registrazione microfono"
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-red-500/40 bg-black hover:border-red-500 transition"
+                >
+                  <span className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse-fast shadow-[0_0_8px_rgba(239,68,68,0.85)]" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    shadowplay.primeMicrophone().then((granted) => {
+                      if (!granted) return;
+                      isMicEnabledRef.current = true;
+                      setIsMicEnabled(true);
+                      if (phase === 'playing') {
+                        shadowplay.startCapture('audio').finally(() => {
+                          unlockSharedAudioContext().catch(() => {});
+                        });
+                      }
+                    });
+                  }}
+                  aria-label="Attiva registrazione microfono"
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-black text-white/50 hover:border-white/40 hover:text-white transition"
+                >
+                  <Mic className="h-3.5 w-3.5" />
+                </button>
+              ))}
             {(phase === 'precount' || phase === 'playing') && (
               <button
                 type="button"
@@ -713,10 +730,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  shadowplay.primeMicrophone();
-                  startPreCountNow();
-                }}
+                onClick={startPreCountNow}
                 className="inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-xs font-black text-black hover:bg-white/90 transition"
               >
                 <FastForward className="h-3.5 w-3.5" />
@@ -739,10 +753,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
 
             <button
               type="button"
-              onClick={() => {
-                shadowplay.primeMicrophone();
-                skipPreCountNow();
-              }}
+              onClick={skipPreCountNow}
               className="rounded-full border border-white/15 bg-black px-5 py-2 text-xs font-bold text-white/60 hover:text-white hover:border-white/40 transition"
             >
               Salta

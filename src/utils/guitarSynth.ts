@@ -62,6 +62,27 @@ let samplePreloadPromise: Promise<void> | null = null;
 let iosKeepAliveAudio: HTMLAudioElement | null = null;
 let iosKeepAliveUrl: string | null = null;
 let iosMicSessionActive = false;
+let metronomeBusCtx: AudioContext | null = null;
+let metronomeBusGain: GainNode | null = null;
+
+function getMetronomeOutputNode(ctx: AudioContext): AudioNode {
+  if (metronomeBusCtx !== ctx || !metronomeBusGain) {
+    const gain = ctx.createGain();
+    const limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = -4;
+    limiter.knee.value = 6;
+    limiter.ratio.value = 12;
+    limiter.attack.value = 0.001;
+    limiter.release.value = 0.05;
+    gain.connect(limiter);
+    limiter.connect(ctx.destination);
+    metronomeBusCtx = ctx;
+    metronomeBusGain = gain;
+  }
+  // Compensate iOS Safari PlayAndRecord volume ducking when mic is active
+  metronomeBusGain.gain.value = iosMicSessionActive ? 2.6 : 1.2;
+  return metronomeBusGain;
+}
 
 /**
  * Forces iOS Safari / standalone PWAs into the right audio session category:
@@ -87,6 +108,9 @@ function configureIosPlaybackSession(): void {
 export function setIosMicSessionActive(active: boolean): void {
   iosMicSessionActive = active;
   configureIosPlaybackSession();
+  if (metronomeBusGain) {
+    metronomeBusGain.gain.value = active ? 2.6 : 1.2;
+  }
   if (active && iosKeepAliveAudio && !iosKeepAliveAudio.paused) {
     try {
       iosKeepAliveAudio.pause();
@@ -606,6 +630,7 @@ export function playMetronomeClick(
   soundId: MetronomeSoundId = 'woodblock'
 ): void {
   try {
+    const out = getMetronomeOutputNode(ctx);
     const safeTime = Math.max(ctx.currentTime + 0.002, time);
     const isStrong = kind === 'accent' || kind === 'go';
     const isSub = kind === 'sub';
@@ -626,7 +651,7 @@ export function playMetronomeClick(
       gain.gain.exponentialRampToValueAtTime(0.001, safeTime + decay);
 
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(out);
       osc.start(safeTime);
       osc.stop(safeTime + decay + 0.006);
 
@@ -644,7 +669,7 @@ export function playMetronomeClick(
 
       noise.connect(bp);
       bp.connect(nGain);
-      nGain.connect(ctx.destination);
+      nGain.connect(out);
       noise.start(safeTime);
       noise.stop(safeTime + 0.01);
       return;
@@ -669,7 +694,7 @@ export function playMetronomeClick(
 
       noise.connect(bp);
       bp.connect(nGain);
-      nGain.connect(ctx.destination);
+      nGain.connect(out);
       noise.start(safeTime);
       noise.stop(safeTime + 0.016);
 
@@ -680,7 +705,7 @@ export function playMetronomeClick(
       oGain.gain.setValueAtTime(amp * 0.42, safeTime);
       oGain.gain.exponentialRampToValueAtTime(0.001, safeTime + 0.016);
       osc.connect(oGain);
-      oGain.connect(ctx.destination);
+      oGain.connect(out);
       osc.start(safeTime);
       osc.stop(safeTime + 0.02);
       return;
@@ -700,7 +725,7 @@ export function playMetronomeClick(
 
         hat.connect(hp);
         hp.connect(hGain);
-        hGain.connect(ctx.destination);
+        hGain.connect(out);
         hat.start(safeTime);
         hat.stop(safeTime + 0.02);
         return;
@@ -716,7 +741,7 @@ export function playMetronomeClick(
       bGain.gain.setValueAtTime(isStrong ? 0.52 : 0.36, safeTime);
       bGain.gain.exponentialRampToValueAtTime(0.001, safeTime + 0.036);
       bodyOsc.connect(bGain);
-      bGain.connect(ctx.destination);
+      bGain.connect(out);
       bodyOsc.start(safeTime);
       bodyOsc.stop(safeTime + 0.04);
 
@@ -732,7 +757,7 @@ export function playMetronomeClick(
 
       snap.connect(sBp);
       sBp.connect(sGain);
-      sGain.connect(ctx.destination);
+      sGain.connect(out);
       snap.start(safeTime);
       snap.stop(safeTime + 0.025);
       return;
@@ -759,8 +784,8 @@ export function playMetronomeClick(
 
     osc1.connect(gain1);
     osc2.connect(gain2);
-    gain1.connect(ctx.destination);
-    gain2.connect(ctx.destination);
+    gain1.connect(out);
+    gain2.connect(out);
     osc1.start(safeTime);
     osc2.start(safeTime);
     osc1.stop(safeTime + 0.048);

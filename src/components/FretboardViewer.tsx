@@ -55,6 +55,26 @@ const DEFAULT_STRING_NAMES = ['e', 'B', 'G', 'D', 'A', 'E'] as const;
 const INLAY_FRETS = [3, 5, 7, 9, 12, 15];
 const BAR_8_LABELS = ['1', '&', '2', '&', '3', '&', '4', '&'] as const;
 
+type StepArticulation =
+  | 'pick'
+  | 'hammer'
+  | 'pull'
+  | 'slide'
+  | 'vibrato'
+  | 'sustain'
+  | 'muted';
+
+function getStepArticulation(step: DemoStep | null | undefined): StepArticulation {
+  if (!step || step.muted || step.notes.length === 0) return 'muted';
+  const tech = (step.technique || '').toLowerCase();
+  if (tech.includes('hammer')) return 'hammer';
+  if (tech.includes('pull')) return 'pull';
+  if (tech.includes('slide')) return 'slide';
+  if (step.sustain && tech.includes('vibrato')) return 'vibrato';
+  if (step.sustain) return 'sustain';
+  return 'pick';
+}
+
 export const FretboardViewer: React.FC<FretboardViewerProps> = ({
   notes,
   demoSequence,
@@ -340,7 +360,63 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
       ? effectiveSteps[effectiveActiveStepIndex] ?? null
       : null;
 
+  const activeArticulation = getStepArticulation(activeStep);
   const isSustainedStep = Boolean(activeStep?.sustain);
+
+  const legatoConnections = useMemo(() => {
+    const conns: {
+      stepIndex: number;
+      kind: 'hammer' | 'pull' | 'slide';
+      string: 1 | 2 | 3 | 4 | 5 | 6;
+      fromFret: number;
+      toFret: number;
+    }[] = [];
+
+    for (let i = 1; i < effectiveSteps.length; i++) {
+      const art = getStepArticulation(effectiveSteps[i]);
+      if (art !== 'hammer' && art !== 'pull' && art !== 'slide') continue;
+      const prevNote = effectiveSteps[i - 1]?.notes[0];
+      const currNote = effectiveSteps[i]?.notes[0];
+      if (
+        prevNote &&
+        currNote &&
+        prevNote.string === currNote.string &&
+        prevNote.fret !== currNote.fret
+      ) {
+        conns.push({
+          stepIndex: i,
+          kind: art,
+          string: currNote.string,
+          fromFret: prevNote.fret,
+          toFret: currNote.fret,
+        });
+      }
+    }
+    return conns;
+  }, [effectiveSteps]);
+
+  const uniqueStaticLegatoArcs = useMemo(() => {
+    const seen = new Set<string>();
+    return legatoConnections.filter((c) => {
+      const key = `${c.kind}-${c.string}-${c.fromFret}-${c.toFret}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [legatoConnections]);
+
+  const activeLegatoConn = useMemo(
+    () =>
+      effectiveActiveStepIndex !== null
+        ? legatoConnections.find((c) => c.stepIndex === effectiveActiveStepIndex) ??
+          null
+        : null,
+    [legatoConnections, effectiveActiveStepIndex]
+  );
+
+  const legatoAnchorKey = activeLegatoConn
+    ? `${activeLegatoConn.string}-${activeLegatoConn.fromFret}`
+    : null;
 
   const activeNoteKeys = useMemo(() => {
     const set = new Set<string>();
@@ -387,7 +463,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
   const fretCount = fretRange.end - fretRange.start + 1;
   const leftPad = 28;
   const rightPad = 12;
-  const topPad = 22;
+  const topPad = !interactive && legatoConnections.length > 0 ? 36 : 22;
   const bottomPad = 28;
   const fretWidth = interactive
     ? 44
@@ -557,9 +633,11 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                 const noteKey = `${stringNum}-${fretNum}`;
                 const note = noteMap.get(noteKey);
                 const isHighlighted = activeNoteKeys.has(noteKey);
+                const isLegatoAnchor = legatoAnchorKey === noteKey;
                 const isDimmed =
                   (effectivePlayingVisual || effectiveActiveStepIndex !== null) &&
-                  !isHighlighted;
+                  !isHighlighted &&
+                  !isLegatoAnchor;
 
                 const textLabel =
                   labelMode === 'fingers'
@@ -588,18 +666,36 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                     {note && (
                       <g
                         style={{
-                          opacity: isDimmed ? 0.24 : 1,
+                          opacity: isDimmed ? 0.24 : isLegatoAnchor ? 0.72 : 1,
                         }}
                       >
+                        {isLegatoAnchor && !isHighlighted && (
+                          <circle
+                            cx={cx}
+                            cy={y}
+                            r={baseRadius + 3.5}
+                            fill="rgba(255,107,0,0.12)"
+                            stroke="rgba(255,107,0,0.75)"
+                            strokeWidth={1.5}
+                            strokeDasharray="3 2"
+                          />
+                        )}
                         {isHighlighted && (
-                          <>
+                          <g
+                            className={
+                              activeArticulation === 'vibrato' ||
+                              activeArticulation === 'sustain'
+                                ? 'animate-vibrato'
+                                : undefined
+                            }
+                          >
                             <circle
                               cx={cx}
                               cy={y}
                               r={litRadius + 6}
                               fill={
                                 isSustainedStep
-                                  ? 'rgba(255,255,255,0.14)'
+                                  ? 'rgba(255,255,255,0.16)'
                                   : 'rgba(255,107,0,0.2)'
                               }
                               stroke={isSustainedStep ? '#FFFFFF' : '#FF6B00'}
@@ -615,7 +711,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                               stroke="#FFFFFF"
                               strokeWidth={2}
                             />
-                          </>
+                          </g>
                         )}
                         {!isHighlighted && (
                           <circle
@@ -624,11 +720,15 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                             r={baseRadius}
                             fill="#000000"
                             stroke={
-                              note.isRoot
+                              isLegatoAnchor
+                                ? '#FF6B00'
+                                : note.isRoot
                                 ? 'rgba(255,107,0,0.88)'
                                 : 'rgba(255,255,255,0.68)'
                             }
-                            strokeWidth={note.isRoot ? 2 : 1.4}
+                            strokeWidth={
+                              isLegatoAnchor || note.isRoot ? 2 : 1.4
+                            }
                           />
                         )}
                         <text
@@ -649,6 +749,101 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
             </g>
           );
         })}
+
+        {/* Ad-Hoc Legato & Expressivity Slur Arcs (Hammer-On / Pull-Off / Slide) */}
+        {!interactive &&
+          uniqueStaticLegatoArcs.map((conn) => {
+            const x1 =
+              leftPad + (conn.fromFret - fretRange.start) * fretWidth + fretWidth / 2;
+            const x2 =
+              leftPad + (conn.toFret - fretRange.start) * fretWidth + fretWidth / 2;
+            const y = topPad + (conn.string - 1) * stringGap;
+            const midX = (x1 + x2) / 2;
+            const archDir = conn.kind === 'pull' ? 1 : -1;
+            const archLift = conn.kind === 'slide' ? 0 : 20 * archDir;
+            const d =
+              conn.kind === 'slide'
+                ? `M ${x1} ${y} L ${x2} ${y}`
+                : `M ${x1} ${y + archDir * 6} Q ${midX} ${y + archLift * 1.45} ${x2} ${y + archDir * 6}`;
+
+            return (
+              <path
+                key={`static-${conn.kind}-${conn.string}-${conn.fromFret}-${conn.toFret}`}
+                d={d}
+                fill="none"
+                stroke="rgba(255,255,255,0.22)"
+                strokeWidth={1.5}
+                strokeLinecap="round"
+                strokeDasharray={conn.kind === 'slide' ? '4 3' : undefined}
+                pointerEvents="none"
+              />
+            );
+          })}
+
+        {!interactive && activeLegatoConn && (() => {
+          const x1 =
+            leftPad +
+            (activeLegatoConn.fromFret - fretRange.start) * fretWidth +
+            fretWidth / 2;
+          const x2 =
+            leftPad +
+            (activeLegatoConn.toFret - fretRange.start) * fretWidth +
+            fretWidth / 2;
+          const y = topPad + (activeLegatoConn.string - 1) * stringGap;
+          const midX = (x1 + x2) / 2;
+          const archDir = activeLegatoConn.kind === 'pull' ? 1 : -1;
+          const archLift = activeLegatoConn.kind === 'slide' ? 0 : 22 * archDir;
+          const d =
+            activeLegatoConn.kind === 'slide'
+              ? `M ${x1} ${y} L ${x2} ${y}`
+              : `M ${x1} ${y + archDir * 6} Q ${midX} ${y + archLift * 1.5} ${x2} ${y + archDir * 6}`;
+          const badgeY =
+            activeLegatoConn.kind === 'slide'
+              ? y - 14
+              : y + archLift * 1.05;
+          const badgeChar =
+            activeLegatoConn.kind === 'hammer'
+              ? 'H'
+              : activeLegatoConn.kind === 'pull'
+              ? 'P'
+              : 'S';
+
+          return (
+            <g
+              key={`active-legato-${effectiveActiveStepIndex}-${activeLegatoConn.fromFret}-${activeLegatoConn.toFret}`}
+              pointerEvents="none"
+            >
+              <path
+                d={d}
+                pathLength={1}
+                fill="none"
+                stroke="#FF6B00"
+                strokeWidth={2.8}
+                strokeLinecap="round"
+                filter={`url(#${svgFilterId})`}
+                className="animate-legato-arc"
+              />
+              <circle
+                cx={midX}
+                cy={badgeY}
+                r={8}
+                fill="#000000"
+                stroke="#FF6B00"
+                strokeWidth={1.6}
+              />
+              <text
+                x={midX}
+                y={badgeY + 3.4}
+                textAnchor="middle"
+                fontSize={9}
+                fontWeight={900}
+                fill="#FF6B00"
+              >
+                {badgeChar}
+              </text>
+            </g>
+          );
+        })()}
       </svg>
     </div>
   );
@@ -661,11 +856,23 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
           const isActive = effectiveActiveStepIndex === idx;
           const slotLabel = BAR_8_LABELS[idx] ?? String(idx + 1);
           const isDownbeat = idx % 2 === 0;
-          const symbol = step.sustain
-            ? '—'
-            : step.muted || step.notes.length === 0
-            ? '×'
-            : '●';
+          const art = getStepArticulation(step);
+          const isLegatoSlot =
+            art === 'hammer' || art === 'pull' || art === 'slide';
+          const symbol =
+            art === 'hammer'
+              ? 'H'
+              : art === 'pull'
+              ? 'P'
+              : art === 'slide'
+              ? '/'
+              : art === 'vibrato'
+              ? '~'
+              : art === 'sustain'
+              ? '—'
+              : art === 'muted'
+              ? '×'
+              : '●';
 
           return (
             <div
@@ -673,6 +880,8 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
               className={`min-w-0 flex flex-col items-center justify-center rounded-lg border py-1 text-[10px] font-bold tabular-nums ${
                 isActive
                   ? 'border-[#FF6B00] bg-[#FF6B00] text-black'
+                  : isLegatoSlot
+                  ? 'border-[#FF6B00]/35 bg-black text-[#FF6B00]'
                   : isDownbeat
                   ? 'border-white/15 bg-black text-white/75'
                   : 'border-white/10 bg-black text-white/40'
