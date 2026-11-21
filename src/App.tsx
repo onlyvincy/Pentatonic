@@ -48,6 +48,11 @@ import { TunerAndCheatSheet } from './components/TunerAndCheatSheet';
 import { AnalyticsView } from './components/AnalyticsView';
 import { LiveWorkoutPlayer } from './components/LiveWorkoutPlayer';
 import { OnboardingFlow } from './components/OnboardingFlow';
+import {
+  BeforeInstallPromptEvent,
+  PostOnboardingGuide,
+  PostOnboardingStep,
+} from './components/PostOnboardingGuide';
 import { CloudSyncModal, CloudSyncStatus } from './components/CloudSyncModal';
 import { useAppUpdate } from './hooks/useAppUpdate';
 import {
@@ -62,6 +67,31 @@ import {
 } from './services/supabaseCloud';
 
 export type NavTab = 'today' | 'programs' | 'analytics' | 'tuner';
+
+const POST_ONBOARDING_STEP_KEY = 'pentatonic_post_onboarding_step';
+
+function readStoredPostOnboardingStep(): PostOnboardingStep | null {
+  try {
+    if (typeof localStorage === 'undefined') return null;
+    const raw = localStorage.getItem(POST_ONBOARDING_STEP_KEY);
+    return raw === 'google' || raw === 'install' ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredPostOnboardingStep(step: PostOnboardingStep | null): void {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    if (step) {
+      localStorage.setItem(POST_ONBOARDING_STEP_KEY, step);
+    } else {
+      localStorage.removeItem(POST_ONBOARDING_STEP_KEY);
+    }
+  } catch {
+    // ignore storage errors
+  }
+}
 
 function applyLevelBaselineToUnpracticed(
   exercises: Exercise[],
@@ -195,6 +225,10 @@ export function App() {
   const [syncError, setSyncError] = useState<string | null>(null);
   const [showCloudModal, setShowCloudModal] = useState<boolean>(false);
   const [authConfigVersion, setAuthConfigVersion] = useState<number>(0);
+  const [postOnboardingStep, setPostOnboardingStep] =
+    useState<PostOnboardingStep | null>(() => readStoredPostOnboardingStep());
+  const [deferredInstallPrompt, setDeferredInstallPrompt] =
+    useState<BeforeInstallPromptEvent | null>(null);
 
   const appStateRef = useRef(appState);
   appStateRef.current = appState;
@@ -265,6 +299,29 @@ export function App() {
   useEffect(() => {
     savePersistedState(appState);
   }, [appState]);
+
+  useEffect(() => {
+    const handleBeforeInstall = (e: Event) => {
+      e.preventDefault();
+      setDeferredInstallPrompt(e as BeforeInstallPromptEvent);
+    };
+    const handleAppInstalled = () => {
+      setDeferredInstallPrompt(null);
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+    window.addEventListener('appinstalled', handleAppInstalled);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (cloudUser && postOnboardingStep === 'google') {
+      setPostOnboardingStep('install');
+      writeStoredPostOnboardingStep('install');
+    }
+  }, [cloudUser, postOnboardingStep]);
 
   useEffect(() => {
     if (!isSupabaseConfigured()) {
@@ -416,6 +473,7 @@ export function App() {
     prescription: ScientificPlanPrescription,
     launchWorkoutNow: boolean
   ) => {
+    const isFirstOnboarding = !appState.settings.hasCompletedOnboarding;
     const calibratedExercises = applyLevelBaselineToUnpracticed(
       appState.exercises,
       appState.sessionLogs,
@@ -439,6 +497,12 @@ export function App() {
     setShowDiagnosticQuiz(false);
     setActiveTab('today');
     showToast('Piano scientifico calibrato!');
+
+    if (isFirstOnboarding) {
+      const nextStep: PostOnboardingStep = cloudUser ? 'install' : 'google';
+      setPostOnboardingStep(nextStep);
+      writeStoredPostOnboardingStep(nextStep);
+    }
 
     if (launchWorkoutNow) {
       setActiveLivePlan(
@@ -697,6 +761,8 @@ export function App() {
     const clean = createCleanProfileAppState();
     setAppState(clean);
     setActiveLivePlan(null);
+    setPostOnboardingStep(null);
+    writeStoredPostOnboardingStep(null);
     setShowDiagnosticQuiz(true);
     showToast('Dati azzerati');
   };
@@ -734,6 +800,38 @@ export function App() {
               ? () => setShowDiagnosticQuiz(false)
               : undefined
           }
+        />
+        <CloudSyncModal
+          isOpen={showCloudModal}
+          onClose={() => setShowCloudModal(false)}
+          user={cloudUser}
+          syncStatus={syncStatus}
+          syncError={syncError}
+          lastSyncedAt={appState.settings.lastSyncedAt}
+          onForceSync={() => syncWithCloud()}
+          onAuthConfigured={() => setAuthConfigVersion((v) => v + 1)}
+        />
+      </>
+    );
+  }
+
+  if (postOnboardingStep) {
+    return (
+      <>
+        <PostOnboardingGuide
+          step={postOnboardingStep}
+          user={cloudUser}
+          deferredInstallPrompt={deferredInstallPrompt}
+          onClearInstallPrompt={() => setDeferredInstallPrompt(null)}
+          onSkipGoogle={() => {
+            setPostOnboardingStep('install');
+            writeStoredPostOnboardingStep('install');
+          }}
+          onOpenCloudSetup={() => setShowCloudModal(true)}
+          onComplete={() => {
+            setPostOnboardingStep(null);
+            writeStoredPostOnboardingStep(null);
+          }}
         />
         <CloudSyncModal
           isOpen={showCloudModal}
