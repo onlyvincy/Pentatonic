@@ -307,7 +307,6 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     return calculateWarmupBpm(comfort);
   }, [plan.items, plan.playerLevel, priorSessionLogs]);
 
-  const [precountBeat, setPrecountBeat] = useState(4);
   const [setRemainingSec, setSetRemainingSec] = useState(
     currentItem?.durationSec ?? 60
   );
@@ -460,6 +459,8 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     if (phase === 'playing') {
       setIsSetPaused(true);
       metronome.stop();
+    } else if (phase === 'precount') {
+      metronome.stop();
     }
     setCurrentSrsStatus(getFamilyBriefingSrsStatus(currentExercise.id));
     setFamilyBriefingManualMode(true);
@@ -470,7 +471,6 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
   const startPreCountNow = useCallback(() => {
     clearDemoBetweenTimer();
     unlockSharedAudioContext().catch(() => {});
-    setPrecountBeat(4);
     setPhase('precount');
   }, [clearDemoBetweenTimer]);
 
@@ -536,27 +536,21 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Pre-timer with metronome click -> transitions straight into active playing
+  // Pre-timer locked 1:1 to the Web Audio metronome clock at the exact exercise BPM & subdivision,
+  // transitioning seamlessly into Bar 1 Beat 1 of active playing with zero drift or gap.
   useEffect(() => {
-    if (phase !== 'precount') return;
-    const beatMs = Math.max(340, Math.min(800, Math.round(60000 / metronome.bpm)));
-    metronome.playPreCountBeep(false);
-
-    const interval = window.setInterval(() => {
-      setPrecountBeat((prev) => {
-        if (prev <= 1) {
-          window.clearInterval(interval);
-          startPlayingNow();
-          return 0;
-        }
-        metronome.playPreCountBeep(false);
-        return prev - 1;
-      });
-    }, beatMs);
-
-    return () => window.clearInterval(interval);
+    if (phase !== 'precount' || showFamilyBriefing) return;
+    unlockSharedAudioContext().catch(() => {});
+    metronome.start({
+      countInBeats: 4,
+      onCountInComplete: () => {
+        hasTriggeredFinishForSetRef.current = false;
+        setIsSetPaused(false);
+        setPhase('playing');
+      },
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase]);
+  }, [phase, showFamilyBriefing]);
 
   const buildSessionLogSnapshot = useCallback(
     (sets: SetLog[]): WorkoutSessionLog => {
@@ -785,7 +779,6 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
       setDemoReplayKey((k) => k + 1);
       setPhase('demo');
     } else {
-      setPrecountBeat(4);
       setPhase('precount');
     }
   };
@@ -1292,12 +1285,39 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
             )}
 
             <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/50 tabular-nums">
-              {metronome.bpm} BPM • S{setNumber}/{currentItem.sets}
+              {metronome.bpm} BPM • {metronome.subdivision} • S{setNumber}/{currentItem.sets}
             </div>
 
-            <div className="my-8 chrome-ring-bezel rounded-full shadow-[0_0_52px_rgba(57,255,20,0.28)]">
+            {/* 4 Beat Lights locked to Web Audio count-in clock */}
+            <div className="mt-4 flex items-center justify-center gap-3">
+              {[1, 2, 3, 4].map((beat) => {
+                const isActive =
+                  metronome.isPlaying && metronome.currentBeat === beat;
+                const activeStyle =
+                  beat === 1
+                    ? 'bg-[#39FF14] scale-125 shadow-[0_0_16px_rgba(57,255,20,0.75)]'
+                    : 'bg-white scale-110 shadow-[0_0_12px_rgba(255,255,255,0.55)]';
+                return (
+                  <span
+                    key={beat}
+                    className={`h-3 w-3 rounded-full transition-all duration-75 ${
+                      isActive ? activeStyle : 'bg-white/15'
+                    }`}
+                  />
+                );
+              })}
+            </div>
+
+            <div
+              key={metronome.pulseCounter}
+              className={`my-7 chrome-ring-bezel rounded-full transition-transform duration-75 ${
+                metronome.currentBeat === 1
+                  ? 'scale-[1.03] shadow-[0_0_64px_rgba(57,255,20,0.42)]'
+                  : 'shadow-[0_0_48px_rgba(57,255,20,0.24)]'
+              }`}
+            >
               <div className="flex h-44 w-44 items-center justify-center rounded-full border border-[#39FF14]/80 bg-[#050608] text-7xl font-black chrome-text tabular-nums">
-                {precountBeat}
+                {metronome.countInBeat || 4}
               </div>
             </div>
 
@@ -1744,7 +1764,6 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
                   bpmOverrides
                 );
                 setSetRemainingSec(currentItem.durationSec);
-                setPrecountBeat(4);
                 setPhase('precount');
               }}
               className="flex w-full items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-bold text-white/45 hover:text-white transition"

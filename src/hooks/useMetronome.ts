@@ -17,8 +17,15 @@ interface UseMetronomeOptions {
   initialBurstCycleSteps?: number;
 }
 
+export interface StartMetronomeOptions {
+  countInBeats?: number;
+  onCountInComplete?: () => void;
+}
+
 export interface MetronomeState {
   isPlaying: boolean;
+  isCountingIn: boolean;
+  countInBeat: number; // 4..1 during count-in, 0 otherwise
   bpm: number;
   subdivision: Subdivision;
   gapClickMode: GapClickMode;
@@ -26,7 +33,7 @@ export interface MetronomeState {
   visualOnly: boolean;
   speedBurst: boolean;
   currentBeat: number; // 1..4
-  currentBar: number; // 1..N
+  currentBar: number; // 1..N (0 during count-in)
   isGapBar: boolean;
   pulseCounter: number; // increments on every quarter beat for CSS flash trigger
   currentSubStep: number; // driven directly by AudioContext.currentTime playhead
@@ -47,6 +54,8 @@ function getSubdivisionCount(sub: Subdivision): number {
 
 export function useMetronome(options: UseMetronomeOptions = {}) {
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isCountingIn, setIsCountingIn] = useState(false);
+  const [countInBeat, setCountInBeat] = useState(0);
   const [bpm, setBpmState] = useState(options.initialBpm ?? 90);
   const [subdivision, setSubdivisionState] = useState<Subdivision>(
     options.initialSubdivision ?? '1/8'
@@ -88,11 +97,17 @@ export function useMetronome(options: UseMetronomeOptions = {}) {
       beat: number;
       bar: number;
       isGap: boolean;
+      isCountIn: boolean;
+      countInBeat: number;
     }[]
   >([]);
 
   const lastEmittedSubStepRef = useRef<number>(-1);
   const lastEmittedBeatRef = useRef<number>(-1);
+  const lastEmittedBarRef = useRef<number>(-1);
+  const countInStepsRef = useRef<number>(0);
+  const isCountingInRef = useRef<boolean>(false);
+  const onCountInCompleteRef = useRef<(() => void) | null>(null);
   const barGapMapRef = useRef<Map<number, boolean>>(new Map());
   const tapTimesRef = useRef<number[]>([]);
 
@@ -141,8 +156,15 @@ export function useMetronome(options: UseMetronomeOptions = {}) {
 
   const setBpm = useCallback(
     (next: number | ((prev: number) => number)) => {
+      if (typeof next === 'number') {
+        const clamped = Math.max(30, Math.min(260, Math.round(next)));
+        bpmRef.current = clamped;
+        rebaseClockAnchor();
+        setBpmState(clamped);
+        return;
+      }
       setBpmState((prev) => {
-        const val = typeof next === 'function' ? next(prev) : next;
+        const val = next(prev);
         const clamped = Math.max(30, Math.min(260, Math.round(val)));
         bpmRef.current = clamped;
         rebaseClockAnchor();
@@ -203,6 +225,67 @@ export function useMetronome(options: UseMetronomeOptions = {}) {
     (step: number, time: number, nowClock: number, useAudioClock: boolean) => {
       const audioSubsPerBeat = getSubdivisionCount(subRef.current);
       const clockSubsPerBeat = speedBurstRef.current ? 4 : audioSubsPerBeat;
+
+      // Native sample-accurate count-in bar (step < 0) seamlessly leading into step 0 (Bar 1 Beat 1)
+      if (step < 0) {
+        const totalCountInSteps = Math.max(
+          clockSubsPerBeat,
+          countInStepsRef.current
+        );
+        const stepsFromStart = step + totalCountInSteps;
+        const isQuarterBeat = stepsFromStart % clockSubsPerBeat === 0;
+        const beatIdx = Math.floor(stepsFromStart / clockSubsPerBeat);
+        const beatNumber = beatIdx + 1;
+        const countInBeatsTotal = Math.max(
+          1,
+          Math.round(totalCountInSteps / clockSubsPerBeat)
+        );
+        const remainingBeat = Math.max(1, countInBeatsTotal - beatIdx);
+
+        // During count-in, play at the exact exercise BPM & subdivision (1x normal speed if speedBurst is on)
+        const shouldTriggerAudioClick = !speedBurstRef.current
+          ? true
+          : subRef.current === '1/4'
+          ? stepsFromStart % 4 === 0
+          : stepsFromStart % 2 === 0;
+
+        let scheduledTime = time;
+        if (!visualOnlyRef.current && shouldTriggerAudioClick) {
+          const ctx = getSharedAudioContext();
+          const audioTime =
+            useAudioClock || !ctx
+              ? time
+              : ctx.currentTime + Math.max(0.004, time - nowClock);
+
+          const kind: MetronomeClickKind =
+            beatNumber === 1 && isQuarterBeat
+              ? 'accent'
+              : isQuarterBeat
+              ? 'beat'
+              : 'sub';
+
+          const actualAudioTime = triggerSound(audioTime, kind);
+          if (useAudioClock) {
+            scheduledTime = actualAudioTime;
+          }
+        }
+
+        visualQueueRef.current.push({
+          step,
+          time: scheduledTime,
+          useAudioClock,
+          beat: beatNumber,
+          bar: 0,
+          isGap: false,
+          isCountIn: true,
+          countInBeat: remainingBeat,
+        });
+        if (visualQueueRef.current.length > 64) {
+          visualQueueRef.current.splice(0, visualQueueRef.current.length - 64);
+        }
+        return;
+      }
+
       const stepsPerBar = 4 * clockSubsPerBeat;
       const stepInBar = step % stepsPerBar;
       const isQuarterBeat = stepInBar % clockSubsPerBeat === 0;
@@ -275,6 +358,8 @@ export function useMetronome(options: UseMetronomeOptions = {}) {
         beat: beatNumber,
         bar: barNum,
         isGap: mutedByGap,
+        isCountIn: false,
+        countInBeat: 0,
       });
       if (visualQueueRef.current.length > 64) {
         visualQueueRef.current.splice(0, visualQueueRef.current.length - 64);
@@ -290,34 +375,49 @@ export function useMetronome(options: UseMetronomeOptions = {}) {
     }
   }, []);
 
-  const start = useCallback(() => {
-    const ctx = ensureAudioCtx();
-    if (schedulerIdRef.current !== null) {
-      window.clearInterval(schedulerIdRef.current);
-    }
-    stopPlayhead();
+  const start = useCallback(
+    (startOptions?: StartMetronomeOptions) => {
+      const ctx = ensureAudioCtx();
+      if (schedulerIdRef.current !== null) {
+        window.clearInterval(schedulerIdRef.current);
+      }
+      stopPlayhead();
 
-    isPlayingRef.current = true;
-    stepIndexRef.current = 0;
-    baseSubStepOffsetRef.current = 0;
-    lastEmittedSubStepRef.current = -1;
-    lastEmittedBeatRef.current = -1;
-    barGapMapRef.current.clear();
-    visualQueueRef.current = [];
+      const countInBeats = Math.max(
+        0,
+        Math.round(startOptions?.countInBeats ?? 0)
+      );
+      const audioSubsPerBeat = getSubdivisionCount(subRef.current);
+      const clockSubsPerBeat = speedBurstRef.current ? 4 : audioSubsPerBeat;
+      const countInSteps = countInBeats * clockSubsPerBeat;
 
-    const useAudioClock = Boolean(ctx && ctx.state === 'running');
-    lastUsingAudioClockRef.current = useAudioClock;
-    const baseNow =
-      useAudioClock && ctx ? ctx.currentTime : performance.now() / 1000;
-    const startAt = baseNow + 0.05;
+      isPlayingRef.current = true;
+      countInStepsRef.current = countInSteps;
+      isCountingInRef.current = countInSteps > 0;
+      onCountInCompleteRef.current = startOptions?.onCountInComplete ?? null;
+      stepIndexRef.current = -countInSteps;
+      baseSubStepOffsetRef.current = -countInSteps;
+      lastEmittedSubStepRef.current = -1;
+      lastEmittedBeatRef.current = -1;
+      lastEmittedBarRef.current = -1;
+      barGapMapRef.current.clear();
+      visualQueueRef.current = [];
 
-    clockAnchorRef.current = startAt;
-    nextNoteTimeRef.current = startAt;
-    setCurrentSubStep(0);
-    setCurrentBeat(1);
-    setCurrentBar(1);
-    setIsGapBar(false);
-    setIsPlaying(true);
+      const useAudioClock = Boolean(ctx && ctx.state === 'running');
+      lastUsingAudioClockRef.current = useAudioClock;
+      const baseNow =
+        useAudioClock && ctx ? ctx.currentTime : performance.now() / 1000;
+      const startAt = baseNow + 0.05;
+
+      clockAnchorRef.current = startAt;
+      nextNoteTimeRef.current = startAt;
+      setIsCountingIn(countInSteps > 0);
+      setCountInBeat(countInBeats);
+      setCurrentSubStep(0);
+      setCurrentBeat(1);
+      setCurrentBar(countInSteps > 0 ? 0 : 1);
+      setIsGapBar(false);
+      setIsPlaying(true);
 
     const runSchedulerTick = () => {
       if (!isPlayingRef.current) return;
@@ -414,16 +514,43 @@ export function useMetronome(options: UseMetronomeOptions = {}) {
       }
 
       if (latestDue) {
-        if (latestDue.step !== lastEmittedSubStepRef.current) {
-          lastEmittedSubStepRef.current = latestDue.step;
-          setCurrentSubStep(latestDue.step);
-        }
-        if (latestDue.beat !== lastEmittedBeatRef.current) {
-          lastEmittedBeatRef.current = latestDue.beat;
-          setCurrentBeat(latestDue.beat);
-          setCurrentBar(latestDue.bar);
-          setIsGapBar(latestDue.isGap);
-          setPulseCounter((c) => c + 1);
+        if (latestDue.isCountIn) {
+          if (
+            latestDue.beat !== lastEmittedBeatRef.current ||
+            latestDue.bar !== lastEmittedBarRef.current
+          ) {
+            lastEmittedBeatRef.current = latestDue.beat;
+            lastEmittedBarRef.current = latestDue.bar;
+            setCountInBeat(latestDue.countInBeat);
+            setCurrentBeat(latestDue.beat);
+            setCurrentBar(0);
+            setIsGapBar(false);
+            setPulseCounter((c) => c + 1);
+          }
+        } else {
+          if (isCountingInRef.current) {
+            isCountingInRef.current = false;
+            setIsCountingIn(false);
+            setCountInBeat(0);
+            const onComplete = onCountInCompleteRef.current;
+            onCountInCompleteRef.current = null;
+            onComplete?.();
+          }
+          if (latestDue.step !== lastEmittedSubStepRef.current) {
+            lastEmittedSubStepRef.current = latestDue.step;
+            setCurrentSubStep(latestDue.step);
+          }
+          if (
+            latestDue.beat !== lastEmittedBeatRef.current ||
+            latestDue.bar !== lastEmittedBarRef.current
+          ) {
+            lastEmittedBeatRef.current = latestDue.beat;
+            lastEmittedBarRef.current = latestDue.bar;
+            setCurrentBeat(latestDue.beat);
+            setCurrentBar(latestDue.bar);
+            setIsGapBar(latestDue.isGap);
+            setPulseCounter((c) => c + 1);
+          }
         }
       }
 
@@ -435,6 +562,9 @@ export function useMetronome(options: UseMetronomeOptions = {}) {
 
   const stop = useCallback(() => {
     isPlayingRef.current = false;
+    countInStepsRef.current = 0;
+    isCountingInRef.current = false;
+    onCountInCompleteRef.current = null;
     if (schedulerIdRef.current !== null) {
       window.clearInterval(schedulerIdRef.current);
       schedulerIdRef.current = null;
@@ -442,6 +572,8 @@ export function useMetronome(options: UseMetronomeOptions = {}) {
     visualQueueRef.current = [];
     stopPlayhead();
     setIsPlaying(false);
+    setIsCountingIn(false);
+    setCountInBeat(0);
     setCurrentBeat(1);
     setIsGapBar(false);
     setCurrentSubStep(0);
@@ -483,6 +615,8 @@ export function useMetronome(options: UseMetronomeOptions = {}) {
 
   return {
     isPlaying,
+    isCountingIn,
+    countInBeat,
     bpm,
     subdivision,
     gapClickMode,
