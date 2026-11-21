@@ -631,7 +631,7 @@ export const CANONICAL_PILLARS: {
 }[] = [
   {
     pillarNumber: 1,
-    exerciseId: 'ex-pent-box1',
+    exerciseId: 'ex-pent-licks',
     pillarLabel: 'Esercizio 1 • Fondamentale ogni giorno',
     minPreset: 5,
     setsByPreset: {
@@ -643,7 +643,7 @@ export const CANONICAL_PILLARS: {
   },
   {
     pillarNumber: 2,
-    exerciseId: 'ex-picking-pg6',
+    exerciseId: 'ex-speed-bursts',
     pillarLabel: 'Esercizio 2 • Velocità e Sincronia',
     minPreset: 15,
     setsByPreset: {

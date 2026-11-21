@@ -38,6 +38,8 @@ interface FretboardViewerProps {
   muteAudio?: boolean;
   /** Target BPM used to synchronize slow-intro & live-loop pacing */
   bpm?: number;
+  /** Runs alternating 1/8 (1x normal) -> 1/16 (2x double-speed burst) cycles */
+  speedBurst?: boolean;
   /** Hides the manual Demo button in compact mode when not needed */
   hideDemoButton?: boolean;
   /** Automatically plays the guitar demo sequence on mount (used in full-screen stage) */
@@ -120,6 +122,29 @@ function getBarreInfo(
   return null;
 }
 
+function resolveSpeedBurstTick(
+  tick16: number,
+  totalSteps: number
+): { stepIndex: number; isBurstPhase: boolean } {
+  if (totalSteps <= 0) {
+    return { stepIndex: 0, isBurstPhase: false };
+  }
+  const phase1Ticks = 2 * totalSteps;
+  const phase2Ticks = Math.max(16, totalSteps);
+  const cycleTicks = phase1Ticks + phase2Ticks;
+  const safeTick = ((tick16 % cycleTicks) + cycleTicks) % cycleTicks;
+  if (safeTick < phase1Ticks) {
+    return {
+      stepIndex: Math.floor(safeTick / 2) % totalSteps,
+      isBurstPhase: false,
+    };
+  }
+  return {
+    stepIndex: (safeTick - phase1Ticks) % totalSteps,
+    isBurstPhase: true,
+  };
+}
+
 export const FretboardViewer: React.FC<FretboardViewerProps> = ({
   notes,
   demoSequence,
@@ -133,6 +158,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
   customStringFreqs,
   muteAudio = false,
   bpm = 90,
+  speedBurst = false,
   hideDemoButton = false,
   autoPlayDemo = false,
   onDemoComplete,
@@ -142,6 +168,8 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
   const [userLabelMode, setUserLabelMode] = useState<LabelMode | null>(null);
   const [isPlayingDemo, setIsPlayingDemo] = useState(false);
   const [activeStepIndex, setActiveStepIndex] = useState<number | null>(null);
+  const [internalBurstPhase, setInternalBurstPhase] = useState(false);
+  const [internalBeatIdx, setInternalBeatIdx] = useState<number | null>(null);
   const [clickedNoteKey, setClickedNoteKey] = useState<string | null>(null);
 
   const rafRef = useRef<number | null>(null);
@@ -194,6 +222,8 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
     clearTimers();
     setIsPlayingDemo(false);
     setActiveStepIndex(null);
+    setInternalBurstPhase(false);
+    setInternalBeatIdx(null);
   }, [clearTimers]);
 
   const playNoteForTuning = useCallback(
@@ -247,6 +277,76 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
           ? ctx.currentTime
           : performance.now() / 1000;
       };
+
+      if (speedBurst) {
+        const demoBpm =
+          mode === 'slow-intro' ? 62 : Math.max(40, Math.min(240, bpm));
+        const sixteenthSec = 60 / demoBpm / 4;
+        const demoStepsCount =
+          mode === 'slow-intro' && effectiveSteps.length > 16
+            ? 8
+            : effectiveSteps.length;
+        const phase1Ticks = 2 * demoStepsCount;
+        const phase2Ticks = Math.max(16, demoStepsCount);
+        const cycleTicks = phase1Ticks + phase2Ticks;
+        const startAnchor = getNowSec();
+        let lastTick16 = 0;
+
+        setInternalBurstPhase(false);
+        setActiveStepIndex(0);
+        setInternalBeatIdx(0);
+        if (mode === 'slow-intro' && !muteAudio) {
+          playSoftMetronomeTick(true, metronomeSound);
+        }
+        triggerStepAudio(0, false);
+
+        const loopBurst = () => {
+          const elapsed = Math.max(0, getNowSec() - startAnchor);
+          const tick16 = Math.floor(elapsed / sixteenthSec);
+
+          if (mode !== 'live-loop' && tick16 >= cycleTicks) {
+            clearTimers();
+            endTimeoutRef.current = window.setTimeout(() => {
+              setIsPlayingDemo(false);
+              setActiveStepIndex(null);
+              setInternalBurstPhase(false);
+              setInternalBeatIdx(null);
+              if (mode === 'slow-intro') {
+                onDemoCompleteRef.current?.();
+              }
+            }, Math.round(sixteenthSec * 600));
+            return;
+          }
+
+          if (tick16 !== lastTick16) {
+            lastTick16 = tick16;
+            const tickInCycle = tick16 % cycleTicks;
+            setInternalBeatIdx(Math.floor(tick16 / 4) % 4);
+            if (mode === 'slow-intro' && !muteAudio && tick16 % 4 === 0) {
+              playSoftMetronomeTick(tick16 % 16 === 0, metronomeSound);
+            }
+
+            if (tickInCycle < phase1Ticks) {
+              setInternalBurstPhase(false);
+              const stepIdx = Math.floor(tickInCycle / 2) % demoStepsCount;
+              setActiveStepIndex(stepIdx);
+              if (tickInCycle % 2 === 0) {
+                triggerStepAudio(stepIdx, false);
+              }
+            } else {
+              setInternalBurstPhase(true);
+              const stepIdx = (tickInCycle - phase1Ticks) % demoStepsCount;
+              setActiveStepIndex(stepIdx);
+              triggerStepAudio(stepIdx, false);
+            }
+          }
+
+          rafRef.current = window.requestAnimationFrame(loopBurst);
+        };
+
+        rafRef.current = window.requestAnimationFrame(loopBurst);
+        return;
+      }
 
       if (mode === 'slow-intro') {
         const stepSec = 60 / slowBpm / 2;
@@ -342,7 +442,16 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
 
       rafRef.current = window.requestAnimationFrame(loopManual);
     },
-    [effectiveSteps, demoMode, bpm, clearTimers, triggerStepAudio]
+    [
+      effectiveSteps,
+      demoMode,
+      bpm,
+      speedBurst,
+      muteAudio,
+      metronomeSound,
+      clearTimers,
+      triggerStepAudio,
+    ]
   );
 
   useEffect(() => {
@@ -355,11 +464,26 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
   const usesExternalClock =
     demoMode === 'live-loop' && externalStepTick !== undefined;
 
+  const externalBurstResolved =
+    usesExternalClock &&
+    speedBurst &&
+    !forceStopDemo &&
+    externalStepTick !== null &&
+    effectiveSteps.length > 0
+      ? resolveSpeedBurstTick(externalStepTick, effectiveSteps.length)
+      : null;
+
   const effectiveActiveStepIndex: number | null = usesExternalClock
     ? !forceStopDemo && externalStepTick !== null && effectiveSteps.length > 0
-      ? externalStepTick % effectiveSteps.length
+      ? externalBurstResolved
+        ? externalBurstResolved.stepIndex
+        : externalStepTick % effectiveSteps.length
       : null
     : activeStepIndex;
+
+  const isBurstPhase = usesExternalClock
+    ? Boolean(externalBurstResolved?.isBurstPhase)
+    : internalBurstPhase;
 
   // Trigger optional audio only when step changes under external clock
   useEffect(() => {
@@ -1279,6 +1403,18 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
       </div>
     ) : null;
 
+  const speedBurstBadge = speedBurst ? (
+    isBurstPhase ? (
+      <span className="rounded-full border border-[#FF6B00] bg-[#FF6B00] px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-black animate-pulse">
+        ⚡ 1/16 · BURST 2x
+      </span>
+    ) : (
+      <span className="rounded-full border border-white/25 bg-white/10 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-white">
+        1/8 · NORMALE 1x
+      </span>
+    )
+  ) : null;
+
   // FULL-SCREEN STAGE VARIANT
   if (variant === 'stage') {
     const progressPct =
@@ -1286,7 +1422,9 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
         ? Math.round(((effectiveActiveStepIndex + 1) / effectiveSteps.length) * 100)
         : 0;
     const stageBeatIdx =
-      effectiveActiveStepIndex !== null
+      internalBeatIdx !== null
+        ? internalBeatIdx
+        : effectiveActiveStepIndex !== null
         ? Math.floor(effectiveActiveStepIndex / 2) % 4
         : -1;
 
@@ -1294,8 +1432,9 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
       <div className="w-full min-w-0 max-w-full space-y-4">
         {fretboardSvg}
 
-        {(activeTechniqueLabel || totalBars > 1) && (
-          <div className="mx-auto flex min-h-[26px] max-w-md items-center justify-center gap-2">
+        {(speedBurstBadge || activeTechniqueLabel || totalBars > 1) && (
+          <div className="mx-auto flex min-h-[26px] max-w-md flex-wrap items-center justify-center gap-2">
+            {speedBurstBadge}
             {activeTechniqueLabel && (
               <span className="rounded-full border border-[#FF6B00]/50 bg-[#FF6B00]/12 px-3 py-0.5 text-[11px] font-black tracking-wide text-[#FF6B00]">
                 {activeTechniqueLabel}
@@ -1369,6 +1508,8 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
               )}
             </button>
           )}
+
+          {speedBurstBadge}
 
           {activeTechniqueLabel && effectiveActiveStepIndex !== null ? (
             <span className="rounded-full border border-[#FF6B00]/50 bg-[#FF6B00]/12 px-2.5 py-0.5 text-[11px] font-black tracking-wide text-[#FF6B00] tabular-nums">

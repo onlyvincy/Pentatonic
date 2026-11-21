@@ -30,6 +30,7 @@ import {
   savePersistedState,
 } from './services/storage';
 import {
+  LEGACY_EXERCISE_ID_MAP,
   buildSessionPlanFromPrescription,
   createDefaultScientificPrescription,
   generateScientificPrescription,
@@ -51,8 +52,11 @@ export function App() {
     const saved = loadPersistedState();
     if (!saved) return createInitialAppState();
     const seedById = new Map(SEED_EXERCISES.map((ex) => [ex.id, ex]));
-    const savedIds = new Set(saved.exercises.map((ex) => ex.id));
-    const hydratedSavedExercises = saved.exercises.map((ex) => {
+    const activeSavedExercises = saved.exercises.filter(
+      (ex) => seedById.has(ex.id) || ex.isCustom
+    );
+    const savedIds = new Set(activeSavedExercises.map((ex) => ex.id));
+    const hydratedSavedExercises = activeSavedExercises.map((ex) => {
       const seed = seedById.get(ex.id);
       if (!seed) return ex;
       return {
@@ -61,11 +65,15 @@ export function App() {
         title: seed.title,
         description: seed.description,
         scientificRationale: seed.scientificRationale,
+        category: seed.category,
         subdivision: seed.subdivision,
+        speedBurst: seed.speedBurst,
         fretboardNotes: seed.fretboardNotes,
         demoSequence: seed.demoSequence,
         variants: seed.variants,
-        activeVariantId: ex.activeVariantId ?? seed.activeVariantId,
+        activeVariantId: seed.variants?.some((v) => v.id === ex.activeVariantId)
+          ? ex.activeVariantId
+          : seed.activeVariantId,
       };
     });
     const missingSeedExercises = SEED_EXERCISES.filter(
@@ -75,6 +83,17 @@ export function App() {
       ...hydratedSavedExercises,
       ...missingSeedExercises,
     ];
+    const migratedSessionLogs = (saved.sessionLogs ?? []).map((log) => ({
+      ...log,
+      sets: log.sets.map((st) => ({
+        ...st,
+        exerciseId: LEGACY_EXERCISE_ID_MAP[st.exerciseId] ?? st.exerciseId,
+      })),
+    }));
+    const migratedRecordings = (saved.feedRecordings ?? []).map((rec) => ({
+      ...rec,
+      exerciseId: LEGACY_EXERCISE_ID_MAP[rec.exerciseId] ?? rec.exerciseId,
+    }));
     const hydratedPlan = saved.settings.scientificPlan
       ? generateScientificPrescription(
           saved.settings.scientificPlan.answers,
@@ -89,6 +108,8 @@ export function App() {
     return {
       ...saved,
       exercises: hydratedExercises,
+      sessionLogs: migratedSessionLogs,
+      feedRecordings: migratedRecordings,
       settings: {
         ...saved.settings,
         scientificPlan: hydratedPlan,

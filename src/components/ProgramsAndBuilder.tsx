@@ -58,6 +58,9 @@ export const ProgramsAndBuilder: React.FC<ProgramsAndBuilderProps> = ({
   const [selectedVariantByEx, setSelectedVariantByEx] = useState<
     Record<string, string>
   >({});
+  const [speedBurstByEx, setSpeedBurstByEx] = useState<Record<string, boolean>>(
+    {}
+  );
   const [selectedArpeggioProgId, setSelectedArpeggioProgId] = useState<string>(
     () => pickRecommendedProgression(sessionLogs.length).id
   );
@@ -358,6 +361,7 @@ export const ProgramsAndBuilder: React.FC<ProgramsAndBuilderProps> = ({
         const arpData = isArpeggioEx
           ? buildArpeggioWorkoutData(activeVarId, selectedArpeggioProgId)
           : null;
+        const exSpeedBurst = speedBurstByEx[ex.id] ?? Boolean(ex.speedBurst);
 
         return (
           <div
@@ -389,15 +393,33 @@ export const ProgramsAndBuilder: React.FC<ProgramsAndBuilderProps> = ({
 
               {/* Minimal Sets & BPM Row */}
               <div className="space-y-2">
-                <div className="flex items-baseline justify-between gap-3 tabular-nums">
+                <div className="flex items-center justify-between gap-3 tabular-nums">
                   <div className="text-xs font-bold text-white/55">
                     <span className="font-black text-white">
                       {item.completedSets}
                     </span>
                     /{item.weeklyMinSets} min · ott {item.weeklyOptimalSets}
                   </div>
-                  <div className="text-sm font-black text-[#FF6B00]">
-                    {targetForSelected} BPM
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSpeedBurstByEx((prev) => ({
+                          ...prev,
+                          [ex.id]: !exSpeedBurst,
+                        }))
+                      }
+                      className={`rounded-full border px-2.5 py-0.5 text-[10px] font-black transition ${
+                        exSpeedBurst
+                          ? 'border-[#FF6B00] bg-[#FF6B00] text-black'
+                          : 'border-white/20 bg-black text-white/55 hover:border-white/45 hover:text-white'
+                      }`}
+                    >
+                      ⚡ Burst 1/8→1/16
+                    </button>
+                    <div className="text-sm font-black text-[#FF6B00]">
+                      {targetForSelected} BPM
+                    </div>
                   </div>
                 </div>
 
@@ -497,6 +519,7 @@ export const ProgramsAndBuilder: React.FC<ProgramsAndBuilderProps> = ({
                   ex.demoSequence
                 }
                 bpm={targetForSelected}
+                speedBurst={exSpeedBurst}
                 variant="compact"
               />
 

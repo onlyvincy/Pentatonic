@@ -367,6 +367,7 @@ export function buildSeedArpeggioExercise(): Exercise {
     defaultRestSec: 15,
     subdivision: '1/8',
     gapClickMode: 'off',
+    speedBurst: true,
     isBenchmark: true,
     activeVariantId: ARPEGGIO_PATTERNS[0].id,
     fretboardNotes: defaultData.fretboardNotes,

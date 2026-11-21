@@ -163,65 +163,57 @@ export const SESSION_BUDGET_OPTIONS: QuizOption<SessionDurationPreset>[] = [
   },
 ];
 
+export const LEGACY_EXERCISE_ID_MAP: Record<string, string> = {
+  'ex-picking-pg6': 'ex-speed-bursts',
+  'ex-pent-box1': 'ex-pent-licks',
+  'ex-lead-phrasing': 'ex-lead-bending',
+  'ex-rhythm-chords': 'ex-harmony-scale',
+  'ex-rhythm-funk16': 'ex-rhythm-gap',
+};
+
 const DOSE_COPY_BY_EXERCISE: Record<
   string,
   { coachMethod: string; scientificRationale: string }
 > = {
-  'ex-pent-box1': {
-    coachMethod: 'Cambio corda',
-    scientificRationale: 'Passa da una corda all’altra senza intoppi.',
-  },
-  'ex-picking-pg6': {
-    coachMethod: 'Velocità',
-    scientificRationale: 'Sincronizza plettro e dita nei passaggi rapidi.',
-  },
-  'ex-rhythm-gap': {
-    coachMethod: 'Tempo interno',
-    scientificRationale: 'Resta a tempo da solo anche nel silenzio.',
-  },
-  'ex-legato-trill': {
-    coachMethod: 'Forza mano sinistra',
-    scientificRationale: 'Suona legati forti e chiari senza plettro.',
-  },
-  'ex-pent-diagonal': {
-    coachMethod: 'Tutto il manico',
-    scientificRationale: 'Collega tasti bassi e alti con un gesto fluido.',
-  },
-  'ex-picking-spider': {
-    coachMethod: 'Controllo dita',
-    scientificRationale: 'Rinforza mignolo e anulare senza tensione.',
-  },
-  'ex-rhythm-funk16': {
-    coachMethod: 'Polso sciolto',
-    scientificRationale: 'Tieni il groove sugli accordi senza irrigidirti.',
-  },
-  'ex-rhythm-palmmute': {
-    coachMethod: 'Muting & Attacco',
-    scientificRationale: 'Controlla il palmo sul ponte tra chug e power chords.',
-  },
-  'ex-rhythm-chords': {
-    coachMethod: 'Cambi & Barrè',
-    scientificRationale: 'Piazzamento istantaneo su forme mobili barrè o aperte.',
-  },
-  'ex-lead-bending': {
-    coachMethod: 'Intonazione & Vibrato',
-    scientificRationale: 'Centra il pitch nei bend rapidi e fai cantare il vibrato.',
-  },
-  'ex-harmony-scale': {
-    coachMethod: 'Armonia & Gradi',
-    scientificRationale: 'Padroneggia i 7 gradi della scala e le progressioni in numeri romani.',
-  },
-  'ex-arpeggio-progressions': {
-    coachMethod: 'Arpeggi & Songwriting',
-    scientificRationale: 'Pattern ritmici di arpeggio su progressioni reali per comporre e accompagnare.',
+  'ex-speed-bursts': {
+    coachMethod: 'Escape & Speed Burst',
+    scientificRationale: 'Alterna ottavi di controllo e burst 1/16 con movimenti di escape USX/DSX.',
   },
   'ex-pent-licks': {
     coachMethod: 'Lick Solisti',
-    scientificRationale: 'Vocabolario di lick pentatonici veloci e ritmici pronti per gli assoli.',
+    scientificRationale: 'Vocabolario pentatonico ad alta velocità, sequenze a 3/4 e salti di corda.',
   },
-  'ex-lead-phrasing': {
-    coachMethod: 'Target & Double-Stop',
-    scientificRationale: 'Atterra sulle note chiave degli accordi e arricchisci il fraseggio con i double-stop.',
+  'ex-picking-spider': {
+    coachMethod: 'Indipendenza & Muting',
+    scientificRationale: 'Rinforza dita, stretch laterale e string muting mano sinistra senza tensione.',
+  },
+  'ex-arpeggio-progressions': {
+    coachMethod: 'Arpeggi & Songwriting',
+    scientificRationale: 'Pattern modulari per gradi (1-3-5-8) applicabili su qualsiasi giro armonico.',
+  },
+  'ex-legato-trill': {
+    coachMethod: 'Legato & Rolling 3NPS',
+    scientificRationale: 'Suona legati fluidi, trilli e hammer-on from nowhere senza plettrata.',
+  },
+  'ex-lead-bending': {
+    coachMethod: 'Bending & Target Notes',
+    scientificRationale: 'Centra pitch, vibrato, double-stop e note bersaglio sugli accordi.',
+  },
+  'ex-harmony-scale': {
+    coachMethod: 'Armonia, Barrè & Gradi',
+    scientificRationale: 'Padroneggia gradi della scala, numeri romani e forme barrè mobili.',
+  },
+  'ex-pent-diagonal': {
+    coachMethod: 'Visione Orizzontale',
+    scientificRationale: 'Collega il manico per diagonali, singola corda, triadi ed ottave 3NPS.',
+  },
+  'ex-rhythm-palmmute': {
+    coachMethod: 'Chug, Gallop & Muting',
+    scientificRationale: 'Domina palm mute 16ths, gallop, poliritmi 3+3+2, stabs sincopati e stoppate.',
+  },
+  'ex-rhythm-gap': {
+    coachMethod: 'Timing & Groove 16th',
+    scientificRationale: 'Orologio interno su battuta muta, sincopi in levare e ghost notes funk.',
   },
 };
 
@@ -272,10 +264,9 @@ export function generateScientificPrescription(
 
   if (pathId === 'solista') {
     const solistaPrimary = [
+      'ex-speed-bursts',
       'ex-pent-licks',
-      'ex-picking-pg6',
       'ex-lead-bending',
-      'ex-lead-phrasing',
       'ex-legato-trill',
     ];
     solistaPrimary.forEach((id, idx) => {
@@ -291,11 +282,10 @@ export function generateScientificPrescription(
     });
 
     const solistaSupport = [
-      'ex-arpeggio-progressions',
-      'ex-pent-box1',
-      'ex-pent-diagonal',
-      'ex-harmony-scale',
       'ex-picking-spider',
+      'ex-pent-diagonal',
+      'ex-arpeggio-progressions',
+      'ex-harmony-scale',
     ];
     solistaSupport.forEach((id) => {
       addIfAvailable(
@@ -311,9 +301,7 @@ export function generateScientificPrescription(
 
     const solistaRhythmBase = [
       'ex-rhythm-palmmute',
-      'ex-rhythm-chords',
       'ex-rhythm-gap',
-      'ex-rhythm-funk16',
     ];
     solistaRhythmBase.forEach((id) => {
       addIfAvailable(
@@ -328,12 +316,10 @@ export function generateScientificPrescription(
     });
   } else {
     const rhythmPrimary = [
+      'ex-rhythm-palmmute',
+      'ex-rhythm-gap',
       'ex-arpeggio-progressions',
       'ex-harmony-scale',
-      'ex-rhythm-palmmute',
-      'ex-rhythm-chords',
-      'ex-rhythm-gap',
-      'ex-rhythm-funk16',
     ];
     rhythmPrimary.forEach((id, idx) => {
       addIfAvailable(
@@ -348,9 +334,8 @@ export function generateScientificPrescription(
     });
 
     const rhythmSupport = [
-      'ex-lead-phrasing',
-      'ex-picking-pg6',
       'ex-picking-spider',
+      'ex-speed-bursts',
     ];
     rhythmSupport.forEach((id) => {
       addIfAvailable(
@@ -366,9 +351,8 @@ export function generateScientificPrescription(
 
     const rhythmSoloBase = [
       'ex-pent-licks',
-      'ex-pent-box1',
-      'ex-legato-trill',
       'ex-lead-bending',
+      'ex-legato-trill',
       'ex-pent-diagonal',
     ];
     rhythmSoloBase.forEach((id) => {
@@ -556,24 +540,20 @@ export interface FondamentaWeeklyGroup {
 
 export function getFondamentaForExercise(ex: Exercise): FondamentaId {
   switch (ex.id) {
-    case 'ex-picking-pg6':
-    case 'ex-pent-box1':
+    case 'ex-speed-bursts':
     case 'ex-pent-licks':
       return 'velocita';
     case 'ex-picking-spider':
-    case 'ex-rhythm-palmmute':
     case 'ex-arpeggio-progressions':
       return 'precisione';
     case 'ex-legato-trill':
     case 'ex-lead-bending':
-    case 'ex-lead-phrasing':
       return 'espressivita';
-    case 'ex-pent-diagonal':
-    case 'ex-rhythm-chords':
     case 'ex-harmony-scale':
+    case 'ex-pent-diagonal':
       return 'visione';
+    case 'ex-rhythm-palmmute':
     case 'ex-rhythm-gap':
-    case 'ex-rhythm-funk16':
       return 'groove';
     default:
       if (ex.category === 'picking') return 'velocita';

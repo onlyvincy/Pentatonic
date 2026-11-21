@@ -13,6 +13,7 @@ interface UseMetronomeOptions {
   initialGapClick?: GapClickMode;
   initialSound?: MetronomeSoundId;
   visualOnly?: boolean;
+  speedBurst?: boolean;
 }
 
 export interface MetronomeState {
@@ -22,6 +23,7 @@ export interface MetronomeState {
   gapClickMode: GapClickMode;
   soundId: MetronomeSoundId;
   visualOnly: boolean;
+  speedBurst: boolean;
   currentBeat: number; // 1..4
   currentBar: number; // 1..N
   isGapBar: boolean;
@@ -55,6 +57,9 @@ export function useMetronome(options: UseMetronomeOptions = {}) {
     options.initialSound ?? 'woodblock'
   );
   const [visualOnly, setVisualOnly] = useState<boolean>(options.visualOnly ?? false);
+  const [speedBurst, setSpeedBurstState] = useState<boolean>(
+    options.speedBurst ?? false
+  );
 
   const [currentBeat, setCurrentBeat] = useState(1);
   const [currentBar, setCurrentBar] = useState(1);
@@ -96,6 +101,7 @@ export function useMetronome(options: UseMetronomeOptions = {}) {
   const gapRef = useRef(gapClickMode);
   const soundIdRef = useRef(soundId);
   const visualOnlyRef = useRef(visualOnly);
+  const speedBurstRef = useRef(speedBurst);
 
   useEffect(() => {
     gapRef.current = gapClickMode;
@@ -151,6 +157,15 @@ export function useMetronome(options: UseMetronomeOptions = {}) {
     [rebaseClockAnchor]
   );
 
+  const setSpeedBurst = useCallback(
+    (next: boolean) => {
+      speedBurstRef.current = next;
+      setSpeedBurstState(next);
+      rebaseClockAnchor();
+    },
+    [rebaseClockAnchor]
+  );
+
   const triggerSound = useCallback(
     (time: number, kind: MetronomeClickKind): number => {
       const ctx = getSharedAudioContext();
@@ -178,11 +193,12 @@ export function useMetronome(options: UseMetronomeOptions = {}) {
 
   const scheduleAudioStep = useCallback(
     (step: number, time: number, nowClock: number, useAudioClock: boolean) => {
-      const subsPerBeat = getSubdivisionCount(subRef.current);
-      const stepsPerBar = 4 * subsPerBeat;
+      const audioSubsPerBeat = getSubdivisionCount(subRef.current);
+      const clockSubsPerBeat = speedBurstRef.current ? 4 : audioSubsPerBeat;
+      const stepsPerBar = 4 * clockSubsPerBeat;
       const stepInBar = step % stepsPerBar;
-      const isQuarterBeat = stepInBar % subsPerBeat === 0;
-      const beatNumber = Math.floor(stepInBar / subsPerBeat) + 1;
+      const isQuarterBeat = stepInBar % clockSubsPerBeat === 0;
+      const beatNumber = Math.floor(stepInBar / clockSubsPerBeat) + 1;
       const barNum = Math.floor(step / stepsPerBar) + 1;
 
       if (!barGapMapRef.current.has(barNum)) {
@@ -200,9 +216,16 @@ export function useMetronome(options: UseMetronomeOptions = {}) {
       }
 
       const mutedByGap = barGapMapRef.current.get(barNum) ?? false;
+      const shouldTriggerAudioClick =
+        !speedBurstRef.current ||
+        (subRef.current === '1/4'
+          ? stepInBar % 4 === 0
+          : subRef.current === '1/8'
+          ? stepInBar % 2 === 0
+          : true);
       let scheduledTime = time;
 
-      if (!visualOnlyRef.current && !mutedByGap) {
+      if (!visualOnlyRef.current && !mutedByGap && shouldTriggerAudioClick) {
         const ctx = getSharedAudioContext();
         const audioTime =
           useAudioClock || !ctx
@@ -305,8 +328,9 @@ export function useMetronome(options: UseMetronomeOptions = {}) {
         nextNoteTimeRef.current = recoverAnchor;
       }
 
-      const subsPerBeat = getSubdivisionCount(subRef.current);
-      const stepDur = 60.0 / bpmRef.current / subsPerBeat;
+      const audioSubsPerBeat = getSubdivisionCount(subRef.current);
+      const clockSubsPerBeat = speedBurstRef.current ? 4 : audioSubsPerBeat;
+      const stepDur = 60.0 / bpmRef.current / clockSubsPerBeat;
       const lookahead = 0.1;
 
       while (nextNoteTimeRef.current < now + lookahead) {
@@ -441,6 +465,7 @@ export function useMetronome(options: UseMetronomeOptions = {}) {
     gapClickMode,
     soundId,
     visualOnly,
+    speedBurst,
     currentBeat,
     currentBar,
     isGapBar,
@@ -451,6 +476,7 @@ export function useMetronome(options: UseMetronomeOptions = {}) {
     setGapClickMode,
     setSoundId,
     setVisualOnly,
+    setSpeedBurst,
     start,
     stop,
     toggle,

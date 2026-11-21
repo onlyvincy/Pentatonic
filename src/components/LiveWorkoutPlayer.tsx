@@ -117,6 +117,10 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
   const currentItem = plan.items[exerciseIdx];
   const currentExercise: Exercise | undefined = currentItem?.exercise;
 
+  const [isSpeedBurst, setIsSpeedBurst] = useState<boolean>(() =>
+    Boolean(plan.items[0]?.exercise.speedBurst)
+  );
+
   const [bpmOverrides, setBpmOverrides] = useState<
     Record<
       string,
@@ -237,7 +241,16 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     initialGapClick: currentExercise?.gapClickMode ?? 'off',
     initialSound: initialMetronomeSound,
     visualOnly: initialVisualOnly,
+    speedBurst: isSpeedBurst,
   });
+
+  const handleToggleSpeedBurst = () => {
+    setIsSpeedBurst((prev) => {
+      const next = !prev;
+      metronome.setSpeedBurst(next);
+      return next;
+    });
+  };
 
   // Bulletproof screen anti-sleep lock + ensure pure 'playback' speaker session
   useWakeLock(true);
@@ -283,6 +296,9 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     metronome.setBpm(calculateWarmupBpm(comfortBpm));
     metronome.setSubdivision(currentExercise.subdivision);
     metronome.setGapClickMode(currentExercise.gapClickMode);
+    const nextBurst = Boolean(currentExercise.speedBurst);
+    setIsSpeedBurst(nextBurst);
+    metronome.setSpeedBurst(nextBurst);
     setSetRemainingSec(currentItem.durationSec);
     setRestRemainingSec(currentItem.restSec);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -628,22 +644,38 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
               <h3 className="text-lg sm:text-xl font-black text-white">
                 {currentExercise.title}
               </h3>
-              {arpeggioData ? (
-                <div className="flex flex-wrap items-center justify-center gap-1.5">
-                  <span className="inline-flex rounded-full border border-[#FF6B00]/50 bg-[#FF6B00]/12 px-3 py-0.5 text-xs font-black text-[#FF6B00] tabular-nums">
-                    Formula Gradi: {arpeggioData.pattern.formulaText}
-                  </span>
-                  <span className="inline-flex rounded-full border border-white/20 bg-black px-2.5 py-0.5 text-[11px] font-bold text-white/80">
-                    {arpeggioData.progression.name}
-                  </span>
-                </div>
-              ) : (
-                activeVariant && (
-                  <div className="inline-flex rounded-full border border-[#FF6B00]/45 bg-[#FF6B00]/12 px-3 py-0.5 text-xs font-bold text-[#FF6B00]">
-                    {activeVariant.name}
-                  </div>
-                )
-              )}
+              <div className="flex flex-wrap items-center justify-center gap-1.5">
+                {arpeggioData ? (
+                  <>
+                    <span className="inline-flex rounded-full border border-[#FF6B00]/50 bg-[#FF6B00]/12 px-3 py-0.5 text-xs font-black text-[#FF6B00] tabular-nums">
+                      Formula Gradi: {arpeggioData.pattern.formulaText}
+                    </span>
+                    <span className="inline-flex rounded-full border border-white/20 bg-black px-2.5 py-0.5 text-[11px] font-bold text-white/80">
+                      {arpeggioData.progression.name}
+                    </span>
+                  </>
+                ) : (
+                  activeVariant && (
+                    <span className="inline-flex rounded-full border border-[#FF6B00]/45 bg-[#FF6B00]/12 px-3 py-0.5 text-xs font-bold text-[#FF6B00]">
+                      {activeVariant.name}
+                    </span>
+                  )
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleToggleSpeedBurst();
+                    setDemoReplayKey((k) => k + 1);
+                  }}
+                  className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-black transition ${
+                    isSpeedBurst
+                      ? 'border-[#FF6B00] bg-[#FF6B00] text-black'
+                      : 'border-white/20 bg-black text-white/60 hover:border-white/45 hover:text-white'
+                  }`}
+                >
+                  ⚡ Burst 1/8→1/16
+                </button>
+              </div>
             </div>
 
             {isArpeggioExercise && (
@@ -678,6 +710,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
               demoMode="slow-intro"
               metronomeSound={metronome.soundId}
               bpm={metronome.bpm}
+              speedBurst={isSpeedBurst}
               autoPlayDemo
               replayKey={demoReplayKey}
               onDemoComplete={startPreCountNow}
@@ -853,8 +886,21 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
                 <div className="text-6xl sm:text-7xl font-black tracking-tight text-white tabular-nums">
                   {formatMMSS(setRemainingSec)}
                 </div>
-                <div className="mt-2 text-lg font-black text-[#FF6B00] tabular-nums">
-                  {metronome.bpm} BPM
+                <div className="mt-2 flex items-center justify-center gap-2">
+                  <span className="text-lg font-black text-[#FF6B00] tabular-nums">
+                    {metronome.bpm} BPM
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleToggleSpeedBurst}
+                    className={`rounded-full border px-2.5 py-0.5 text-[11px] font-black transition ${
+                      isSpeedBurst
+                        ? 'border-[#FF6B00] bg-[#FF6B00] text-black'
+                        : 'border-white/20 bg-black text-white/55 hover:border-white/45 hover:text-white'
+                    }`}
+                  >
+                    ⚡ Burst 1/8→1/16
+                  </button>
                 </div>
               </div>
 
@@ -897,6 +943,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
                   subdivisionLabel={metronome.subdivision}
                   muteAudio
                   bpm={metronome.bpm}
+                  speedBurst={isSpeedBurst}
                   hideDemoButton
                   forceStopDemo={isSetPaused}
                 />

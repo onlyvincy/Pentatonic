@@ -121,6 +121,8 @@ export interface Exercise {
   defaultRestSec: number;
   subdivision: Subdivision;
   gapClickMode: GapClickMode;
+  /** When true, runs the exercise in alternating 1/8 (1x normal) -> 1/16 (2x double-speed burst) cycles */
+  speedBurst?: boolean;
   fretboardNotes: FretNote[];
   demoSequence?: DemoStep[];
   variants?: ExerciseVariant[];
