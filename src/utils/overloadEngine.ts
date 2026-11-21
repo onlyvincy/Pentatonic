@@ -63,6 +63,16 @@ export interface OverloadResult {
   badgeBorder: string;
 }
 
+export const STARTING_BPM_BY_LEVEL: Record<PlayerLevelId, number> = {
+  foundation: 50,
+  intermediate: 60,
+  advanced: 75,
+};
+
+export function getStartingBpmForLevel(level?: PlayerLevelId): number {
+  return STARTING_BPM_BY_LEVEL[level ?? 'intermediate'];
+}
+
 export function calculateWarmupBpm(comfortBpm: number): number {
   return Math.max(44, Math.min(240, Math.round(comfortBpm * 0.85)));
 }
@@ -297,12 +307,18 @@ export function computeWeightedExerciseBpm(
     .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
   const variants = getLevelFilteredVariants(exercise, playerLevel);
+  const unpracticedBaseBpm =
+    !exercise.isCustom && playerLevel
+      ? getStartingBpmForLevel(playerLevel)
+      : exercise.baselineBpm;
 
   if (variants.length === 0) {
     if (matchingSets.length === 0) {
       return {
-        weightedBpm: exercise.baselineBpm,
-        nextSessionBpm: Math.max(exercise.baselineBpm, exercise.currentTargetBpm),
+        weightedBpm: unpracticedBaseBpm,
+        nextSessionBpm: exercise.isCustom
+          ? Math.max(exercise.baselineBpm, exercise.currentTargetBpm)
+          : unpracticedBaseBpm,
         byVariant: [],
         practicedVariantsCount: 0,
         totalVariantsCount: 1,
@@ -395,7 +411,7 @@ export function computeWeightedExerciseBpm(
   const practicedMean =
     practicedEntries.length > 0
       ? practicedEntries.reduce((acc, e) => acc + e.bpm, 0) / practicedEntries.length
-      : exercise.baselineBpm;
+      : unpracticedBaseBpm;
 
   let weightedNumerator = 0;
   let weightedDenominator = 0;
@@ -422,7 +438,7 @@ export function computeWeightedExerciseBpm(
 
   const weightedBpm =
     practicedEntries.length === 0
-      ? exercise.baselineBpm
+      ? unpracticedBaseBpm
       : Math.round(weightedNumerator / Math.max(0.0001, weightedDenominator));
 
   const rawTargetVarId =

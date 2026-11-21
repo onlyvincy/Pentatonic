@@ -14,7 +14,10 @@ import {
   computeWeeklyDoseProgress,
   resolvePathId,
 } from '../utils/scientificPrescription';
-import { getLevelFilteredVariants } from '../utils/overloadEngine';
+import {
+  getLevelFilteredVariants,
+  getStartingBpmForLevel,
+} from '../utils/overloadEngine';
 import {
   ARPEGGIO_EXERCISE_ID,
   ARPEGGIO_PROGRESSIONS,
@@ -67,7 +70,9 @@ export const ProgramsAndBuilder: React.FC<ProgramsAndBuilderProps> = ({
 
   const [exTitle, setExTitle] = useState('');
   const [exCategory, setExCategory] = useState<ExerciseCategory>('pentatonic');
-  const [exBpm, setExBpm] = useState(90);
+  const [exBpm, setExBpm] = useState(() =>
+    getStartingBpmForLevel(prescription.answers.level)
+  );
   const [exSub, setExSub] = useState<Subdivision>('1/8');
   const [exGap, setExGap] = useState<GapClickMode>('off');
   const [exNotes, setExNotes] = useState<FretNote[]>([

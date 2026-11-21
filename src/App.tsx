@@ -11,6 +11,7 @@ import {
   AppState,
   Exercise,
   FeedRecording,
+  PlayerLevelId,
   ScaledWorkoutPlan,
   ScientificPlanPrescription,
   SessionDurationPreset,
@@ -35,7 +36,10 @@ import {
   createDefaultScientificPrescription,
   generateScientificPrescription,
 } from './utils/scientificPrescription';
-import { computeWeightedExerciseBpm } from './utils/overloadEngine';
+import {
+  computeWeightedExerciseBpm,
+  getStartingBpmForLevel,
+} from './utils/overloadEngine';
 import { computeNerdTelemetry } from './utils/nerdStats';
 import { TodayDashboard } from './components/TodayDashboard';
 import { ProgramsAndBuilder } from './components/ProgramsAndBuilder';
@@ -46,6 +50,32 @@ import { OnboardingFlow } from './components/OnboardingFlow';
 import { useAppUpdate } from './hooks/useAppUpdate';
 
 export type NavTab = 'today' | 'programs' | 'analytics' | 'tuner';
+
+function applyLevelBaselineToUnpracticed(
+  exercises: Exercise[],
+  sessionLogs: WorkoutSessionLog[],
+  level?: PlayerLevelId
+): Exercise[] {
+  const practicedIds = new Set(
+    sessionLogs.flatMap((log) => log.sets.map((st) => st.exerciseId))
+  );
+  const levelBpm = getStartingBpmForLevel(level);
+  return exercises.map((ex) => {
+    if (ex.isCustom) return ex;
+    const hasVariantHistory =
+      ex.variantBpms && Object.keys(ex.variantBpms).length > 0;
+    if (practicedIds.has(ex.id) || hasVariantHistory) {
+      return ex;
+    }
+    return {
+      ...ex,
+      defaultBpm: levelBpm,
+      baselineBpm: levelBpm,
+      currentTargetBpm: levelBpm,
+      bestCleanBpm: levelBpm,
+    };
+  });
+}
 
 export function App() {
   const [appState, setAppState] = useState<AppState>(() => {
@@ -105,9 +135,15 @@ export function App() {
           saved.settings.selectedPreset
         );
 
+    const calibratedExercises = applyLevelBaselineToUnpracticed(
+      hydratedExercises,
+      migratedSessionLogs,
+      hydratedPlan.answers.level
+    );
+
     return {
       ...saved,
-      exercises: hydratedExercises,
+      exercises: calibratedExercises,
       sessionLogs: migratedSessionLogs,
       feedRecordings: migratedRecordings,
       settings: {
@@ -177,8 +213,18 @@ export function App() {
     prescription: ScientificPlanPrescription,
     launchWorkoutNow: boolean
   ) => {
+    const calibratedExercises = applyLevelBaselineToUnpracticed(
+      appState.exercises,
+      appState.sessionLogs,
+      prescription.answers.level
+    );
     setAppState((prev) => ({
       ...prev,
+      exercises: applyLevelBaselineToUnpracticed(
+        prev.exercises,
+        prev.sessionLogs,
+        prescription.answers.level
+      ),
       settings: {
         ...prev.settings,
         weeklyGoalDays: prescription.answers.weeklyDays,
@@ -195,7 +241,7 @@ export function App() {
       setActiveLivePlan(
         buildSessionPlanFromPrescription(
           prescription,
-          appState.exercises,
+          calibratedExercises,
           appState.sessionLogs,
           prescription.answers.sessionPreset
         )
@@ -406,6 +452,7 @@ export function App() {
     return (
       <OnboardingFlow
         exercises={appState.exercises}
+        showIntroSlides={!appState.settings.hasCompletedOnboarding}
         onFinishQuiz={handleFinishQuiz}
         onCancel={
           appState.settings.hasCompletedOnboarding
