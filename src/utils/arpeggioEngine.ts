@@ -158,6 +158,14 @@ export const ARPEGGIO_PROGRESSIONS: ArpeggioProgressionPreset[] = [
 
 export const ARPEGGIO_PATTERNS: ArpeggioPatternDef[] = [
   {
+    id: 'arp-pat-00',
+    shortLabel: 'Base Lento 1-3-5',
+    name: '1) Arpeggio Lento con Respiro (1–3–5–3)',
+    formulaText: '1 · – · 3 · – · 5 · – · 3 · –',
+    slots: ['1', 'hold', '3', 'hold', '5', 'hold', '3', 'hold'],
+    difficultyWeight: 0.9,
+  },
+  {
     id: 'v-arp-1535-8',
     shortLabel: '1-5-3-5 (8/8)',
     name: 'Pendolo 3ª–5ª: 1 – 5 – 3 – 5 – 3 – 5 – 3 – 5',
@@ -367,7 +375,7 @@ export function buildSeedArpeggioExercise(): Exercise {
     defaultRestSec: 15,
     subdivision: '1/8',
     gapClickMode: 'off',
-    speedBurst: true,
+    speedBurst: false,
     isBenchmark: true,
     activeVariantId: ARPEGGIO_PATTERNS[0].id,
     fretboardNotes: defaultData.fretboardNotes,

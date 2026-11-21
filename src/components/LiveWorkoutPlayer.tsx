@@ -31,6 +31,7 @@ import {
   computeWeightedExerciseBpm,
   getLevelFilteredVariants,
   pickNextRecommendedVariant,
+  shouldEnableSpeedBurstForSkill,
 } from '../utils/overloadEngine';
 import { useMetronome } from '../hooks/useMetronome';
 import { useWakeLock } from '../hooks/useWakeLock';
@@ -140,9 +141,15 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
   const currentItem = plan.items[exerciseIdx];
   const currentExercise: Exercise | undefined = currentItem?.exercise;
 
-  const [isSpeedBurst, setIsSpeedBurst] = useState<boolean>(() =>
-    Boolean(plan.items[0]?.exercise.speedBurst)
-  );
+  const [isSpeedBurst, setIsSpeedBurst] = useState<boolean>(() => {
+    const firstEx = plan.items[0]?.exercise;
+    if (!firstEx) return false;
+    return shouldEnableSpeedBurstForSkill(
+      firstEx,
+      sessionLogs,
+      plan.playerLevel
+    );
+  });
 
   const [bpmOverrides, setBpmOverrides] = useState<
     Record<
@@ -332,7 +339,11 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     metronome.setBpm(calculateWarmupBpm(comfortBpm));
     metronome.setSubdivision(currentExercise.subdivision);
     metronome.setGapClickMode(currentExercise.gapClickMode);
-    const nextBurst = Boolean(currentExercise.speedBurst);
+    const nextBurst = shouldEnableSpeedBurstForSkill(
+      currentExercise,
+      sessionLogs,
+      plan.playerLevel
+    );
     setIsSpeedBurst(nextBurst);
     metronome.setSpeedBurst(nextBurst);
     setSetRemainingSec(currentItem.durationSec);

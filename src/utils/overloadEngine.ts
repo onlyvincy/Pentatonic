@@ -292,6 +292,66 @@ export function getLevelFilteredVariants(
 }
 
 /**
+ * Returns variants unlocked for automatic daily prescription based on the player's
+ * current Skill Level on this exercise, ordered from easiest to hardest.
+ */
+export function getSkillUnlockedVariants(
+  exercise: Exercise,
+  sessionLogs: WorkoutSessionLog[] = [],
+  playerLevel?: PlayerLevelId
+): ExerciseVariant[] {
+  const filtered = getLevelFilteredVariants(exercise, playerLevel);
+  if (filtered.length <= 1) return filtered;
+
+  const sortedByDifficulty = [...filtered].sort(
+    (a, b) => a.difficultyWeight - b.difficultyWeight
+  );
+
+  if (playerLevel === 'advanced') {
+    return sortedByDifficulty;
+  }
+
+  const mastery = computeExerciseScore(exercise, sessionLogs);
+  const rawLevel = mastery.setsCompleted < 3 ? 1 : mastery.level;
+  const effectiveTier =
+    playerLevel === 'intermediate' ? Math.max(2, rawLevel) : rawLevel;
+
+  let unlockCount = 2;
+  if (effectiveTier >= 5) {
+    unlockCount = sortedByDifficulty.length;
+  } else if (effectiveTier === 4) {
+    unlockCount = 8;
+  } else if (effectiveTier === 3) {
+    unlockCount = 6;
+  } else if (effectiveTier === 2) {
+    unlockCount = 4;
+  }
+
+  return sortedByDifficulty.slice(0, Math.min(sortedByDifficulty.length, unlockCount));
+}
+
+/**
+ * Enables automatic 1/8 -> 1/16 speed bursts only for the dedicated Speed Bursts drill
+ * or once the player has reached Advanced level / Skill Level 4+ on exercises that opt in.
+ */
+export function shouldEnableSpeedBurstForSkill(
+  exercise: Exercise,
+  sessionLogs: WorkoutSessionLog[] = [],
+  playerLevel?: PlayerLevelId
+): boolean {
+  if (exercise.id === 'ex-speed-bursts') {
+    return true;
+  }
+  if (!exercise.speedBurst) {
+    return false;
+  }
+  if (playerLevel === 'advanced') {
+    return true;
+  }
+  return computeExerciseScore(exercise, sessionLogs).level >= 4;
+}
+
+/**
  * Computes recency-weighted, difficulty-normalized BPM across all variants of an exercise.
  * Ensures practicing one variant at 90 BPM cleanly immediately steps that variant's next BPM up (92/95 BPM)
  * while weighting harder permutations without skewing overall progress.
@@ -461,7 +521,9 @@ export function computeWeightedExerciseBpm(
 }
 
 /**
- * Picks the least-practiced variant (or first unpracticed) so all variants train evenly.
+ * Picks the next recommended variant within the player's skill-unlocked pool.
+ * Consolidates each variant with at least 2 clean sets (cleanliness >= 3) before
+ * advancing to the next difficulty step, then rotates evenly by lowest set count.
  */
 export function pickNextRecommendedVariant(
   exercise: Exercise,
@@ -469,21 +531,53 @@ export function pickNextRecommendedVariant(
   preferredVariantId?: string,
   playerLevel?: PlayerLevelId
 ): ExerciseVariant | undefined {
-  const variants = getLevelFilteredVariants(exercise, playerLevel);
-  if (variants.length === 0) return undefined;
+  const allFiltered = getLevelFilteredVariants(exercise, playerLevel);
+  if (allFiltered.length === 0) return undefined;
   if (preferredVariantId) {
-    const found = variants.find((v) => v.id === preferredVariantId);
+    const found = allFiltered.find((v) => v.id === preferredVariantId);
     if (found) return found;
   }
-  const summary = computeWeightedExerciseBpm(
-    exercise,
-    sessionLogs,
-    undefined,
-    playerLevel
+
+  const unlocked = getSkillUnlockedVariants(exercise, sessionLogs, playerLevel);
+  const pool = unlocked.length > 0 ? unlocked : allFiltered;
+  const poolIds = new Set(pool.map((v) => v.id));
+  const defaultVariantId = pool[0].id;
+
+  const totalSetsByVariant = new Map<string, number>();
+  const cleanSetsByVariant = new Map<string, number>();
+  pool.forEach((v) => {
+    totalSetsByVariant.set(v.id, 0);
+    cleanSetsByVariant.set(v.id, 0);
+  });
+
+  for (const session of sessionLogs) {
+    for (const st of session.sets) {
+      if (st.exerciseId !== exercise.id) continue;
+      const vid = st.variantId
+        ? poolIds.has(st.variantId)
+          ? st.variantId
+          : null
+        : defaultVariantId;
+      if (!vid) continue;
+      totalSetsByVariant.set(vid, (totalSetsByVariant.get(vid) ?? 0) + 1);
+      if (st.cleanliness >= 3) {
+        cleanSetsByVariant.set(vid, (cleanSetsByVariant.get(vid) ?? 0) + 1);
+      }
+    }
+  }
+
+  const nextToConsolidate = pool.find(
+    (v) => (cleanSetsByVariant.get(v.id) ?? 0) < 2
   );
-  const sorted = [...summary.byVariant].sort((a, b) => a.setsCount - b.setsCount);
-  const targetId = sorted[0]?.variantId ?? variants[0].id;
-  return variants.find((v) => v.id === targetId) ?? variants[0];
+  if (nextToConsolidate) {
+    return nextToConsolidate;
+  }
+
+  const sortedByUsage = [...pool].sort(
+    (a, b) =>
+      (totalSetsByVariant.get(a.id) ?? 0) - (totalSetsByVariant.get(b.id) ?? 0)
+  );
+  return sortedByUsage[0] ?? pool[0];
 }
 
 const XP_PER_LEVEL = 100;
