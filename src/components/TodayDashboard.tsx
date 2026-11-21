@@ -221,21 +221,21 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* Compact Week Strip + Coach Plek (Pitch Black + White Border; Orange Vector Accents) */}
-      <section className="relative overflow-hidden rounded-3xl bg-black border border-white/15 p-3.5 space-y-2.5">
+      {/* Compact Week Strip + Coach Plek (Liquid Chrome + Electric Neon Green) */}
+      <section className="relative overflow-hidden rounded-3xl chrome-card p-3.5 space-y-2.5">
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute -top-20 left-1/2 h-36 w-48 -translate-x-1/2 rounded-full bg-[#FF6B00]/10 blur-3xl"
+          className="pointer-events-none absolute -top-20 left-1/2 h-36 w-52 -translate-x-1/2 rounded-full bg-[#39FF14]/12 blur-3xl"
         />
-        <div className="relative z-10 flex flex-wrap items-center justify-between gap-2 border-b border-white/15 pb-2.5">
+        <div className="relative z-10 flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/15 pb-2.5">
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-white/55">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300/65">
               La tua settimana
             </span>
             <button
               type="button"
               onClick={onOpenDiagnosticQuiz}
-              className="inline-flex items-center gap-1 rounded-full bg-black border border-white/15 px-2.5 py-0.5 text-[10px] font-bold text-white/60 hover:text-white hover:border-white/35 transition"
+              className="inline-flex items-center gap-1 rounded-full chrome-pill px-2.5 py-0.5 text-[10px] font-bold text-slate-200 hover:text-white transition"
             >
               <RotateCcw className="h-2.5 w-2.5" /> Quiz
             </button>
@@ -247,17 +247,17 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
                 <div
                   className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-black transition ${
                     day.completed
-                      ? 'bg-white text-black'
+                      ? 'chrome-active'
                       : day.isToday
-                      ? 'border border-white bg-black text-white'
-                      : 'border border-white/15 bg-black text-white/40'
+                      ? 'border border-[#39FF14] bg-[#39FF14]/10 text-[#39FF14] shadow-[0_0_10px_rgba(57,255,20,0.3)]'
+                      : 'border border-slate-200/15 bg-black/70 text-slate-400/60'
                   }`}
                 >
                   {day.completed ? <Check className="h-3 w-3 stroke-[3]" /> : day.label[0]}
                 </div>
                 <span
                   className={`text-[9px] font-semibold ${
-                    day.isToday ? 'text-white' : 'text-white/45'
+                    day.isToday ? 'text-white' : 'text-slate-400/65'
                   }`}
                 >
                   {day.label}
@@ -268,26 +268,26 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
         </div>
 
         <div className="relative z-10 flex items-start gap-3">
-          {/* Vector Coach Emblem */}
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#080808] border border-white/15">
+          {/* Chrome-Bezel Vector Coach Emblem */}
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl chrome-pill">
             <CoachVectorEmblem className="h-6 w-6" />
           </div>
 
           <div className="min-w-0 flex-1">
-            <span className="text-[10px] font-black uppercase tracking-[0.14em] text-[#FF6B00]">
+            <span className="text-[10px] font-black uppercase tracking-[0.14em] text-[#39FF14] drop-shadow-[0_0_8px_rgba(57,255,20,0.45)]">
               {prescription.profileTitle}
             </span>
             <h1 className="text-sm font-bold text-white leading-snug">
               {plekHeadline}
             </h1>
-            <p className="mt-0.5 text-[11px] text-white/55 leading-snug">
+            <p className="mt-0.5 text-[11px] text-slate-300/65 leading-snug">
               {plekSub}
             </p>
           </div>
         </div>
       </section>
 
-      {/* ABOVE THE FOLD: Large Circular Dark-Vector Hold-to-Start "Inizia" Button */}
+      {/* ABOVE THE FOLD: Large Circular Chrome-Bezel Hold-to-Start "Inizia" Button */}
       <section className="flex flex-col items-center justify-center py-2">
         <div className="relative flex items-center justify-center">
           <svg
@@ -295,20 +295,28 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
             className="pointer-events-none h-[220px] w-[220px] -rotate-90"
             aria-hidden="true"
           >
+            <defs>
+              <linearGradient id="chrome-outer-ring" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.55" />
+                <stop offset="35%" stopColor="#94A3B8" stopOpacity="0.22" />
+                <stop offset="65%" stopColor="#F8FAFC" stopOpacity="0.48" />
+                <stop offset="100%" stopColor="#475569" stopOpacity="0.2" />
+              </linearGradient>
+            </defs>
             <circle
               cx="110"
               cy="110"
               r={ringRadius}
               fill="none"
-              stroke="rgba(255,255,255,0.14)"
-              strokeWidth="2.5"
+              stroke="url(#chrome-outer-ring)"
+              strokeWidth="2.8"
             />
             <circle
               cx="110"
               cy="110"
               r={ringRadius}
               fill="none"
-              stroke="#FF6B00"
+              stroke="#39FF14"
               strokeWidth="4.5"
               strokeLinecap="round"
               strokeDasharray={ringCircumference}
@@ -341,36 +349,38 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
                 ? `scale(${0.96 + holdProgress * 0.06})`
                 : 'scale(1)',
               boxShadow: isHolding
-                ? `0 0 ${28 + holdProgress * 44}px rgba(255, 107, 0, ${0.38 + holdProgress * 0.48})`
-                : '0 0 28px rgba(255, 107, 0, 0.16)',
+                ? `0 0 ${28 + holdProgress * 44}px rgba(57,255,20,${0.42 + holdProgress * 0.48}), inset 0 1px 0 rgba(255,255,255,0.5)`
+                : '0 0 28px rgba(57,255,20,0.18), 0 12px 32px rgba(0, 0, 0, 0.75)',
             }}
-            className="absolute flex h-48 w-48 sm:h-50 sm:w-50 select-none touch-none items-center justify-center overflow-hidden rounded-full border border-white/20 bg-[#060606] text-white transition-transform duration-75 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF6B00]"
+            className="chrome-ring-bezel absolute flex h-48 w-48 sm:h-50 sm:w-50 select-none touch-none items-center justify-center overflow-hidden rounded-full text-white transition-transform duration-75 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#39FF14]"
           >
-            <span
-              aria-hidden="true"
-              style={{
-                transform: `scale(${holdProgress})`,
-                opacity: isHolding ? 0.14 : 0,
-              }}
-              className="pointer-events-none absolute inset-0 z-20 rounded-full bg-[#FF6B00] transition-opacity duration-100"
-            />
-            <IniziaButtonIllustration
-              isHolding={isHolding}
-              holdProgress={holdProgress}
-            />
+            <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-[#050608]">
+              <span
+                aria-hidden="true"
+                style={{
+                  transform: `scale(${holdProgress})`,
+                  opacity: isHolding ? 0.16 : 0,
+                }}
+                className="pointer-events-none absolute inset-0 z-20 rounded-full bg-[#39FF14] transition-opacity duration-100"
+              />
+              <IniziaButtonIllustration
+                isHolding={isHolding}
+                holdProgress={holdProgress}
+              />
+            </div>
           </button>
         </div>
       </section>
 
-      {/* BELOW INIZIA: Gamified Ultra-Minimal Weekly To-Do List */}
+      {/* BELOW INIZIA: Gamified Chrome + Neon Weekly To-Do List */}
       <section className="space-y-2.5 pt-1">
         <div className="space-y-2 px-1">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-white/60">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300/70">
                 To-Do Settimana
               </span>
-              <span className="rounded-full border border-white/15 bg-black px-2 py-0.5 text-[10px] font-black text-white tabular-nums">
+              <span className="rounded-full chrome-pill px-2.5 py-0.5 text-[10px] font-black text-white tabular-nums">
                 {completedGroups}/{fondamentaGroups.length} completati
               </span>
             </div>
@@ -378,16 +388,16 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
             <button
               type="button"
               onClick={onOpenDiagnosticQuiz}
-              className="inline-flex items-center gap-1.5 rounded-full bg-black border border-white/15 px-3 py-1 text-[11px] font-bold text-white/75 hover:text-white hover:border-white/40 transition"
+              className="inline-flex items-center gap-1.5 rounded-full chrome-pill px-3 py-1 text-[11px] font-bold text-slate-200 hover:text-white transition"
             >
               <SlidersHorizontal className="h-3 w-3" />
               Ricalibra
             </button>
           </div>
 
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/15">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200/15 ring-1 ring-slate-200/10">
             <div
-              className="h-full rounded-full bg-[#FF6B00] transition-all duration-300"
+              className="h-full rounded-full bg-[#39FF14] shadow-[0_0_12px_rgba(57,255,20,0.75)] transition-all duration-300"
               style={{ width: `${weekly.overallMinPct}%` }}
             />
           </div>
@@ -413,24 +423,24 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
                 onClick={() =>
                   openTodoLauncher(group.items.map((it) => it.exercise.id))
                 }
-                className="flex w-full items-center justify-between gap-3 rounded-2xl bg-black border border-white/15 px-3.5 py-2.5 text-left hover:border-white/40 active:scale-[0.99] transition"
+                className="flex w-full items-center justify-between gap-3 rounded-2xl chrome-card px-3.5 py-2.5 text-left active:scale-[0.99] transition"
               >
                 <div className="flex min-w-0 flex-1 items-center gap-2.5">
                   {group.minReached ? (
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-black">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full chrome-active">
                       <Check className="h-3 w-3 stroke-[3]" />
                     </span>
                   ) : group.completedSets > 0 ? (
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-[#FF6B00]">
-                      <span className="h-2 w-2 rounded-full bg-[#FF6B00]" />
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-[#39FF14] shadow-[0_0_10px_rgba(57,255,20,0.35)]">
+                      <span className="h-2 w-2 rounded-full bg-[#39FF14]" />
                     </span>
                   ) : (
-                    <span className="h-5 w-5 shrink-0 rounded-full border border-white/25" />
+                    <span className="h-5 w-5 shrink-0 rounded-full border border-slate-300/30" />
                   )}
 
                   <span
                     className={`truncate text-xs sm:text-sm font-black ${
-                      group.minReached ? 'line-through text-white/45' : 'text-white'
+                      group.minReached ? 'line-through text-slate-400/55' : 'text-white'
                     }`}
                   >
                     {group.title}
@@ -446,17 +456,17 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
                           key={idx}
                           className={`h-2.5 w-1.5 rounded-sm transition-colors ${
                             group.minReached
-                              ? 'bg-white'
+                              ? 'bg-gradient-to-b from-white to-slate-300'
                               : filled
-                              ? 'bg-[#FF6B00]'
-                              : 'bg-white/15'
+                              ? 'bg-[#39FF14] shadow-[0_0_6px_rgba(57,255,20,0.65)]'
+                              : 'bg-slate-200/15'
                           }`}
                         />
                       );
                     })}
                   </div>
 
-                  <span className="text-[11px] font-black text-white/80 tabular-nums">
+                  <span className="text-[11px] font-black text-slate-200 tabular-nums">
                     {group.completedSets}/{group.weeklyMinSets}
                   </span>
                 </div>
@@ -468,10 +478,10 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
 
       {/* POST-HOLD TACTICAL SESSION LAUNCHER (Appears ONLY after holding "Inizia") */}
       {showLauncher && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/90 backdrop-blur-md p-2 sm:p-4 overscroll-none">
-          <div className="w-full max-w-lg max-h-[92vh] overflow-y-auto overscroll-contain rounded-2xl bg-black border border-white/20 p-4 sm:p-5 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between gap-2 border-b border-white/15 pb-3">
-              <h2 className="text-base sm:text-lg font-black text-white">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/88 backdrop-blur-md p-2 sm:p-4 overscroll-none">
+          <div className="w-full max-w-lg max-h-[92vh] overflow-y-auto overscroll-contain rounded-2xl chrome-panel p-4 sm:p-5 space-y-4">
+            <div className="flex items-center justify-between gap-2 border-b border-slate-200/15 pb-3">
+              <h2 className="text-base sm:text-lg font-black chrome-text">
                 Allenamento di oggi
               </h2>
               <button
@@ -489,7 +499,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
               <div className="text-xs font-bold uppercase tracking-wider text-white/60">
                 Quanto tempo hai?
               </div>
-              <div className="grid grid-cols-4 gap-1.5 rounded-xl bg-black border border-white/15 p-1">
+              <div className="grid grid-cols-4 gap-1.5 rounded-xl chrome-pill p-1">
                 {LAUNCHER_TIME_OPTIONS.map((opt) => {
                   const active = launcherPreset === opt.preset;
                   return (
@@ -503,8 +513,8 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
                       }}
                       className={`rounded-lg py-2 px-1 text-center transition ${
                         active
-                          ? 'bg-white text-black'
-                          : 'text-white/55 hover:text-white'
+                          ? 'chrome-active'
+                          : 'text-slate-300/60 hover:text-white'
                       }`}
                     >
                       <div className="text-xs sm:text-sm font-black tabular-nums">
@@ -551,8 +561,8 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
                       }
                       className={`flex w-full items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5 text-left transition ${
                         isSelected
-                          ? 'bg-white text-black border-white'
-                          : 'bg-black text-white border-white/15 hover:border-white/40'
+                          ? 'chrome-active'
+                          : 'chrome-card text-white'
                       }`}
                     >
                       <div className="min-w-0 flex-1">
@@ -594,7 +604,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
                   customSelectedIds ?? previewPlan.items.map((i) => i.exerciseId)
                 );
               }}
-              className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-[#FF6B00] px-5 py-3 text-sm sm:text-base font-black text-black hover:bg-[#ff7d1f] transition"
+              className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl neon-cta px-5 py-3 text-sm sm:text-base font-black transition"
             >
               <Play className="h-4 w-4 fill-current" />
               Avvia Allenamento ({previewPlan.estimatedMinutes} min)

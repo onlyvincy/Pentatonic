@@ -122,7 +122,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
           <div className="mt-1 text-xl sm:text-2xl font-black text-white tabular-nums">
             {nerd.currentAvgCleanBpm}
           </div>
-          <div className="text-[11px] font-bold text-[#FF6B00] tabular-nums">
+          <div className="text-[11px] font-bold text-[#39FF14] tabular-nums">
             {nerd.cleanBpmDelta >= 0 ? '+' : ''}
             {nerd.cleanBpmDelta} BPM
           </div>
@@ -150,18 +150,18 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
       </section>
 
       {/* Clean Responsive BPM Evolution Chart */}
-      <section className="relative overflow-hidden rounded-3xl bg-black border border-white/15 p-4 space-y-3">
+      <section className="relative overflow-hidden rounded-3xl chrome-card p-4 space-y-3">
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute -top-20 left-1/2 h-40 w-56 -translate-x-1/2 rounded-full bg-[#FF6B00]/10 blur-3xl"
+          className="pointer-events-none absolute -top-20 left-1/2 h-40 w-56 -translate-x-1/2 rounded-full bg-[#39FF14]/12 blur-3xl"
         />
         <div className="relative z-10 flex items-center justify-between gap-2">
-          <h2 className="text-sm font-bold text-white">BPM Pulito</h2>
+          <h2 className="text-sm font-black chrome-text">BPM Pulito</h2>
           <select
             value={selectedExId}
             onChange={(e) => setSelectedExId(e.target.value)}
             aria-label="Filtra grafico per esercizio"
-            className="max-w-[200px] rounded-xl bg-black border border-white/15 px-2.5 py-1.5 text-xs font-bold text-white outline-none focus:border-white/40"
+            className="max-w-[200px] rounded-xl chrome-pill px-2.5 py-1.5 text-xs font-bold text-white outline-none focus:border-[#39FF14]/50"
           >
             <option value="all">Tutti</option>
             {exercises.map((ex) => (
@@ -181,8 +181,8 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
           >
             <defs>
               <linearGradient id="minimalOrangeArea" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#FF6B00" stopOpacity="0.25" />
-                <stop offset="100%" stopColor="#FF6B00" stopOpacity="0.0" />
+                <stop offset="0%" stopColor="#39FF14" stopOpacity="0.25" />
+                <stop offset="100%" stopColor="#39FF14" stopOpacity="0.0" />
               </linearGradient>
             </defs>
 
@@ -220,7 +220,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             {pointsCoords.length > 1 && (
               <polyline
                 fill="none"
-                stroke="#FF6B00"
+                stroke="#39FF14"
                 strokeWidth={2.5}
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -234,7 +234,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                   cx={pt.x}
                   cy={pt.yAvg}
                   r={4.5}
-                  fill="#FF6B00"
+                  fill="#39FF14"
                   stroke="#FFFFFF"
                   strokeWidth={1.5}
                 />
@@ -279,7 +279,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
       </section>
 
       {/* Minimal Per-Exercise BPM Bar List */}
-      <section className="rounded-3xl bg-black border border-white/15 p-4 space-y-3">
+      <section className="rounded-3xl chrome-card p-4 space-y-3">
         {nerd.pillarStats.map((p) => {
           const targetGoal = Math.max(
             p.bestCleanBpm + 10,
@@ -294,15 +294,15 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             <div key={p.exerciseId} className="space-y-1.5">
               <div className="flex items-center justify-between gap-2 text-xs">
                 <span className="font-bold text-white truncate">{p.title}</span>
-                <span className="font-bold text-white/80 tabular-nums shrink-0">
+                <span className="font-bold text-slate-200/85 tabular-nums shrink-0">
                   {p.baselineBpm} →{' '}
-                  <span className="text-[#FF6B00]">{p.bestCleanBpm}</span> BPM
+                  <span className="text-[#39FF14]">{p.bestCleanBpm}</span> BPM
                   {p.gainPct > 0 ? ` (+${p.gainPct}%)` : ''}
                 </span>
               </div>
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/15">
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200/15">
                 <div
-                  className="h-full rounded-full bg-white transition-all duration-300"
+                  className="h-full rounded-full bg-gradient-to-r from-slate-300 via-white to-[#39FF14] transition-all duration-300"
                   style={{ width: `${pct}%` }}
                 />
               </div>
@@ -314,7 +314,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
       {/* Diario & Registrazioni */}
       <section className="space-y-2.5 pt-2">
         <div className="px-1">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-white/55">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300/65">
             Diario &amp; Registrazioni
           </span>
         </div>
@@ -327,20 +327,20 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
       </section>
 
       {/* Compact Actions Footer */}
-      <section className="rounded-2xl bg-black border border-white/15 p-3 flex flex-wrap items-center justify-between gap-2">
+      <section className="rounded-2xl chrome-card p-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-1.5">
           <button
             type="button"
             onClick={handleDownloadBackup}
-            className="flex items-center gap-1.5 rounded-full bg-black border border-white/15 px-3 py-1.5 text-[11px] font-bold text-white hover:border-white/40 transition"
+            className="flex items-center gap-1.5 rounded-full chrome-pill px-3 py-1.5 text-[11px] font-bold text-white hover:border-white/50 transition"
           >
-            <Download className="h-3 w-3 text-[#FF6B00]" />
+            <Download className="h-3 w-3 text-[#39FF14]" />
             Esporta
           </button>
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-1.5 rounded-full bg-black border border-white/15 px-3 py-1.5 text-[11px] font-bold text-white hover:border-white/40 transition"
+            className="flex items-center gap-1.5 rounded-full chrome-pill px-3 py-1.5 text-[11px] font-bold text-white hover:border-white/50 transition"
           >
             <Upload className="h-3 w-3" />
             Importa
@@ -355,7 +355,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
           <button
             type="button"
             onClick={onResetDemoData}
-            className="flex items-center gap-1.5 rounded-full bg-black border border-white/15 px-3 py-1.5 text-[11px] font-bold text-white/60 hover:text-white transition"
+            className="flex items-center gap-1.5 rounded-full chrome-pill px-3 py-1.5 text-[11px] font-bold text-slate-300/75 hover:text-white transition"
           >
             <RotateCcw className="h-3 w-3" />
             Azzera

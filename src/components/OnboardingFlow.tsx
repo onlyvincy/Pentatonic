@@ -6,11 +6,13 @@ import {
   Dumbbell,
   Flame,
   Gauge,
+  Music2,
   SlidersHorizontal,
   Sparkles,
-  Target,
   TrendingUp,
   X,
+  Youtube,
+  Zap,
 } from 'lucide-react';
 import {
   DiagnosticQuizAnswers,
@@ -27,7 +29,7 @@ import {
   WEEKLY_DAYS_OPTIONS,
   generateScientificPrescription,
 } from '../utils/scientificPrescription';
-import { PathIllustration } from './PathIllustrations';
+import { OnboardingHeroGuitarBg, PathIllustration } from './PathIllustrations';
 
 interface OnboardingFlowProps {
   exercises: Exercise[];
@@ -57,7 +59,7 @@ const DEFAULT_DRAFT: DraftQuizAnswers = {
 const PlekMascot: React.FC<{ mood?: 'wave' | 'coach' | 'rocket' }> = ({
   mood = 'wave',
 }) => (
-  <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[#FF6B00]/40 bg-[#FF6B00]/12 shadow-[0_0_20px_rgba(255,107,0,0.18)]">
+  <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[#39FF14]/40 bg-[#39FF14]/12 shadow-[0_0_20px_rgba(57,255,20,0.18)]">
     <svg
       viewBox="0 0 48 48"
       fill="none"
@@ -68,7 +70,7 @@ const PlekMascot: React.FC<{ mood?: 'wave' | 'coach' | 'rocket' }> = ({
       {/* Guitar Pick Body */}
       <path
         d="M24 5C14 5 8 11.5 8 20.5C8 30.5 17.5 39.5 22.3 43.2C23.3 44 24.7 44 25.7 43.2C30.5 39.5 40 30.5 40 20.5C40 11.5 34 5 24 5Z"
-        fill="#FF6B00"
+        fill="#39FF14"
       />
       {/* Subtle Top Highlight */}
       <path
@@ -100,7 +102,7 @@ const PlekMascot: React.FC<{ mood?: 'wave' | 'coach' | 'rocket' }> = ({
       )}
     </svg>
     {mood === 'wave' && (
-      <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#A4FF00] text-[9px] font-black text-black">
+      <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#39FF14] text-[9px] font-black text-black">
         !
       </span>
     )}
@@ -110,7 +112,7 @@ const PlekMascot: React.FC<{ mood?: 'wave' | 'coach' | 'rocket' }> = ({
       </span>
     )}
     {mood === 'rocket' && (
-      <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#A4FF00] text-black">
+      <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#39FF14] text-black">
         <Flame className="h-2.5 w-2.5" />
       </span>
     )}
@@ -134,6 +136,10 @@ const IntroSlideCoachBubble: React.FC<IntroSlideCoachBubbleProps> = ({
   </div>
 );
 
+type IntroSlideIndex = 0 | 1 | 2 | 3 | 4 | 5;
+const INTRO_SLIDE_COUNT = 6;
+const LAST_INTRO_SLIDE: IntroSlideIndex = 5;
+
 export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   exercises,
   showIntroSlides = false,
@@ -143,7 +149,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   const [phase, setPhase] = useState<'intro' | 'quiz'>(
     showIntroSlides ? 'intro' : 'quiz'
   );
-  const [introSlide, setIntroSlide] = useState<0 | 1 | 2>(0);
+  const [introSlide, setIntroSlide] = useState<IntroSlideIndex>(0);
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [draft, setDraft] = useState<DraftQuizAnswers>(DEFAULT_DRAFT);
   const [animatingChoice, setAnimatingChoice] = useState<string | null>(null);
@@ -197,7 +203,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   );
 
   const transitionToIntroSlide = useCallback(
-    (nextSlide: 0 | 1 | 2) => {
+    (nextSlide: IntroSlideIndex) => {
       if (isTransitioningOut) return;
       runTransition(() => {
         setPhase('intro');
@@ -251,13 +257,13 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     touchStartXRef.current = null;
     if (Math.abs(deltaX) < 55) return;
     if (deltaX < 0) {
-      if (introSlide < 2) {
-        transitionToIntroSlide((introSlide + 1) as 0 | 1 | 2);
+      if (introSlide < LAST_INTRO_SLIDE) {
+        transitionToIntroSlide((introSlide + 1) as IntroSlideIndex);
       } else {
         startQuizPhase();
       }
     } else if (deltaX > 0 && introSlide > 0) {
-      transitionToIntroSlide((introSlide - 1) as 0 | 1 | 2);
+      transitionToIntroSlide((introSlide - 1) as IntroSlideIndex);
     }
   };
 
@@ -276,11 +282,11 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     },
   };
 
-  const totalProgressSegments = showIntroSlides ? 6 : 3;
+  const totalProgressSegments = showIntroSlides ? INTRO_SLIDE_COUNT + 3 : 3;
   const activeProgressSegment =
     phase === 'intro'
       ? introSlide + 1
-      : (showIntroSlides ? 3 : 0) + step;
+      : (showIntroSlides ? INTRO_SLIDE_COUNT : 0) + step;
 
   const canGoBack =
     (phase === 'intro' && introSlide > 0) ||
@@ -289,20 +295,37 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   const handleHeaderBack = () => {
     if (phase === 'intro') {
       if (introSlide > 0) {
-        transitionToIntroSlide((introSlide - 1) as 0 | 1 | 2);
+        transitionToIntroSlide((introSlide - 1) as IntroSlideIndex);
       }
       return;
     }
     if (step > 1) {
       transitionToStep((step - 1) as 1 | 2 | 3);
     } else if (showIntroSlides) {
-      transitionToIntroSlide(2);
+      transitionToIntroSlide(LAST_INTRO_SLIDE);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col overflow-y-auto bg-black text-white">
-      <header className="mx-auto flex w-full max-w-xl items-center justify-between px-5 pt-4 pb-2">
+    <div className="fixed inset-0 z-50 flex flex-col overflow-y-auto bg-[#030405] text-white">
+      {/* Dramatic Full-Bleed Chrome & Neon Guitar Background on Slide 1 */}
+      {phase === 'intro' && introSlide === 0 && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none fixed inset-0 z-0 flex items-center justify-center overflow-hidden"
+        >
+          <OnboardingHeroGuitarBg className="h-[108vh] w-auto max-w-none opacity-85 scale-105 sm:scale-110 transition-opacity duration-300" />
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                'radial-gradient(circle at 50% 48%, rgba(3,4,5,0.42) 0%, rgba(3,4,5,0.68) 58%, rgba(3,4,5,0.94) 100%)',
+            }}
+          />
+        </div>
+      )}
+
+      <header className="relative z-10 mx-auto flex w-full max-w-xl items-center justify-between px-5 pt-4 pb-2">
         <div className="flex items-center gap-2.5">
           {canGoBack ? (
             <button
@@ -316,14 +339,14 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
           ) : (
             <img
               src="/icon.svg"
-              alt="PENTATONIC"
-              className="h-8 w-8 rounded-xl shrink-0"
+              alt="The Shredding Lab"
+              className="h-8 w-8 rounded-xl shrink-0 ring-1 ring-slate-200/35 shadow-[0_0_14px_rgba(57,255,20,0.22)]"
             />
           )}
           <span className="text-[11px] font-bold uppercase tracking-widest text-white/55 tabular-nums">
             {phase === 'intro'
-              ? `Intro ${introSlide + 1} / 3`
-              : `${step} / 3`}
+              ? `${introSlide + 1} / ${INTRO_SLIDE_COUNT}`
+              : `Quiz ${step} / 3`}
           </span>
         </div>
 
@@ -335,7 +358,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                 <div
                   key={n}
                   className={`h-1 flex-1 rounded-full transition-all duration-300 ${
-                    n <= activeProgressSegment ? 'bg-[#FF6B00]' : 'bg-white/15'
+                    n <= activeProgressSegment ? 'bg-[#39FF14]' : 'bg-white/15'
                   }`}
                 />
               );
@@ -364,7 +387,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       </header>
 
       <main
-        className="mx-auto flex w-full max-w-xl flex-1 flex-col justify-center px-5 py-4"
+        className="relative z-10 mx-auto flex w-full max-w-xl flex-1 flex-col justify-center px-5 py-4"
         onTouchStart={phase === 'intro' ? handleIntroTouchStart : undefined}
         onTouchEnd={phase === 'intro' ? handleIntroTouchEnd : undefined}
       >
@@ -377,175 +400,172 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                 : 'animate-quiz-step'
             }`}
           >
-            {/* INTRO SLIDE 1: COS'È PENTATONIC & PER CHI È */}
+            {/* SLIDE 1: HOOK — ESSENZA */}
             {introSlide === 0 && (
-              <>
+              <div className="space-y-4 py-10 sm:py-14 text-center flex flex-col items-center">
+                <h1 className="text-4xl sm:text-5xl font-black tracking-tight chrome-text leading-[1.05] drop-shadow-[0_6px_28px_rgba(0,0,0,0.9)]">
+                  Impara a suonare come hai sempre sognato.
+                </h1>
+                <p className="max-w-sm text-sm sm:text-base text-slate-200/85 leading-relaxed drop-shadow-[0_2px_12px_rgba(0,0,0,0.95)]">
+                  Progredisci Scientificamente e raggiungi ciò che non avresti mai pensato possibile.
+                </p>
+              </div>
+            )}
+
+            {/* SLIDE 2: IL PROBLEMA */}
+            {introSlide === 1 && (
+              <div className="space-y-5 py-2">
                 <IntroSlideCoachBubble
                   mood="wave"
-                  message="Ciao! Sono Plek. Prima di prendere in mano la chitarra, ti spiego in 30 secondi cos'è davvero Pentatonic — e cosa NON è."
+                  message="Il blocco non è nella testa. È nelle dita."
                 />
-
-                <div className="space-y-2.5 px-0.5">
-                  <div className="inline-flex items-center gap-1.5 rounded-full border border-[#FF6B00]/35 bg-[#FF6B00]/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-[#FF6B00]">
-                    <Target className="h-3.5 w-3.5" />
-                    Laboratorio di Tecnica
-                  </div>
-                  <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white leading-tight">
-                    Trasforma in musica le idee che hai già in testa.
+                <div className="space-y-3 px-0.5">
+                  <h1 className="text-3xl sm:text-4xl font-black tracking-tight chrome-text leading-[1.08]">
+                    Sai cosa suonare. Le mani non ti seguono.
                   </h1>
-                  <p className="text-sm text-white/65 leading-relaxed">
-                    Pentatonic <span className="text-white font-semibold">non è un'app per imparare da zero la teoria musicale o le shape</span> sulla tastiera. È uno spazio dedicato al 100% ad affinare la tua tecnica sui{' '}
-                    <span className="text-white font-semibold">Fondamentali</span>, così le dita riescono finalmente a seguire quello che immagini.
+                  <p className="text-sm sm:text-base text-slate-300/75 leading-relaxed">
+                    Capire un concetto richiede 5 minuti. Suonarlo{' '}
+                    <span className="text-white font-semibold">pulito, a tempo e senza tensione</span>{' '}
+                    richiede allenamento vero.
                   </p>
+                </div>
+              </div>
+            )}
+
+            {/* SLIDE 3: TECNICA VS COMPOSIZIONE (MOZART VS STEVE VAI) */}
+            {introSlide === 2 && (
+              <div className="space-y-5 py-2">
+                <div className="px-0.5">
+                  <h1 className="text-3xl sm:text-4xl font-black tracking-tight chrome-text leading-[1.08]">
+                    Non ti insegniamo a comporre.
+                  </h1>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <div className="rounded-2xl border border-white/10 bg-[#0A0A0C] p-3.5 space-y-1">
-                    <div className="text-[11px] font-bold uppercase tracking-wider text-white/45">
-                      Cosa NON facciamo
+                  <div className="rounded-2xl chrome-card p-4 space-y-1">
+                    <div className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-slate-200">
+                      <Music2 className="h-3.5 w-3.5 text-slate-300" />
+                      Mozart
                     </div>
-                    <p className="text-xs sm:text-sm text-white/70 leading-snug">
-                      Lezioni di teoria base, spiegazioni infinite di scale o primi accordi da zero.
+                    <p className="text-xs sm:text-sm text-slate-300/75">
+                      Comporre melodie, armonia e canzoni.
                     </p>
                   </div>
-                  <div className="rounded-2xl border border-[#A4FF00]/30 bg-[#A4FF00]/[0.06] p-3.5 space-y-1">
-                    <div className="text-[11px] font-bold uppercase tracking-wider text-[#A4FF00]">
-                      Cosa alleni qui
+
+                  <div className="rounded-2xl border border-[#39FF14]/45 bg-[#39FF14]/[0.08] p-4 space-y-1 shadow-[0_0_24px_rgba(57,255,20,0.1)]">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-[#39FF14]">
+                        <Zap className="h-3.5 w-3.5" />
+                        Eddie Van Halen
+                      </span>
+                      <span className="rounded-full bg-[#39FF14]/20 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-[#39FF14]">
+                        Qui
+                      </span>
                     </div>
-                    <p className="text-xs sm:text-sm text-white/90 leading-snug">
-                      Velocità, precisione, espressività, visione del manico e groove sui fondamentali.
+                    <p className="text-xs sm:text-sm text-white/95">
+                      Velocità, controllo e precisione chirurgica.
                     </p>
                   </div>
                 </div>
-              </>
+
+                <p className="text-xs sm:text-sm text-slate-300/70 px-0.5">
+                  Entrambe sono fondamentali ma <span className="text-white font-semibold">The Shredding Lab</span> si concentra al 100% sulla seconda.
+                </p>
+              </div>
             )}
 
-            {/* INTRO SLIDE 2: TEORIA VS TECNICA (SCHEDA PALESTRA) */}
-            {introSlide === 1 && (
-              <>
-                <IntroSlideCoachBubble
-                  mood="coach"
-                  message="La teoria musicale oggi la trovi ovunque su YouTube, libri e corsi. Il vero collo di bottiglia è quasi sempre un altro."
-                />
-
-                <div className="space-y-2.5 px-0.5">
-                  <div className="inline-flex items-center gap-1.5 rounded-full border border-[#FF6B00]/35 bg-[#FF6B00]/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-[#FF6B00]">
-                    <Dumbbell className="h-3.5 w-3.5" />
-                    Come una scheda in palestra
-                  </div>
-                  <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white leading-tight">
-                    La tecnica non si studia. Si allena ogni giorno.
+            {/* SLIDE 4: PREREQUISITI + YOUTUBE */}
+            {introSlide === 3 && (
+              <div className="space-y-5 py-2">
+                <div className="px-0.5">
+                  <h1 className="text-3xl sm:text-4xl font-black tracking-tight chrome-text leading-[1.08]">
+                    Ti servono già le basi.
                   </h1>
-                  <p className="text-sm text-white/65 leading-relaxed">
-                    Per capire un concetto bastano 10 minuti di video. Per far obbedire le mani servono{' '}
-                    <span className="text-white font-semibold">routine, disciplina e zero attrito</span>: aprire l'app e sapere subito cosa fare, proprio come quando entri in palestra con la tua scheda pronta.
-                  </p>
                 </div>
 
                 <div className="space-y-2">
                   {[
-                    {
-                      title: 'Zero decisioni, zero attrito',
-                      desc: 'Niente 15 minuti persi a decidere cosa studiare: premi Play e parti subito.',
-                    },
-                    {
-                      title: 'Routine sostenibile',
-                      desc: 'Anche 5 o 15 minuti fatti bene battono 2 ore fatte una volta al mese.',
-                    },
-                    {
-                      title: 'Sovraccarico progressivo',
-                      desc: 'Come i pesi in palestra: serie, recuperi e BPM che salgono solo quando sei pulito.',
-                    },
-                  ].map((item) => (
+                    'Teoria musicale di base',
+                    'Forme principali di accordi',
+                    'Scale fondamentali',
+                  ].map((label) => (
                     <div
-                      key={item.title}
-                      className="flex items-start gap-3 rounded-2xl border border-white/12 bg-[#0A0A0C] px-3.5 py-3"
+                      key={label}
+                      className="flex items-center gap-3 rounded-2xl chrome-card px-4 py-3"
                     >
-                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#FF6B00]/15 text-[#FF6B00]">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#39FF14]/15 text-[#39FF14]">
                         <Check className="h-3 w-3 stroke-[3]" />
                       </span>
-                      <div className="min-w-0">
-                        <div className="text-xs sm:text-sm font-bold text-white">
-                          {item.title}
-                        </div>
-                        <p className="text-xs text-white/55 leading-snug mt-0.5">
-                          {item.desc}
-                        </p>
-                      </div>
+                      <span className="text-sm font-bold text-white">
+                        {label}
+                      </span>
                     </div>
                   ))}
                 </div>
-              </>
+
+                <div className="flex items-center gap-2.5 rounded-xl chrome-pill px-3.5 py-2.5 text-xs text-slate-200/85">
+                  <Youtube className="h-4 w-4 shrink-0 text-[#39FF14]" />
+                  <span>Ti manca qualcosa? Su YouTube lo impari gratis in pochi minuti, poi torni qui ad allenarlo.</span>
+                </div>
+              </div>
             )}
 
-            {/* INTRO SLIDE 3: COME FUNZIONA IN BREVE */}
-            {introSlide === 2 && (
-              <>
+            {/* SLIDE 5: IL METODO (ZERO ATTRITO + BPM ADATTIVI) */}
+            {introSlide === 4 && (
+              <div className="space-y-5 py-2">
+                <IntroSlideCoachBubble
+                  mood="coach"
+                  message="Niente decisioni. Niente perdite di tempo."
+                />
+                <div className="space-y-3 px-0.5">
+                  <h1 className="text-3xl sm:text-4xl font-black tracking-tight chrome-text leading-[1.08]">
+                    Apri. Suona. I BPM crescono con te.
+                  </h1>
+                  <p className="text-sm sm:text-base text-slate-300/75 leading-relaxed">
+                    Schede pronte da <span className="text-white font-semibold">5 a 45 minuti</span>. Voti la pulizia da 1 a 5 e il metronomo si adatta da solo.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <span className="inline-flex items-center gap-1.5 rounded-full chrome-pill px-3 py-1.5 text-xs font-bold text-white">
+                    <SlidersHorizontal className="h-3.5 w-3.5 text-[#39FF14]" />
+                    Scheda pronta
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 rounded-full chrome-pill px-3 py-1.5 text-xs font-bold text-white">
+                    <Gauge className="h-3.5 w-3.5 text-[#39FF14]" />
+                    BPM adattivi
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 rounded-full chrome-pill px-3 py-1.5 text-xs font-bold text-white">
+                    <TrendingUp className="h-3.5 w-3.5 text-[#39FF14]" />
+                    Progressi reali
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* SLIDE 6: IL TUO SÉ FUTURO */}
+            {introSlide === 5 && (
+              <div className="space-y-5 py-2">
                 <IntroSlideCoachBubble
                   mood="rocket"
-                  message="Tutto chiaro? Allora ecco in 3 punti come funziona la tua sessione su Pentatonic. Ci vorrà un attimo!"
+                  message="Chiudi gli occhi un secondo."
                 />
-
-                <div className="space-y-2 px-0.5">
-                  <div className="inline-flex items-center gap-1.5 rounded-full border border-[#A4FF00]/35 bg-[#A4FF00]/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-[#A4FF00]">
-                    <Sparkles className="h-3.5 w-3.5" />
-                    Come funziona
-                  </div>
-                  <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white leading-tight">
-                    Scegli il tempo. Suona. Al resto pensa l'app.
+                <div className="space-y-3 px-0.5">
+                  <h1 className="text-3xl sm:text-4xl font-black tracking-tight chrome-text leading-[1.08]">
+                    Prendi la chitarra e le dita volano.
                   </h1>
+                  <p className="text-sm sm:text-base text-slate-300/75 leading-relaxed">
+                    Attacchi quel riff o quell'assolo veloce e ogni nota esce{' '}
+                    <span className="text-white font-semibold">pulita, potente e senza sforzo</span>. Iniziamo.
+                  </p>
                 </div>
-
-                <div className="space-y-2.5">
-                  <div className="flex items-start gap-3.5 rounded-2xl border border-white/15 bg-[#0A0A0C] p-3.5">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#FF6B00]/15 text-[#FF6B00]">
-                      <SlidersHorizontal className="h-4 w-4" />
-                    </div>
-                    <div className="space-y-0.5">
-                      <div className="text-sm font-black text-white">
-                        1. Scheda pronta in 1 tap (5–45 min)
-                      </div>
-                      <p className="text-xs text-white/60 leading-relaxed">
-                        Ogni giorno trovi gli esercizi prioritari sui 5 Fondamentali con tastiera interattiva, varianti e metronomo integrato.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-3.5 rounded-2xl border border-white/15 bg-[#0A0A0C] p-3.5">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#A4FF00]/15 text-[#A4FF00]">
-                      <Gauge className="h-4 w-4" />
-                    </div>
-                    <div className="space-y-0.5">
-                      <div className="text-sm font-black text-white">
-                        2. BPM adattivi (Zona Goldilocks)
-                      </div>
-                      <p className="text-xs text-white/60 leading-relaxed">
-                        Si parte sempre comodi per scaldare le mani. A fine serie voti da 1 a 5 la pulizia: se è facile sale subito, se sei teso rallenta.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-3.5 rounded-2xl border border-white/15 bg-[#0A0A0C] p-3.5">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white">
-                      <TrendingUp className="h-4 w-4" />
-                    </div>
-                    <div className="space-y-0.5">
-                      <div className="text-sm font-black text-white">
-                        3. Misura la tua crescita
-                      </div>
-                      <p className="text-xs text-white/60 leading-relaxed">
-                        Traccia le serie settimanali, sali di livello su ogni fondamentale e riascolta le tue registrazioni nel tempo.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </>
+              </div>
             )}
 
             {/* SLIDE NAVIGATION FOOTER */}
-            <div className="pt-2 space-y-3">
+            <div className="pt-4 space-y-3">
               <div className="flex items-center justify-center gap-2">
-                {([0, 1, 2] as const).map((idx) => (
+                {([0, 1, 2, 3, 4, 5] as const).map((idx) => (
                   <button
                     key={idx}
                     type="button"
@@ -553,20 +573,20 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                     aria-label={`Vai alla slide ${idx + 1}`}
                     className={`h-1.5 rounded-full transition-all duration-200 ${
                       introSlide === idx
-                        ? 'w-6 bg-[#FF6B00]'
+                        ? 'w-6 bg-[#39FF14] shadow-[0_0_8px_rgba(57,255,20,0.7)]'
                         : 'w-1.5 bg-white/25 hover:bg-white/45'
                     }`}
                   />
                 ))}
               </div>
 
-              {introSlide < 2 ? (
+              {introSlide < LAST_INTRO_SLIDE ? (
                 <button
                   type="button"
                   onClick={() =>
-                    transitionToIntroSlide((introSlide + 1) as 0 | 1 | 2)
+                    transitionToIntroSlide((introSlide + 1) as IntroSlideIndex)
                   }
-                  className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-black text-black hover:bg-white/90 active:scale-[0.98] transition"
+                  className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl chrome-active px-5 py-3 text-sm font-black active:scale-[0.98] transition"
                 >
                   Continua
                   <ArrowRight className="h-4 w-4" />
@@ -575,7 +595,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                 <button
                   type="button"
                   onClick={startQuizPhase}
-                  className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-[#FF6B00] px-5 py-3 text-sm font-black text-black hover:bg-[#ff7d1f] active:scale-[0.98] transition"
+                  className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl neon-cta px-5 py-3 text-sm font-black active:scale-[0.98] transition"
                 >
                   <Sparkles className="h-4 w-4" />
                   Crea la mia scheda
@@ -616,7 +636,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                       onClick={() => handleSelectPath(opt.value)}
                       className={`group flex flex-col justify-between overflow-hidden rounded-3xl border p-4 text-left transition-all duration-150 active:scale-[0.98] ${
                         isSelected
-                          ? 'border-[#FF6B00] bg-[#0B0B0B] shadow-[0_0_28px_rgba(255,107,0,0.22)]'
+                          ? 'border-[#39FF14] bg-[#0B0B0B] shadow-[0_0_28px_rgba(57,255,20,0.22)]'
                           : 'border-white/15 bg-black hover:border-white/45'
                       } ${isDimmed ? 'opacity-40' : ''}`}
                     >
@@ -635,7 +655,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                           <span
                             className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition ${
                               isSelected
-                                ? 'border-[#FF6B00] bg-[#FF6B00] text-black'
+                                ? 'border-[#39FF14] bg-[#39FF14] text-black'
                                 : 'border-white/15 text-white/50 group-hover:border-white/40 group-hover:text-white'
                             }`}
                           >
@@ -809,7 +829,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                 <button
                   type="button"
                   onClick={() => onFinishQuiz(generatedPrescription, false)}
-                  className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-[#FF6B00] px-5 py-3 text-sm font-black text-black hover:bg-[#ff7d1f] active:scale-[0.98] transition"
+                  className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-[#39FF14] px-5 py-3 text-sm font-black text-black hover:bg-[#5EFF3D] active:scale-[0.98] transition"
                 >
                   <Sparkles className="h-4 w-4" />
                   Attiva Percorso

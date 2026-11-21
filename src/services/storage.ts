@@ -132,7 +132,7 @@ export function savePersistedState(state: AppState): void {
 export function exportAppStateJson(state: AppState): string {
   return JSON.stringify(
     {
-      app: 'PENTATONIC',
+      app: 'THE SHREDDING LAB',
       version: 1,
       exportedAt: new Date().toISOString(),
       data: state,

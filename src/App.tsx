@@ -464,23 +464,24 @@ export function App() {
   }
 
   return (
-    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-black text-white pb-24 sm:pb-10">
-      {/* Clean Top Bar */}
-      <header className="sticky top-0 z-30 border-b border-white/15 bg-black/95 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-2.5">
-          <div className="flex items-center gap-2.5 shrink-0">
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-transparent text-white pb-24 sm:pb-10">
+      {/* Chrome + Electric Neon Top Bar */}
+      <header className="sticky top-0 z-30 border-b border-slate-200/20 bg-[#050608]/92 backdrop-blur-xl shadow-[0_8px_28px_rgba(0,0,0,0.65)]">
+        <div className="mx-auto flex max-w-4xl items-center justify-between gap-2 px-4 py-2.5">
+          <div className="flex items-center gap-2.5 shrink-0 min-w-0">
             <img
               src="/icon.svg"
-              alt="PENTATONIC"
-              className="h-8 w-8 rounded-xl shrink-0"
+              alt="The Shredding Lab"
+              className="h-8 w-8 rounded-xl shrink-0 ring-1 ring-slate-200/35 shadow-[0_0_16px_rgba(57,255,20,0.22)]"
             />
-            <span className="font-brand text-sm text-white whitespace-nowrap">
-              PENTATONIC<span className="text-[#FF6B00] ml-0.5">•</span>
+            <span className="font-brand text-[11px] sm:text-sm whitespace-nowrap tracking-[0.14em] sm:tracking-[0.18em]">
+              <span className="chrome-text">THE SHREDDING LAB</span>
+              <span className="text-[#39FF14] ml-1 drop-shadow-[0_0_8px_rgba(57,255,20,0.9)]">•</span>
             </span>
           </div>
 
-          {/* Desktop 4 Clear Tabs (Minimal B&W) */}
-          <nav className="hidden sm:flex items-center gap-1 rounded-full bg-black border border-white/15 p-1">
+          {/* Desktop 4 Clear Tabs (Polished Chrome) */}
+          <nav className="hidden sm:flex items-center gap-1 rounded-full chrome-pill p-1">
             {navItems.map((item) => {
               const active = activeTab === item.id;
               return (
@@ -490,8 +491,8 @@ export function App() {
                   onClick={() => setActiveTab(item.id)}
                   className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-bold transition ${
                     active
-                      ? 'bg-white text-black'
-                      : 'text-white/55 hover:text-white'
+                      ? 'chrome-active'
+                      : 'text-slate-300/70 hover:text-white'
                   }`}
                 >
                   {item.icon}
@@ -501,25 +502,26 @@ export function App() {
             })}
           </nav>
 
-          {/* Minimal Streak Pill */}
-          <div className="flex items-center gap-1.5 rounded-full bg-black border border-white/15 px-3 py-1.5 text-xs font-bold text-white tabular-nums">
-            <Flame className="h-3.5 w-3.5 text-white" />
+          {/* Chrome Streak Pill */}
+          <div className="flex items-center gap-1.5 rounded-full chrome-pill px-3 py-1.5 text-xs font-bold text-slate-100 tabular-nums shrink-0">
+            <Flame className="h-3.5 w-3.5 text-[#39FF14] drop-shadow-[0_0_6px_rgba(57,255,20,0.75)]" />
             <span>{nerd.currentStreakDays} di fila</span>
           </div>
         </div>
+        <div className="chrome-hairline w-full opacity-60" />
       </header>
 
       {toastMessage && (
-        <div className="fixed top-16 right-4 z-40 rounded-full bg-black border border-white/30 px-4 py-2 text-xs font-bold text-white shadow-2xl">
+        <div className="fixed top-16 right-4 z-40 rounded-full chrome-panel px-4 py-2 text-xs font-bold text-white shadow-2xl">
           {toastMessage}
         </div>
       )}
 
       {/* PWA New Deploy Update Popup */}
       {appUpdate.updateAvailable && !activeLivePlan && (
-        <div className="fixed bottom-20 sm:bottom-6 inset-x-4 sm:left-auto sm:right-6 z-40 mx-auto sm:mx-0 max-w-sm rounded-2xl border border-white/25 bg-black/95 backdrop-blur-xl px-4 py-3 shadow-2xl flex items-center justify-between gap-3">
+        <div className="fixed bottom-20 sm:bottom-6 inset-x-4 sm:left-auto sm:right-6 z-40 mx-auto sm:mx-0 max-w-sm rounded-2xl chrome-panel backdrop-blur-xl px-4 py-3 shadow-2xl flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 min-w-0">
-            <span className="h-2 w-2 shrink-0 rounded-full bg-[#FF6B00] animate-pulse-fast" />
+            <span className="h-2 w-2 shrink-0 rounded-full bg-[#39FF14] shadow-[0_0_10px_rgba(57,255,20,0.9)] animate-pulse-fast" />
             <span className="truncate text-xs font-bold text-white">
               Nuova versione disponibile
             </span>
@@ -529,7 +531,7 @@ export function App() {
               type="button"
               disabled={appUpdate.isUpdating}
               onClick={appUpdate.applyUpdate}
-              className="inline-flex items-center gap-1.5 rounded-full bg-[#FF6B00] px-3 py-1.5 text-[11px] font-black text-black hover:bg-[#ff7d1f] disabled:opacity-60 transition"
+              className="inline-flex items-center gap-1.5 rounded-full neon-cta px-3 py-1.5 text-[11px] font-black disabled:opacity-60 transition"
             >
               <RefreshCw
                 className={`h-3 w-3 ${appUpdate.isUpdating ? 'animate-spin' : ''}`}
@@ -540,7 +542,7 @@ export function App() {
               type="button"
               onClick={appUpdate.dismissUpdate}
               aria-label="Chiudi avviso aggiornamento"
-              className="flex h-7 w-7 items-center justify-center rounded-full border border-white/15 text-white/50 hover:text-white transition"
+              className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200/20 text-slate-300/60 hover:text-white transition"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -603,24 +605,32 @@ export function App() {
         )}
       </main>
 
-      {/* Mobile Bottom Tab Bar */}
-      <nav className="fixed bottom-0 inset-x-0 z-30 flex sm:hidden border-t border-white/15 bg-black/95 backdrop-blur-xl">
-        {navItems.map((item) => {
-          const active = activeTab === item.id;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => setActiveTab(item.id)}
-              className={`flex flex-1 flex-col items-center justify-center gap-1 py-2.5 text-[11px] font-bold transition ${
-                active ? 'text-white' : 'text-white/45'
-              }`}
-            >
-              {item.icon}
-              <span>{item.label}</span>
-            </button>
-          );
-        })}
+      {/* Mobile Bottom Tab Bar (Chrome Rim + Neon Active) */}
+      <nav className="fixed bottom-0 inset-x-0 z-30 flex sm:hidden flex-col border-t border-slate-200/20 bg-[#050608]/95 backdrop-blur-xl shadow-[0_-8px_28px_rgba(0,0,0,0.75)]">
+        <div className="chrome-hairline w-full opacity-55" />
+        <div className="flex">
+          {navItems.map((item) => {
+            const active = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setActiveTab(item.id)}
+                className={`relative flex flex-1 flex-col items-center justify-center gap-1 py-2.5 text-[11px] font-bold transition ${
+                  active
+                    ? 'text-[#39FF14] drop-shadow-[0_0_8px_rgba(57,255,20,0.55)]'
+                    : 'text-slate-300/50 hover:text-slate-200'
+                }`}
+              >
+                {active && (
+                  <span className="absolute top-0 h-[2px] w-8 rounded-full bg-[#39FF14] shadow-[0_0_10px_rgba(57,255,20,0.9)]" />
+                )}
+                {item.icon}
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
+        </div>
       </nav>
 
       {/* Live Guided Player */}

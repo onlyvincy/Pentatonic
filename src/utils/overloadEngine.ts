@@ -114,9 +114,9 @@ export function calculateGoldilocksNextBpm(
           plekQuip: 'Mani calde e sciolte: si entra subito in Zona Goldilocks.',
           scientificAdvice:
             'Riscaldamento perfetto: portiamo il metronomo appena sopra la tua zona di comfort.',
-          color: 'text-[#A4FF00]',
-          badgeBg: 'bg-[#A4FF00]/10',
-          badgeBorder: 'border-[#A4FF00]/35',
+          color: 'text-[#39FF14]',
+          badgeBg: 'bg-[#39FF14]/10',
+          badgeBorder: 'border-[#39FF14]/35',
         };
       }
       case 4: {
@@ -129,9 +129,9 @@ export function calculateGoldilocksNextBpm(
           plekQuip: 'Groove agganciato: ora spingiamo un pelo oltre il comfort.',
           scientificAdvice:
             'Ottimo riscaldamento: passiamo alla Zona Goldilocks (+4% sopra il tuo comfort).',
-          color: 'text-[#A4FF00]',
-          badgeBg: 'bg-[#A4FF00]/10',
-          badgeBorder: 'border-[#A4FF00]/30',
+          color: 'text-[#39FF14]',
+          badgeBg: 'bg-[#39FF14]/10',
+          badgeBorder: 'border-[#39FF14]/30',
         };
       }
       case 3: {
@@ -144,9 +144,9 @@ export function calculateGoldilocksNextBpm(
           plekQuip: 'Bene: saliamo gradualmente alla tua velocità di riferimento.',
           scientificAdvice:
             'Saliamo al tuo BPM base senza forzare prima di spingere oltre.',
-          color: 'text-[#FF6B00]',
-          badgeBg: 'bg-[#FF6B00]/10',
-          badgeBorder: 'border-[#FF6B00]/35',
+          color: 'text-[#39FF14]',
+          badgeBg: 'bg-[#39FF14]/10',
+          badgeBorder: 'border-[#39FF14]/35',
         };
       }
       case 2: {
@@ -158,9 +158,9 @@ export function calculateGoldilocksNextBpm(
           plekQuip: 'Teniamo questo passo comodo ancora una serie per sciogliere le dita.',
           scientificAdvice:
             'Restiamo a velocità di riscaldamento finché il movimento non è fluido.',
-          color: 'text-[#FF6B00]',
-          badgeBg: 'bg-[#FF6B00]/15',
-          badgeBorder: 'border-[#FF6B00]/45',
+          color: 'text-slate-200',
+          badgeBg: 'bg-white/10',
+          badgeBorder: 'border-slate-300/35',
         };
       }
       case 1: {
@@ -172,9 +172,9 @@ export function calculateGoldilocksNextBpm(
           plekQuip: 'Scendiamo di -4 BPM per rimettere a fuoco il pattern.',
           scientificAdvice:
             'Rallentiamo leggermente per costruire memoria muscolare pulita.',
-          color: 'text-[#FF6B00]',
-          badgeBg: 'bg-[#FF6B00]/20',
-          badgeBorder: 'border-[#FF6B00]/50',
+          color: 'text-slate-300',
+          badgeBg: 'bg-white/12',
+          badgeBorder: 'border-slate-300/40',
         };
       }
     }
@@ -192,9 +192,9 @@ export function calculateGoldilocksNextBpm(
         plekQuip: `Troppo comodo! Saliamo di +${nextBpm - playedBpm} BPM per restare nella sfida.`,
         scientificAdvice:
           'Sei dentro la zona di comfort: aumentiamo di +5% per riattivare la mielinizzazione.',
-        color: 'text-[#A4FF00]',
-        badgeBg: 'bg-[#A4FF00]/10',
-        badgeBorder: 'border-[#A4FF00]/35',
+        color: 'text-[#39FF14]',
+        badgeBg: 'bg-[#39FF14]/10',
+        badgeBorder: 'border-[#39FF14]/35',
       };
     }
     case 4: {
@@ -207,9 +207,9 @@ export function calculateGoldilocksNextBpm(
         plekQuip: `Pulito! Alziamo l’asticella di +${nextBpm - playedBpm} BPM.`,
         scientificAdvice:
           'Velocità dominata: micro-incremento del +3% per restare sul bordo del comfort.',
-        color: 'text-[#A4FF00]',
-        badgeBg: 'bg-[#A4FF00]/10',
-        badgeBorder: 'border-[#A4FF00]/30',
+        color: 'text-[#39FF14]',
+        badgeBg: 'bg-[#39FF14]/10',
+        badgeBorder: 'border-[#39FF14]/30',
       };
     }
     case 3:
@@ -220,9 +220,9 @@ export function calculateGoldilocksNextBpm(
         plekQuip: 'Punto esatto di crescita! Teniamo questi BPM e cambiamo variante.',
         scientificAdvice:
           'Sei esattamente all’85% di controllo: qui il cervello impara più velocemente.',
-        color: 'text-[#FF6B00]',
-        badgeBg: 'bg-[#FF6B00]/10',
-        badgeBorder: 'border-[#FF6B00]/35',
+        color: 'text-[#39FF14]',
+        badgeBg: 'bg-[#39FF14]/10',
+        badgeBorder: 'border-[#39FF14]/35',
       };
     case 2: {
       const step = Math.max(3, Math.round(playedBpm * 0.04));
@@ -234,9 +234,9 @@ export function calculateGoldilocksNextBpm(
         plekQuip: `Scendiamo di -${playedBpm - nextBpm} BPM per tornare nel punto ottimale.`,
         scientificAdvice:
           'Leggermente oltre il limite: -4% ripristina pulizia e scioltezza.',
-        color: 'text-[#FF6B00]',
-        badgeBg: 'bg-[#FF6B00]/15',
-        badgeBorder: 'border-[#FF6B00]/45',
+        color: 'text-slate-200',
+        badgeBg: 'bg-white/10',
+        badgeBorder: 'border-slate-300/35',
       };
     }
     case 1: {
@@ -249,9 +249,9 @@ export function calculateGoldilocksNextBpm(
         plekQuip: `Rallentiamo di -${playedBpm - nextBpm} BPM: la velocità nasce dal controllo.`,
         scientificAdvice:
           'Troppi errori: riduciamo dell’8% per rientrare nella finestra di apprendimento.',
-        color: 'text-[#FF6B00]',
-        badgeBg: 'bg-[#FF6B00]/20',
-        badgeBorder: 'border-[#FF6B00]/50',
+        color: 'text-slate-300',
+        badgeBg: 'bg-white/12',
+        badgeBorder: 'border-slate-300/40',
       };
     }
   }
@@ -527,7 +527,7 @@ export function computeExerciseScore(
       practicedVariantsCount: weightedSummary.practicedVariantsCount,
       totalVariantsCount: weightedSummary.totalVariantsCount,
       tierLabel: 'Fondamenta',
-      color: 'text-[#FF6B00]',
+      color: 'text-[#39FF14]',
       setsCompleted: 0,
       daysSinceLastPracticed: 999,
     };
@@ -549,13 +549,13 @@ export function computeExerciseScore(
   const score = Math.min(100, Math.max(8, Math.round((totalXp / 900) * 100)));
 
   let tierLabel = 'Fondamenta';
-  let color = 'text-[#FF6B00]';
+  let color = 'text-[#39FF14]';
   if (level >= 9) {
     tierLabel = 'Maestro';
-    color = 'text-[#A4FF00]';
+    color = 'text-[#39FF14]';
   } else if (level >= 7) {
     tierLabel = 'Avanzato';
-    color = 'text-[#A4FF00]';
+    color = 'text-[#39FF14]';
   } else if (level >= 5) {
     tierLabel = 'Solido';
     color = 'text-white';

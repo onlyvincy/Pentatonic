@@ -598,7 +598,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
                 className={`flex h-8 w-8 items-center justify-center rounded-full border transition ${
                   metronome.visualOnly
                     ? 'border-white/15 bg-black text-white/40 hover:text-white'
-                    : 'border-white/20 bg-black text-[#FF6B00] hover:border-white/50'
+                    : 'border-white/20 bg-black text-[#39FF14] hover:border-white/50'
                 }`}
               >
                 {metronome.visualOnly ? (
@@ -628,7 +628,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
         <div className="mx-auto mt-2 max-w-3xl">
           <div className="h-0.5 w-full overflow-hidden rounded-full bg-white/10">
             <div
-              className="h-full bg-[#FF6B00] transition-all duration-300"
+              className="h-full bg-[#39FF14] transition-all duration-300"
               style={{ width: `${progressPct}%` }}
             />
           </div>
@@ -647,7 +647,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
               <div className="flex flex-wrap items-center justify-center gap-1.5">
                 {arpeggioData ? (
                   <>
-                    <span className="inline-flex rounded-full border border-[#FF6B00]/50 bg-[#FF6B00]/12 px-3 py-0.5 text-xs font-black text-[#FF6B00] tabular-nums">
+                    <span className="inline-flex rounded-full border border-[#39FF14]/50 bg-[#39FF14]/12 px-3 py-0.5 text-xs font-black text-[#39FF14] tabular-nums">
                       Formula Gradi: {arpeggioData.pattern.formulaText}
                     </span>
                     <span className="inline-flex rounded-full border border-white/20 bg-black px-2.5 py-0.5 text-[11px] font-bold text-white/80">
@@ -656,7 +656,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
                   </>
                 ) : (
                   activeVariant && (
-                    <span className="inline-flex rounded-full border border-[#FF6B00]/45 bg-[#FF6B00]/12 px-3 py-0.5 text-xs font-bold text-[#FF6B00]">
+                    <span className="inline-flex rounded-full border border-[#39FF14]/45 bg-[#39FF14]/12 px-3 py-0.5 text-xs font-bold text-[#39FF14]">
                       {activeVariant.name}
                     </span>
                   )
@@ -669,7 +669,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
                   }}
                   className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-black transition ${
                     isSpeedBurst
-                      ? 'border-[#FF6B00] bg-[#FF6B00] text-black'
+                      ? 'border-[#39FF14] bg-[#39FF14] text-black'
                       : 'border-white/20 bg-black text-white/60 hover:border-white/45 hover:text-white'
                   }`}
                 >
@@ -744,8 +744,10 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
               {metronome.bpm} BPM • S{setNumber}/{currentItem.sets}
             </div>
 
-            <div className="my-8 flex h-44 w-44 items-center justify-center rounded-full border-2 border-[#FF6B00] bg-black text-7xl font-black text-white tabular-nums shadow-[0_0_50px_rgba(255,107,0,0.2)]">
-              {precountBeat}
+            <div className="my-8 chrome-ring-bezel rounded-full shadow-[0_0_52px_rgba(57,255,20,0.28)]">
+              <div className="flex h-44 w-44 items-center justify-center rounded-full border border-[#39FF14]/80 bg-[#050608] text-7xl font-black chrome-text tabular-nums">
+                {precountBeat}
+              </div>
             </div>
 
             <button
@@ -838,7 +840,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
                           }}
                           className={`rounded-full border px-2.5 py-0.5 text-[11px] font-bold transition ${
                             active
-                              ? 'border-[#FF6B00] bg-[#FF6B00] text-black'
+                              ? 'border-[#39FF14] bg-[#39FF14] text-black'
                               : 'border-white/15 bg-black text-white/65 hover:text-white'
                           }`}
                         >
@@ -861,7 +863,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
                   const activeStyle = metronome.isGapBar
                     ? 'bg-white/30 scale-110'
                     : beat === 1
-                    ? 'bg-[#FF6B00] scale-125 shadow-[0_0_16px_rgba(255,107,0,0.7)]'
+                    ? 'bg-[#39FF14] scale-125 shadow-[0_0_16px_rgba(57,255,20,0.7)]'
                     : 'bg-white scale-110 shadow-[0_0_12px_rgba(255,255,255,0.5)]';
 
                   return (
@@ -876,7 +878,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
               </div>
 
               {metronome.isGapBar && (
-                <div className="rounded-full border border-[#FF6B00]/50 px-3 py-0.5 text-[11px] font-bold text-[#FF6B00] animate-pulse">
+                <div className="rounded-full border border-[#39FF14]/50 px-3 py-0.5 text-[11px] font-bold text-[#39FF14] animate-pulse">
                   SILENZIO
                 </div>
               )}
@@ -887,7 +889,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
                   {formatMMSS(setRemainingSec)}
                 </div>
                 <div className="mt-2 flex items-center justify-center gap-2">
-                  <span className="text-lg font-black text-[#FF6B00] tabular-nums">
+                  <span className="text-lg font-black text-[#39FF14] tabular-nums">
                     {metronome.bpm} BPM
                   </span>
                   <button
@@ -895,7 +897,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
                     onClick={handleToggleSpeedBurst}
                     className={`rounded-full border px-2.5 py-0.5 text-[11px] font-black transition ${
                       isSpeedBurst
-                        ? 'border-[#FF6B00] bg-[#FF6B00] text-black'
+                        ? 'border-[#39FF14] bg-[#39FF14] text-black'
                         : 'border-white/20 bg-black text-white/55 hover:border-white/45 hover:text-white'
                     }`}
                   >
@@ -908,7 +910,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
               <div className="w-full space-y-2">
                 {arpeggioData && (
                   <div className="space-y-1.5 text-center">
-                    <div className="inline-flex rounded-full border border-[#FF6B00]/45 bg-[#FF6B00]/12 px-3 py-0.5 text-[11px] font-black text-[#FF6B00] tabular-nums">
+                    <div className="inline-flex rounded-full border border-[#39FF14]/45 bg-[#39FF14]/12 px-3 py-0.5 text-[11px] font-black text-[#39FF14] tabular-nums">
                       Formula Gradi: {arpeggioData.pattern.formulaText}
                     </div>
                     <div className="flex flex-wrap items-center justify-center gap-1">
@@ -1006,7 +1008,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
               <button
                 type="button"
                 onClick={startNextAfterRest}
-                className="flex items-center gap-1.5 rounded-full bg-[#FF6B00] px-5 py-2.5 text-xs font-black text-black hover:bg-[#ff7d1f] transition"
+                className="flex items-center gap-1.5 rounded-full neon-cta px-5 py-2.5 text-xs font-black transition"
               >
                 <FastForward className="h-3.5 w-3.5" /> Riprendi
               </button>
@@ -1058,7 +1060,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
             <button
               type="button"
               onClick={handleFinishAndSaveWorkout}
-              className="w-full rounded-xl bg-[#FF6B00] px-5 py-3.5 text-sm font-black text-black hover:bg-[#ff7d1f] transition"
+              className="w-full rounded-xl neon-cta px-5 py-3.5 text-sm font-black transition"
             >
               Fine
             </button>
@@ -1069,7 +1071,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
       {/* 1-CLICK END-OF-SET RATING MODAL */}
       {phase === 'rating' && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/90 backdrop-blur-md p-2 sm:p-4 overscroll-none">
-          <div className="w-full max-w-lg rounded-2xl bg-black border border-white/20 p-4 sm:p-5 shadow-2xl space-y-3">
+          <div className="w-full max-w-lg rounded-2xl chrome-panel p-4 sm:p-5 shadow-2xl space-y-3">
             <div className="flex items-baseline justify-between gap-2">
               <h3 className="text-base sm:text-lg font-black text-white">
                 Com'è andata?
@@ -1095,9 +1097,9 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
                     : '= BPM';
                 const deltaColor =
                   delta > 0
-                    ? 'text-[#A4FF00]'
+                    ? 'text-[#39FF14]'
                     : delta < 0
-                    ? 'text-[#FF6B00]'
+                    ? 'text-[#39FF14]'
                     : 'text-white/45';
 
                 return (

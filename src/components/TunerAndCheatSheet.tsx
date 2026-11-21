@@ -674,21 +674,21 @@ export const TunerAndCheatSheet: React.FC<TunerAndCheatSheetProps> = ({
   return (
     <div className="w-full min-w-0 max-w-full overflow-hidden space-y-4">
       {/* ULTRA-MINIMAL LIVE TUNER + FREE METRONOME */}
-      <section className="relative w-full min-w-0 max-w-full overflow-hidden rounded-3xl bg-black border border-white/15 p-4 sm:p-5 space-y-5">
+      <section className="relative w-full min-w-0 max-w-full overflow-hidden rounded-3xl chrome-card p-4 sm:p-5 space-y-5">
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute -top-20 left-1/2 h-40 w-48 -translate-x-1/2 rounded-full bg-[#FF6B00]/12 blur-3xl"
+          className="pointer-events-none absolute -top-20 left-1/2 h-40 w-48 -translate-x-1/2 rounded-full bg-[#39FF14]/12 blur-3xl"
         />
         {/* Top Row: Tool Switcher (Tuner / Metronomo) + Context Controls */}
         <div className="relative z-10 flex items-center justify-between gap-2">
-          <div className="flex rounded-full bg-black border border-white/15 p-0.5">
+          <div className="flex rounded-full chrome-pill p-0.5">
             <button
               type="button"
               onClick={() => handleSelectToolMode('tuner')}
               className={`rounded-full px-3.5 py-1 text-xs font-bold transition ${
                 toolMode === 'tuner'
-                  ? 'bg-white text-black'
-                  : 'text-white/55 hover:text-white'
+                  ? 'chrome-active'
+                  : 'text-slate-300/65 hover:text-white'
               }`}
             >
               Tuner
@@ -698,8 +698,8 @@ export const TunerAndCheatSheet: React.FC<TunerAndCheatSheetProps> = ({
               onClick={() => handleSelectToolMode('metronome')}
               className={`rounded-full px-3.5 py-1 text-xs font-bold transition ${
                 toolMode === 'metronome'
-                  ? 'bg-white text-black'
-                  : 'text-white/55 hover:text-white'
+                  ? 'chrome-active'
+                  : 'text-slate-300/65 hover:text-white'
               }`}
             >
               Metronomo
@@ -733,8 +733,8 @@ export const TunerAndCheatSheet: React.FC<TunerAndCheatSheetProps> = ({
                   className={`h-2 w-2 rounded-full ${
                     isListening
                       ? inTune
-                        ? 'bg-[#A4FF00]'
-                        : 'bg-[#FF6B00] animate-pulse-fast'
+                        ? 'bg-[#39FF14]'
+                        : 'bg-[#39FF14] animate-pulse-fast'
                       : 'bg-white/25'
                   }`}
                 />
@@ -755,7 +755,7 @@ export const TunerAndCheatSheet: React.FC<TunerAndCheatSheetProps> = ({
               {metronome.visualOnly ? (
                 <VolumeX className="h-3.5 w-3.5" />
               ) : (
-                <Volume2 className="h-3.5 w-3.5 text-[#FF6B00]" />
+                <Volume2 className="h-3.5 w-3.5 text-[#39FF14]" />
               )}
               <span>{metronome.visualOnly ? 'Muto' : 'Audio'}</span>
             </button>
@@ -813,13 +813,13 @@ export const TunerAndCheatSheet: React.FC<TunerAndCheatSheetProps> = ({
                   ? 'h-5'
                   : 'h-3';
 
-                let ledColor = 'bg-white/15';
+                let ledColor = 'bg-slate-200/15';
                 if (isLit) {
                   ledColor = inTune
-                    ? 'bg-[#A4FF00] shadow-[0_0_10px_rgba(164,255,0,0.85)]'
+                    ? 'bg-[#39FF14] shadow-[0_0_12px_rgba(57,255,20,0.9)]'
                     : isCenterZone
-                    ? 'bg-white/60'
-                    : 'bg-[#FF6B00] shadow-[0_0_8px_rgba(255,107,0,0.75)]';
+                    ? 'bg-white/75'
+                    : 'bg-gradient-to-b from-white via-slate-200 to-slate-400 shadow-[0_0_8px_rgba(226,232,240,0.65)]';
                 }
 
                 return (
@@ -837,7 +837,7 @@ export const TunerAndCheatSheet: React.FC<TunerAndCheatSheetProps> = ({
                 <span
                   className={`text-7xl sm:text-8xl font-black tracking-tight tabular-nums leading-none ${
                     inTune
-                      ? 'text-[#A4FF00]'
+                      ? 'text-[#39FF14]'
                       : detected
                       ? 'text-white'
                       : 'text-white/20'
@@ -858,8 +858,8 @@ export const TunerAndCheatSheet: React.FC<TunerAndCheatSheetProps> = ({
                     <span
                       className={`rounded-full border px-3 py-0.5 text-[11px] font-black tracking-wider ${
                         inTune
-                          ? 'border-[#A4FF00]/60 bg-[#A4FF00]/10 text-[#A4FF00]'
-                          : 'border-[#FF6B00]/60 bg-[#FF6B00]/10 text-[#FF6B00]'
+                          ? 'border-[#39FF14]/60 bg-[#39FF14]/12 text-[#39FF14] shadow-[0_0_12px_rgba(57,255,20,0.3)]'
+                          : 'chrome-pill text-slate-100'
                       }`}
                     >
                       {inTune
@@ -874,7 +874,7 @@ export const TunerAndCheatSheet: React.FC<TunerAndCheatSheetProps> = ({
                   <button
                     type="button"
                     onClick={() => startTuner()}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-[#FF6B00]/60 bg-[#FF6B00]/10 px-3.5 py-1.5 text-[11px] font-black text-[#FF6B00] hover:bg-[#FF6B00]/20 transition"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-[#39FF14]/60 bg-[#39FF14]/10 px-3.5 py-1.5 text-[11px] font-black text-[#39FF14] hover:bg-[#39FF14]/20 transition"
                   >
                     <Mic className="h-3.5 w-3.5" />
                     {micBlocked ? 'Consenti Microfono' : 'Attiva Microfono'}
@@ -900,7 +900,7 @@ export const TunerAndCheatSheet: React.FC<TunerAndCheatSheetProps> = ({
                         ? metronome.isGapBar
                           ? 'h-3.5 w-3.5 bg-white/30 scale-110'
                           : isAccent
-                          ? 'h-4 w-4 bg-[#FF6B00] shadow-[0_0_14px_rgba(255,107,0,0.9)] scale-110'
+                          ? 'h-4 w-4 bg-[#39FF14] shadow-[0_0_14px_rgba(57,255,20,0.9)] scale-110'
                           : 'h-3.5 w-3.5 bg-white shadow-[0_0_10px_rgba(255,255,255,0.7)] scale-110'
                         : 'h-2.5 w-2.5 bg-white/15'
                     }`}
@@ -961,7 +961,7 @@ export const TunerAndCheatSheet: React.FC<TunerAndCheatSheetProps> = ({
                   value={metronome.bpm}
                   onChange={(e) => metronome.setBpm(Number(e.target.value))}
                   aria-label="Seleziona BPM"
-                  className="w-full h-1.5 rounded-full appearance-none bg-white/15 accent-[#FF6B00] cursor-pointer"
+                  className="w-full h-1.5 rounded-full appearance-none bg-white/15 accent-[#39FF14] cursor-pointer"
                 />
                 <button
                   type="button"
@@ -980,7 +980,7 @@ export const TunerAndCheatSheet: React.FC<TunerAndCheatSheetProps> = ({
                   className={`inline-flex items-center justify-center gap-2 rounded-full px-7 py-2.5 text-sm font-black tracking-wide active:scale-95 transition ${
                     metronome.isPlaying
                       ? 'bg-white text-black hover:bg-white/90'
-                      : 'bg-[#FF6B00] text-black hover:bg-[#ff7f24]'
+                      : 'bg-[#39FF14] text-black hover:bg-[#5EFF3D]'
                   }`}
                 >
                   {metronome.isPlaying ? (
@@ -1042,7 +1042,7 @@ export const TunerAndCheatSheet: React.FC<TunerAndCheatSheetProps> = ({
                         onClick={() => metronome.setGapClickMode(g.id)}
                         className={`rounded-full border px-2.5 py-1 text-[11px] font-bold transition ${
                           active
-                            ? 'border-[#FF6B00] bg-[#FF6B00]/15 text-[#FF6B00]'
+                            ? 'border-[#39FF14] bg-[#39FF14]/15 text-[#39FF14]'
                             : 'border-white/15 bg-black text-white/55 hover:border-white/40 hover:text-white'
                         }`}
                       >
@@ -1083,16 +1083,16 @@ export const TunerAndCheatSheet: React.FC<TunerAndCheatSheetProps> = ({
       </section>
 
       {/* MINIMAL SCALE & ACCORDI */}
-      <section className="w-full min-w-0 max-w-full overflow-hidden rounded-3xl bg-black border border-white/15 p-4 space-y-3">
+      <section className="w-full min-w-0 max-w-full overflow-hidden rounded-3xl chrome-card p-4 space-y-3">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex rounded-full bg-black border border-white/15 p-0.5">
+          <div className="flex rounded-full chrome-pill p-0.5">
             <button
               type="button"
               onClick={() => setCheatMode('scales')}
               className={`rounded-full px-3.5 py-1 text-xs font-bold transition ${
                 cheatMode === 'scales'
-                  ? 'bg-white text-black'
-                  : 'text-white/55 hover:text-white'
+                  ? 'chrome-active'
+                  : 'text-slate-300/65 hover:text-white'
               }`}
             >
               Scale
@@ -1175,7 +1175,7 @@ export const TunerAndCheatSheet: React.FC<TunerAndCheatSheetProps> = ({
                       type="button"
                       onClick={() => handleStrumChord(chord)}
                       aria-label={`Ascolta ${chord.name}`}
-                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/15 bg-black text-[#FF6B00] hover:border-[#FF6B00] hover:bg-[#FF6B00] hover:text-black transition"
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/15 bg-black text-[#39FF14] hover:border-[#39FF14] hover:bg-[#39FF14] hover:text-black transition"
                     >
                       <Volume2 className="h-3.5 w-3.5" />
                     </button>
@@ -1194,7 +1194,7 @@ export const TunerAndCheatSheet: React.FC<TunerAndCheatSheetProps> = ({
                         textAnchor="middle"
                         fontSize={8.5}
                         fontWeight={800}
-                        fill="#FF6B00"
+                        fill="#39FF14"
                         className="tabular-nums"
                       >
                         {startF}
@@ -1267,7 +1267,7 @@ export const TunerAndCheatSheet: React.FC<TunerAndCheatSheetProps> = ({
                               cy={padT - 8}
                               r={3}
                               fill="none"
-                              stroke="#FF6B00"
+                              stroke="#39FF14"
                               strokeWidth={1.4}
                             />
                           )}
@@ -1280,7 +1280,7 @@ export const TunerAndCheatSheet: React.FC<TunerAndCheatSheetProps> = ({
                                 (fretVal - startF + 0.5) * fretSpacing
                               }
                               r={4.2}
-                              fill="#FF6B00"
+                              fill="#39FF14"
                               stroke="#FFFFFF"
                               strokeWidth={1.2}
                             />

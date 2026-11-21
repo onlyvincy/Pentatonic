@@ -179,24 +179,24 @@ export const ProgramsAndBuilder: React.FC<ProgramsAndBuilderProps> = ({
   const overallMinReached =
     weekly.totalMinSets > 0 && weekly.totalCompletedSets >= weekly.totalMinSets;
   const overallBarColor = overallOptimalReached
-    ? 'bg-[#A4FF00]'
+    ? 'bg-[#39FF14]'
     : overallMinReached
     ? 'bg-white'
-    : 'bg-[#FF6B00]';
+    : 'bg-[#39FF14]';
   const activePathId = resolvePathId(prescription.answers);
 
   return (
     <div className="space-y-8 pb-4">
-      {/* MAIN GOAL: LARGE VERTICAL RECTANGULAR CARD */}
+      {/* MAIN GOAL: LARGE VERTICAL RECTANGULAR CHROME CARD */}
       <section className="pt-1">
-        <div className="relative mx-auto flex aspect-[3/4] w-full max-w-[320px] sm:max-w-[340px] flex-col justify-between overflow-hidden rounded-3xl border border-white/20 bg-black p-6">
+        <div className="relative mx-auto flex aspect-[3/4] w-full max-w-[320px] sm:max-w-[340px] flex-col justify-between overflow-hidden rounded-3xl chrome-card p-6">
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute -top-24 left-1/2 h-48 w-48 -translate-x-1/2 rounded-full bg-[#FF6B00]/15 blur-3xl"
+            className="pointer-events-none absolute -top-24 left-1/2 h-48 w-48 -translate-x-1/2 rounded-full bg-[#39FF14]/15 blur-3xl"
           />
 
           <div className="relative z-10 flex items-center justify-between">
-            <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#FF6B00]">
+            <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#39FF14] drop-shadow-[0_0_8px_rgba(57,255,20,0.45)]">
               Obiettivo
             </span>
             <button
@@ -204,20 +204,20 @@ export const ProgramsAndBuilder: React.FC<ProgramsAndBuilderProps> = ({
               onClick={onOpenDiagnosticQuiz}
               aria-label="Cambia obiettivo"
               title="Cambia obiettivo"
-              className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-black text-white/55 hover:border-white/40 hover:text-white transition"
+              className="flex h-8 w-8 items-center justify-center rounded-full chrome-pill text-slate-300 hover:text-white transition"
             >
               <RotateCcw className="h-3.5 w-3.5" />
             </button>
           </div>
 
           <div className="relative z-10 my-auto flex flex-col items-start gap-4 py-2">
-            <div className="w-full overflow-hidden rounded-2xl border border-white/10 bg-black/80 px-2 py-2">
+            <div className="w-full overflow-hidden rounded-2xl border border-slate-200/15 bg-[#050608]/85 px-2 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]">
               <PathIllustration
                 pathId={activePathId}
                 className="mx-auto h-32 sm:h-36 w-full"
               />
             </div>
-            <h1 className="text-3xl sm:text-[34px] font-black tracking-tight leading-[1.08] text-white">
+            <h1 className="text-3xl sm:text-[34px] font-black tracking-tight leading-[1.08] chrome-text">
               {prescription.profileTitle}
             </h1>
           </div>
@@ -272,10 +272,10 @@ export const ProgramsAndBuilder: React.FC<ProgramsAndBuilderProps> = ({
                   Math.max(8, Math.round((item.weeklyMinSets / optTarget) * 100))
                 );
                 const barColorClass = item.optimalReached
-                  ? 'bg-[#A4FF00]'
+                  ? 'bg-[#39FF14]'
                   : item.minReached
                   ? 'bg-white'
-                  : 'bg-[#FF6B00]';
+                  : 'bg-[#39FF14]';
 
                 return (
                   <button
@@ -327,7 +327,7 @@ export const ProgramsAndBuilder: React.FC<ProgramsAndBuilderProps> = ({
           onClick={() => setShowExerciseModal(true)}
           className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-black px-3.5 py-1.5 text-[11px] font-bold text-white/55 hover:border-white/40 hover:text-white transition"
         >
-          <Plus className="h-3.5 w-3.5 text-[#FF6B00]" />
+          <Plus className="h-3.5 w-3.5 text-[#39FF14]" />
           Aggiungi esercizio
         </button>
       </div>
@@ -357,10 +357,10 @@ export const ProgramsAndBuilder: React.FC<ProgramsAndBuilderProps> = ({
           Math.max(8, Math.round((item.weeklyMinSets / optTarget) * 100))
         );
         const barColorClass = item.optimalReached
-          ? 'bg-[#A4FF00]'
+          ? 'bg-[#39FF14]'
           : item.minReached
           ? 'bg-white'
-          : 'bg-[#FF6B00]';
+          : 'bg-[#39FF14]';
 
         const isArpeggioEx = ex.id === ARPEGGIO_EXERCISE_ID;
         const arpData = isArpeggioEx
@@ -379,7 +379,7 @@ export const ProgramsAndBuilder: React.FC<ProgramsAndBuilderProps> = ({
             >
               <div className="flex items-start justify-between gap-3 border-b border-white/15 pb-3">
                 <div className="min-w-0">
-                  <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#FF6B00]">
+                  <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#39FF14]">
                     {group.title}
                   </div>
                   <h3 className="mt-0.5 text-base sm:text-lg font-black text-white">
@@ -416,13 +416,13 @@ export const ProgramsAndBuilder: React.FC<ProgramsAndBuilderProps> = ({
                       }
                       className={`rounded-full border px-2.5 py-0.5 text-[10px] font-black transition ${
                         exSpeedBurst
-                          ? 'border-[#FF6B00] bg-[#FF6B00] text-black'
+                          ? 'border-[#39FF14] bg-[#39FF14] text-black'
                           : 'border-white/20 bg-black text-white/55 hover:border-white/45 hover:text-white'
                       }`}
                     >
                       ⚡ Burst 1/8→1/16
                     </button>
-                    <div className="text-sm font-black text-[#FF6B00]">
+                    <div className="text-sm font-black text-[#39FF14]">
                       {targetForSelected} BPM
                     </div>
                   </div>
@@ -467,7 +467,7 @@ export const ProgramsAndBuilder: React.FC<ProgramsAndBuilderProps> = ({
                         <span>{vEntry.shortLabel}</span>
                         <span
                           className={
-                            isSelected ? 'text-black/70' : 'text-[#FF6B00]'
+                            isSelected ? 'text-black/70' : 'text-[#39FF14]'
                           }
                         >
                           {vEntry.bpm}
@@ -482,7 +482,7 @@ export const ProgramsAndBuilder: React.FC<ProgramsAndBuilderProps> = ({
               {arpData && (
                 <div className="space-y-2 border-t border-white/10 pt-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="rounded-full border border-[#FF6B00]/50 bg-[#FF6B00]/12 px-2.5 py-0.5 text-[11px] font-black text-[#FF6B00] tabular-nums">
+                    <span className="rounded-full border border-[#39FF14]/50 bg-[#39FF14]/12 px-2.5 py-0.5 text-[11px] font-black text-[#39FF14] tabular-nums">
                       Formula Gradi: {arpData.pattern.formulaText}
                     </span>
                     <span className="text-[11px] font-bold text-white/60">
@@ -535,7 +535,7 @@ export const ProgramsAndBuilder: React.FC<ProgramsAndBuilderProps> = ({
                   setActiveExId(null);
                   onStartSingleExercise(ex, activeVarId);
                 }}
-                className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-[#FF6B00] px-5 py-3 text-sm sm:text-base font-black text-black hover:bg-[#ff7d1f] transition"
+                className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl neon-cta px-5 py-3 text-sm sm:text-base font-black transition"
               >
                 <Play className="h-4 w-4 fill-current" />
                 Allena
@@ -554,7 +554,7 @@ export const ProgramsAndBuilder: React.FC<ProgramsAndBuilderProps> = ({
           <form
             onSubmit={submitNewExercise}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-black border border-white/20 p-5 space-y-4"
+            className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl chrome-panel p-5 space-y-4"
           >
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold text-white">
@@ -637,7 +637,7 @@ export const ProgramsAndBuilder: React.FC<ProgramsAndBuilderProps> = ({
               </button>
               <button
                 type="submit"
-                className="rounded-xl bg-[#FF6B00] px-5 py-2 text-xs font-black text-black hover:bg-[#ff7d1f]"
+                className="rounded-xl bg-[#39FF14] px-5 py-2 text-xs font-black text-black hover:bg-[#5EFF3D]"
               >
                 Salva
               </button>

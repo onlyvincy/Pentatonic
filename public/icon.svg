@@ -1,18 +1,35 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
   <defs>
     <radialGradient id="icon-glow" cx="50%" cy="46%" r="54%">
-      <stop offset="0%" stop-color="#FF6B00" stop-opacity="0.32"/>
-      <stop offset="100%" stop-color="#FF6B00" stop-opacity="0"/>
+      <stop offset="0%" stop-color="#39FF14" stop-opacity="0.34"/>
+      <stop offset="100%" stop-color="#39FF14" stop-opacity="0"/>
     </radialGradient>
+    <linearGradient id="chrome-frame" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="28%" stop-color="#94A3B8"/>
+      <stop offset="52%" stop-color="#F8FAFC"/>
+      <stop offset="78%" stop-color="#475569"/>
+      <stop offset="100%" stop-color="#E2E8F0"/>
+    </linearGradient>
+    <linearGradient id="chrome-string" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#64748B" stop-opacity="0.35"/>
+      <stop offset="50%" stop-color="#F8FAFC" stop-opacity="0.72"/>
+      <stop offset="100%" stop-color="#64748B" stop-opacity="0.35"/>
+    </linearGradient>
+    <linearGradient id="neon-pick" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#8CFF74"/>
+      <stop offset="48%" stop-color="#39FF14"/>
+      <stop offset="100%" stop-color="#19B800"/>
+    </linearGradient>
   </defs>
-  <rect width="128" height="128" rx="28" fill="#060606"/>
+  <rect width="128" height="128" rx="28" fill="#050608"/>
   <circle cx="64" cy="60" r="56" fill="url(#icon-glow)"/>
-  <rect x="3" y="3" width="122" height="122" rx="25" stroke="#FFFFFF" stroke-opacity="0.18" stroke-width="2"/>
-  <line x1="18" y1="42" x2="110" y2="38" stroke="#FFFFFF" stroke-opacity="0.18" stroke-width="1.4"/>
-  <line x1="18" y1="56" x2="110" y2="54" stroke="#FFFFFF" stroke-opacity="0.22" stroke-width="1.6"/>
-  <line x1="18" y1="70" x2="110" y2="70" stroke="#FF6B00" stroke-opacity="0.55" stroke-width="1.8"/>
-  <line x1="18" y1="84" x2="110" y2="86" stroke="#FFFFFF" stroke-opacity="0.18" stroke-width="2"/>
-  <path d="M64 22C86 22 99 36 99 57C99 79 76 100 64 107C52 100 29 79 29 57C29 36 42 22 64 22Z" fill="#FF6B00" stroke="#060606" stroke-width="2.5"/>
-  <path d="M40 60Q52 46 64 60T88 60" stroke="#060606" stroke-width="4.5" stroke-linecap="round" fill="none"/>
-  <circle cx="64" cy="60" r="6" fill="#FFFFFF" stroke="#060606" stroke-width="2.5"/>
+  <rect x="3" y="3" width="122" height="122" rx="25" stroke="url(#chrome-frame)" stroke-opacity="0.78" stroke-width="2.4"/>
+  <line x1="18" y1="42" x2="110" y2="38" stroke="url(#chrome-string)" stroke-width="1.5"/>
+  <line x1="18" y1="56" x2="110" y2="54" stroke="url(#chrome-string)" stroke-width="1.7"/>
+  <line x1="18" y1="70" x2="110" y2="70" stroke="#39FF14" stroke-opacity="0.75" stroke-width="2"/>
+  <line x1="18" y1="84" x2="110" y2="86" stroke="url(#chrome-string)" stroke-width="2.1"/>
+  <path d="M64 22C86 22 99 36 99 57C99 79 76 100 64 107C52 100 29 79 29 57C29 36 42 22 64 22Z" fill="url(#neon-pick)" stroke="url(#chrome-frame)" stroke-width="2.6"/>
+  <path d="M40 60Q52 46 64 60T88 60" stroke="#050608" stroke-width="4.5" stroke-linecap="round" fill="none"/>
+  <circle cx="64" cy="60" r="6" fill="url(#chrome-frame)" stroke="#050608" stroke-width="2.2"/>
 </svg>

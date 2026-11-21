@@ -305,13 +305,13 @@ export function computeNerdTelemetry(
     avgGapDays = Number((totalGap / (uniqueDatesAsc.length - 1)).toFixed(1));
   }
 
-  // 4. RPE 1-5 Histogram (60/30/10 Apple Fitness palette)
+  // 4. RPE 1-5 Histogram (Electric Neon Green + Liquid Chrome scale)
   const rpeMeta: { score: CleanlinessScore; colorClass: string }[] = [
-    { score: 5, colorClass: 'bg-[#A4FF00]' },
-    { score: 4, colorClass: 'bg-[#A4FF00]/70' },
-    { score: 3, colorClass: 'bg-[#FF6B00]' },
-    { score: 2, colorClass: 'bg-[#FF6B00]/55' },
-    { score: 1, colorClass: 'bg-[#8E8E93]' },
+    { score: 5, colorClass: 'bg-[#39FF14] shadow-[0_0_10px_rgba(57,255,20,0.55)]' },
+    { score: 4, colorClass: 'bg-[#39FF14]/70' },
+    { score: 3, colorClass: 'bg-gradient-to-r from-slate-200 via-white to-slate-300' },
+    { score: 2, colorClass: 'bg-slate-400/65' },
+    { score: 1, colorClass: 'bg-slate-600/80' },
   ];
 
   const rpeDistribution: RpeBucket[] = rpeMeta.map(({ score, colorClass }) => {

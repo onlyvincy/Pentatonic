@@ -917,11 +917,11 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                 rx={13}
                 fill={
                   activeBarre.isActive
-                    ? 'rgba(255,107,0,0.22)'
+                    ? 'rgba(57,255,20,0.22)'
                     : 'rgba(255,255,255,0.08)'
                 }
                 stroke={
-                  activeBarre.isActive ? '#FF6B00' : 'rgba(255,255,255,0.32)'
+                  activeBarre.isActive ? '#39FF14' : 'rgba(255,255,255,0.32)'
                 }
                 strokeWidth={activeBarre.isActive ? 2 : 1.2}
                 pointerEvents="none"
@@ -957,7 +957,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                 textAnchor="middle"
                 fontSize={11}
                 fontWeight={700}
-                fill={isStringLit ? '#FF6B00' : 'rgba(255,255,255,0.45)'}
+                fill={isStringLit ? '#39FF14' : 'rgba(255,255,255,0.45)'}
               >
                 {name}
               </text>
@@ -967,7 +967,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                     leftPad + fretCount * fretWidth
                   } ${y}`}
                   fill="none"
-                  stroke="#FF6B00"
+                  stroke="#39FF14"
                   strokeWidth={thickness + 1.2}
                 />
               ) : (
@@ -977,7 +977,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                   x2={leftPad + fretCount * fretWidth}
                   y2={y}
                   stroke={
-                    isStringLit ? 'rgba(255,107,0,0.88)' : 'rgba(255,255,255,0.24)'
+                    isStringLit ? 'rgba(57,255,20,0.88)' : 'rgba(255,255,255,0.24)'
                   }
                   strokeWidth={isStringLit ? thickness + 0.8 : thickness}
                 />
@@ -1087,8 +1087,8 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                             cx={cx}
                             cy={y}
                             r={baseRadius + 3.5}
-                            fill="rgba(255,107,0,0.12)"
-                            stroke="rgba(255,107,0,0.75)"
+                            fill="rgba(57,255,20,0.12)"
+                            stroke="rgba(57,255,20,0.75)"
                             strokeWidth={1.5}
                             strokeDasharray="3 2"
                           />
@@ -1111,8 +1111,8 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                                 width={(litRadius + 5) * 2}
                                 height={(litRadius + 5) * 2}
                                 rx={9}
-                                fill="rgba(255,107,0,0.14)"
-                                stroke="#FF6B00"
+                                fill="rgba(57,255,20,0.14)"
+                                stroke="#39FF14"
                                 strokeWidth={1.8}
                                 strokeDasharray="4 2.5"
                               />
@@ -1124,9 +1124,9 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                                 fill={
                                   isSustainedStep
                                     ? 'rgba(255,255,255,0.16)'
-                                    : 'rgba(255,107,0,0.2)'
+                                    : 'rgba(57,255,20,0.2)'
                                 }
-                                stroke={isSustainedStep ? '#FFFFFF' : '#FF6B00'}
+                                stroke={isSustainedStep ? '#FFFFFF' : '#39FF14'}
                                 strokeWidth={isSustainedStep ? 2 : 1.5}
                                 strokeDasharray={isSustainedStep ? '4 3' : undefined}
                                 filter={`url(#${svgFilterId})`}
@@ -1136,7 +1136,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                               cx={cx}
                               cy={cyNote}
                               r={litRadius}
-                              fill="#FF6B00"
+                              fill="#39FF14"
                               stroke="#FFFFFF"
                               strokeWidth={2}
                             />
@@ -1150,9 +1150,9 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                             fill="#000000"
                             stroke={
                               isLegatoAnchor
-                                ? '#FF6B00'
+                                ? '#39FF14'
                                 : note.isRoot
-                                ? 'rgba(255,107,0,0.88)'
+                                ? 'rgba(57,255,20,0.88)'
                                 : 'rgba(255,255,255,0.68)'
                             }
                             strokeWidth={
@@ -1181,7 +1181,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                                 cyNote - litRadius - 17
                               } L ${cx + 4} ${cyNote - litRadius - 12}`}
                               fill="none"
-                              stroke="#FF6B00"
+                              stroke="#39FF14"
                               strokeWidth={2}
                               strokeLinecap="round"
                               strokeLinejoin="round"
@@ -1191,7 +1191,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                               y={cyNote - litRadius - 8}
                               fontSize={9}
                               fontWeight={900}
-                              fill="#FF6B00"
+                              fill="#39FF14"
                             >
                               {activeBendNote?.isHalf ? '½' : '1'}
                             </text>
@@ -1216,7 +1216,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
               height={16}
               rx={5}
               fill="#000000"
-              stroke="#FF6B00"
+              stroke="#39FF14"
               strokeWidth={1.5}
             />
             <text
@@ -1225,7 +1225,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
               textAnchor="middle"
               fontSize={9}
               fontWeight={900}
-              fill="#FF6B00"
+              fill="#39FF14"
             >
               PM
             </text>
@@ -1299,7 +1299,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                 d={d}
                 pathLength={1}
                 fill="none"
-                stroke="#FF6B00"
+                stroke="#39FF14"
                 strokeWidth={2.8}
                 strokeLinecap="round"
                 filter={`url(#${svgFilterId})`}
@@ -1310,7 +1310,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                 cy={badgeY}
                 r={8}
                 fill="#000000"
-                stroke="#FF6B00"
+                stroke="#39FF14"
                 strokeWidth={1.6}
               />
               <text
@@ -1319,7 +1319,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                 textAnchor="middle"
                 fontSize={9}
                 fontWeight={900}
-                fill="#FF6B00"
+                fill="#39FF14"
               >
                 {badgeChar}
               </text>
@@ -1387,9 +1387,9 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
               key={`${barOffset}-${idx}`}
               className={`min-w-0 flex flex-col items-center justify-center rounded-lg border py-1 text-[10px] font-bold tabular-nums ${
                 isActive
-                  ? 'border-[#FF6B00] bg-[#FF6B00] text-black'
+                  ? 'border-[#39FF14] bg-[#39FF14] text-black'
                   : isArticulatedSlot
-                  ? 'border-[#FF6B00]/35 bg-black text-[#FF6B00]'
+                  ? 'border-[#39FF14]/35 bg-black text-[#39FF14]'
                   : isDownbeat
                   ? 'border-white/15 bg-black text-white/75'
                   : 'border-white/10 bg-black text-white/40'
@@ -1405,7 +1405,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
 
   const speedBurstBadge = speedBurst ? (
     isBurstPhase ? (
-      <span className="rounded-full border border-[#FF6B00] bg-[#FF6B00] px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-black animate-pulse">
+      <span className="rounded-full border border-[#39FF14] bg-[#39FF14] px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-black animate-pulse">
         ⚡ 1/16 · BURST 2x
       </span>
     ) : (
@@ -1436,7 +1436,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
           <div className="mx-auto flex min-h-[26px] max-w-md flex-wrap items-center justify-center gap-2">
             {speedBurstBadge}
             {activeTechniqueLabel && (
-              <span className="rounded-full border border-[#FF6B00]/50 bg-[#FF6B00]/12 px-3 py-0.5 text-[11px] font-black tracking-wide text-[#FF6B00]">
+              <span className="rounded-full border border-[#39FF14]/50 bg-[#39FF14]/12 px-3 py-0.5 text-[11px] font-black tracking-wide text-[#39FF14]">
                 {activeTechniqueLabel}
               </span>
             )}
@@ -1460,7 +1460,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                   className={`h-2.5 w-2.5 rounded-full ${
                     lit
                       ? b === 0
-                        ? 'bg-[#FF6B00] scale-125'
+                        ? 'bg-[#39FF14] scale-125'
                         : 'bg-white scale-110'
                       : 'bg-white/15'
                   }`}
@@ -1471,7 +1471,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
 
           <div className="h-1 w-full overflow-hidden rounded-full bg-white/10">
             <div
-              className="h-full rounded-full bg-[#FF6B00]"
+              className="h-full rounded-full bg-[#39FF14]"
               style={{ width: `${progressPct}%` }}
             />
           </div>
@@ -1482,7 +1482,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
 
   // COMPACT VARIANT (Obiettivi / Playing / Tuner Scales / Custom Builder)
   return (
-    <div className="w-full min-w-0 max-w-full overflow-hidden rounded-2xl bg-black border border-white/15 p-3 space-y-2.5">
+    <div className="w-full min-w-0 max-w-full overflow-hidden rounded-2xl chrome-card p-3 space-y-2.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           {!interactive && !hideDemoButton && effectiveSteps.length > 0 && (
@@ -1502,7 +1502,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                 </>
               ) : (
                 <>
-                  <Play className="h-3 w-3 fill-current text-[#FF6B00]" />
+                  <Play className="h-3 w-3 fill-current text-[#39FF14]" />
                   Demo
                 </>
               )}
@@ -1512,7 +1512,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
           {speedBurstBadge}
 
           {activeTechniqueLabel && effectiveActiveStepIndex !== null ? (
-            <span className="rounded-full border border-[#FF6B00]/50 bg-[#FF6B00]/12 px-2.5 py-0.5 text-[11px] font-black tracking-wide text-[#FF6B00] tabular-nums">
+            <span className="rounded-full border border-[#39FF14]/50 bg-[#39FF14]/12 px-2.5 py-0.5 text-[11px] font-black tracking-wide text-[#39FF14] tabular-nums">
               {activeTechniqueLabel}
             </span>
           ) : (
@@ -1520,7 +1520,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
             activeStep &&
             effectiveActiveStepIndex !== null && (
               <span className="text-[11px] font-bold text-white/85 tabular-nums">
-                <span className="text-[#FF6B00] mr-1">
+                <span className="text-[#39FF14] mr-1">
                   {BAR_8_LABELS[effectiveActiveStepIndex % 8] ??
                     effectiveActiveStepIndex + 1}
                 </span>
