@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Check,
   FastForward,
+  HelpCircle,
   Pause,
   Play,
   RotateCcw,
@@ -109,10 +111,31 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
   const [exerciseIdx, setExerciseIdx] = useState(0);
   const [setNumber, setSetNumber] = useState(1);
   // Full-screen single-focus sequence:
-  // demo (automatic BPM-synced fretboard) -> precount (metronome 4-3-2-1) -> playing (set timer)
+  // demo (2 automatic passes with 2s gap) -> precount (metronome 4-3-2-1) -> playing (set timer)
   const [phase, setPhase] = useState<PlayerPhase>('demo');
   const [demoReplayKey, setDemoReplayKey] = useState(0);
+  const [demoContext, setDemoContext] = useState<'intro' | 'recall'>('intro');
+  const [demoPass, setDemoPass] = useState<1 | 2>(1);
+  const [isDemoBetweenPasses, setIsDemoBetweenPasses] = useState(false);
+  const [recallReturnPhase, setRecallReturnPhase] = useState<'precount' | 'rest'>('precount');
+  const demoBetweenTimerRef = useRef<number | null>(null);
   const [showMetronomeOptions, setShowMetronomeOptions] = useState(false);
+
+  const clearDemoBetweenTimer = useCallback(() => {
+    if (demoBetweenTimerRef.current !== null) {
+      window.clearTimeout(demoBetweenTimerRef.current);
+      demoBetweenTimerRef.current = null;
+    }
+    setIsDemoBetweenPasses(false);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (demoBetweenTimerRef.current !== null) {
+        window.clearTimeout(demoBetweenTimerRef.current);
+      }
+    };
+  }, []);
 
   const currentItem = plan.items[exerciseIdx];
   const currentExercise: Exercise | undefined = currentItem?.exercise;
@@ -305,10 +328,64 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
   }, [exerciseIdx]);
 
   const startPreCountNow = useCallback(() => {
+    clearDemoBetweenTimer();
     unlockSharedAudioContext().catch(() => {});
     setPrecountBeat(4);
     setPhase('precount');
-  }, []);
+  }, [clearDemoBetweenTimer]);
+
+  const handleOpenRecallDemo = useCallback(
+    (returnTo: 'precount' | 'rest' = 'precount') => {
+      clearDemoBetweenTimer();
+      metronome.stop();
+      setIsSetPaused(false);
+      setRecallReturnPhase(returnTo);
+      setDemoContext('recall');
+      setDemoPass(1);
+      setDemoReplayKey((k) => k + 1);
+      setPhase('demo');
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [clearDemoBetweenTimer]
+  );
+
+  const handleRecallUnderstood = useCallback(() => {
+    clearDemoBetweenTimer();
+    setDemoContext('intro');
+    if (recallReturnPhase === 'rest') {
+      setPhase('rest');
+    } else {
+      startPreCountNow();
+    }
+  }, [clearDemoBetweenTimer, recallReturnPhase, startPreCountNow]);
+
+  const handleDemoPassComplete = useCallback(() => {
+    clearDemoBetweenTimer();
+    if (demoContext === 'recall') {
+      // In recall mode, gently pause 2s and replay until the user clicks "Ok, ho capito"
+      setIsDemoBetweenPasses(true);
+      demoBetweenTimerRef.current = window.setTimeout(() => {
+        demoBetweenTimerRef.current = null;
+        setIsDemoBetweenPasses(false);
+        setDemoReplayKey((k) => k + 1);
+      }, 2000);
+      return;
+    }
+
+    if (demoPass === 1) {
+      // Pass 1 done (understand) -> wait 2 seconds -> Pass 2 (play slowly along)
+      setIsDemoBetweenPasses(true);
+      demoBetweenTimerRef.current = window.setTimeout(() => {
+        demoBetweenTimerRef.current = null;
+        setIsDemoBetweenPasses(false);
+        setDemoPass(2);
+        setDemoReplayKey((k) => k + 1);
+      }, 2000);
+    } else {
+      // Pass 2 done -> start precount & workout timer
+      startPreCountNow();
+    }
+  }, [clearDemoBetweenTimer, demoContext, demoPass, startPreCountNow]);
 
   const startPlayingNow = useCallback(() => {
     unlockSharedAudioContext().catch(() => {});
@@ -380,8 +457,11 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
   }, [phase]);
 
   const startNextAfterRest = () => {
+    clearDemoBetweenTimer();
     setSetRemainingSec(currentItem?.durationSec ?? 60);
     if (setNumber === 1) {
+      setDemoContext('intro');
+      setDemoPass(1);
       setDemoReplayKey((k) => k + 1);
       setPhase('demo');
     } else {
@@ -703,6 +783,31 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
               </div>
             )}
 
+            {/* Demo Pass / Recall Guidance Pill */}
+            <div className="flex items-center justify-center">
+              {demoContext === 'recall' ? (
+                <span className="inline-flex items-center gap-2 rounded-full border border-[#39FF14]/45 bg-[#39FF14]/10 px-3.5 py-1 text-xs font-bold text-[#39FF14]">
+                  {isDemoBetweenPasses
+                    ? 'Riparte tra 2s · Premi "Ok, ho capito" quando sei pronto'
+                    : 'Ripasso · Segui lentamente la demo'}
+                </span>
+              ) : isDemoBetweenPasses ? (
+                <span className="inline-flex items-center gap-2 rounded-full border border-[#39FF14]/50 bg-[#39FF14]/12 px-3.5 py-1 text-xs font-bold text-[#39FF14] animate-pulse-fast">
+                  Tra 2s si ripete · Preparati a eseguirlo lentamente
+                </span>
+              ) : demoPass === 1 ? (
+                <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-black px-3.5 py-1 text-xs font-bold text-white/85">
+                  <span className="text-[#39FF14] font-black tabular-nums">1/2</span>
+                  Guarda e capisci l&apos;esercizio
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-2 rounded-full border border-[#39FF14]/50 bg-[#39FF14]/12 px-3.5 py-1 text-xs font-bold text-[#39FF14]">
+                  <span className="font-black tabular-nums">2/2</span>
+                  Ora eseguilo lentamente insieme alla demo
+                </span>
+              )}
+            </div>
+
             <FretboardViewer
               notes={effectiveFretboardNotes}
               demoSequence={effectiveDemoSequence}
@@ -713,26 +818,41 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
               speedBurst={isSpeedBurst}
               autoPlayDemo
               replayKey={demoReplayKey}
-              onDemoComplete={startPreCountNow}
+              onDemoComplete={handleDemoPassComplete}
             />
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center justify-center gap-3">
               <button
                 type="button"
-                onClick={() => setDemoReplayKey((k) => k + 1)}
-                className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-black px-4 py-2 text-xs font-bold text-white/70 hover:text-white hover:border-white/40 transition"
+                onClick={() => {
+                  clearDemoBetweenTimer();
+                  if (demoContext === 'intro') setDemoPass(1);
+                  setDemoReplayKey((k) => k + 1);
+                }}
+                className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-black px-4 py-2 text-xs font-bold text-white/75 hover:text-white hover:border-white/40 transition"
               >
                 <RotateCcw className="h-3.5 w-3.5" />
                 Rivedi
               </button>
-              <button
-                type="button"
-                onClick={startPreCountNow}
-                className="inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-xs font-black text-black hover:bg-white/90 transition"
-              >
-                <FastForward className="h-3.5 w-3.5" />
-                Salta
-              </button>
+              {demoContext === 'recall' ? (
+                <button
+                  type="button"
+                  onClick={handleRecallUnderstood}
+                  className="inline-flex items-center gap-1.5 rounded-full neon-cta px-5 py-2 text-xs font-black transition"
+                >
+                  <Check className="h-3.5 w-3.5 stroke-[3]" />
+                  Ok, ho capito
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={startPreCountNow}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-xs font-black text-black hover:bg-white/90 transition"
+                >
+                  <FastForward className="h-3.5 w-3.5" />
+                  Salta
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -750,13 +870,23 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={skipPreCountNow}
-              className="rounded-full border border-white/15 bg-black px-5 py-2 text-xs font-bold text-white/60 hover:text-white hover:border-white/40 transition"
-            >
-              Salta
-            </button>
+            <div className="flex flex-wrap items-center justify-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => handleOpenRecallDemo('precount')}
+                className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-black px-4 py-2 text-xs font-bold text-white/80 hover:text-white hover:border-white/45 transition"
+              >
+                <HelpCircle className="h-3.5 w-3.5 text-[#39FF14]" />
+                Non mi ricordo l&apos;esercizio
+              </button>
+              <button
+                type="button"
+                onClick={skipPreCountNow}
+                className="rounded-full border border-white/15 bg-black px-5 py-2 text-xs font-bold text-white/60 hover:text-white hover:border-white/40 transition"
+              >
+                Salta
+              </button>
+            </div>
           </div>
         )}
 
@@ -952,38 +1082,49 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
               </div>
             </div>
 
-            {/* Minimal Bottom Actions */}
-            <div className="grid grid-cols-2 gap-2.5 pt-2">
+            {/* Minimal Bottom Actions + Always-Ready Recall Tutorial Button */}
+            <div className="space-y-2 pt-2">
               <button
                 type="button"
-                onClick={() => {
-                  setIsSetPaused((p) => {
-                    const next = !p;
-                    if (next) metronome.stop();
-                    else metronome.start();
-                    return next;
-                  });
-                }}
-                className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-black border border-white/20 px-4 py-2.5 text-xs sm:text-sm font-bold text-white hover:border-white/50 transition"
+                onClick={() => handleOpenRecallDemo('precount')}
+                className="flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-xl border border-white/15 bg-black px-4 py-2 text-xs font-bold text-white/80 hover:text-white hover:border-[#39FF14]/50 transition"
               >
-                {isSetPaused ? (
-                  <>
-                    <Play className="h-3.5 w-3.5" /> Riprendi
-                  </>
-                ) : (
-                  <>
-                    <Pause className="h-3.5 w-3.5" /> Pausa
-                  </>
-                )}
+                <HelpCircle className="h-3.5 w-3.5 text-[#39FF14]" />
+                Non mi ricordo l&apos;esercizio
               </button>
-              <button
-                type="button"
-                onClick={finishActiveSet}
-                className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-white px-4 py-2.5 text-xs sm:text-sm font-black text-black hover:bg-white/90 transition"
-              >
-                <Square className="h-3.5 w-3.5 fill-current" />
-                Ho Finito
-              </button>
+
+              <div className="grid grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSetPaused((p) => {
+                      const next = !p;
+                      if (next) metronome.stop();
+                      else metronome.start();
+                      return next;
+                    });
+                  }}
+                  className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-black border border-white/20 px-4 py-2.5 text-xs sm:text-sm font-bold text-white hover:border-white/50 transition"
+                >
+                  {isSetPaused ? (
+                    <>
+                      <Play className="h-3.5 w-3.5" /> Riprendi
+                    </>
+                  ) : (
+                    <>
+                      <Pause className="h-3.5 w-3.5" /> Pausa
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={finishActiveSet}
+                  className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-white px-4 py-2.5 text-xs sm:text-sm font-black text-black hover:bg-white/90 transition"
+                >
+                  <Square className="h-3.5 w-3.5 fill-current" />
+                  Ho Finito
+                </button>
+              </div>
             </div>
           </main>
         )}
@@ -1013,6 +1154,14 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
                 <FastForward className="h-3.5 w-3.5" /> Riprendi
               </button>
             </div>
+            <button
+              type="button"
+              onClick={() => handleOpenRecallDemo('rest')}
+              className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-black px-4 py-2 text-xs font-bold text-white/75 hover:text-white hover:border-[#39FF14]/50 transition"
+            >
+              <HelpCircle className="h-3.5 w-3.5 text-[#39FF14]" />
+              Non mi ricordo l&apos;esercizio
+            </button>
           </div>
         )}
 
