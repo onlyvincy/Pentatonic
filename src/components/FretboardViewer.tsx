@@ -322,7 +322,12 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
             lastTick16 = tick16;
             const tickInCycle = tick16 % cycleTicks;
             setInternalBeatIdx(Math.floor(tick16 / 4) % 4);
-            if (mode === 'slow-intro' && !muteAudio && tick16 % 4 === 0) {
+            const isBurstNow = tickInCycle >= phase1Ticks;
+            if (
+              mode === 'slow-intro' &&
+              !muteAudio &&
+              (isBurstNow ? tick16 % 2 === 0 : tick16 % 4 === 0)
+            ) {
               playSoftMetronomeTick(tick16 % 16 === 0, metronomeSound);
             }
 

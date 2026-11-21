@@ -14,6 +14,7 @@ interface UseMetronomeOptions {
   initialSound?: MetronomeSoundId;
   visualOnly?: boolean;
   speedBurst?: boolean;
+  initialBurstCycleSteps?: number;
 }
 
 export interface MetronomeState {
@@ -102,6 +103,9 @@ export function useMetronome(options: UseMetronomeOptions = {}) {
   const soundIdRef = useRef(soundId);
   const visualOnlyRef = useRef(visualOnly);
   const speedBurstRef = useRef(speedBurst);
+  const burstCycleStepsRef = useRef<number>(
+    Math.max(1, options.initialBurstCycleSteps ?? 8)
+  );
 
   useEffect(() => {
     gapRef.current = gapClickMode;
@@ -166,6 +170,10 @@ export function useMetronome(options: UseMetronomeOptions = {}) {
     [rebaseClockAnchor]
   );
 
+  const setBurstCycleSteps = useCallback((stepsCount: number) => {
+    burstCycleStepsRef.current = Math.max(1, Math.round(stepsCount));
+  }, []);
+
   const triggerSound = useCallback(
     (time: number, kind: MetronomeClickKind): number => {
       const ctx = getSharedAudioContext();
@@ -216,13 +224,28 @@ export function useMetronome(options: UseMetronomeOptions = {}) {
       }
 
       const mutedByGap = barGapMapRef.current.get(barNum) ?? false;
-      const shouldTriggerAudioClick =
-        !speedBurstRef.current ||
-        (subRef.current === '1/4'
-          ? stepInBar % 4 === 0
-          : subRef.current === '1/8'
+
+      let isInSpeedBurstPhase = false;
+      if (speedBurstRef.current) {
+        const totalSteps = Math.max(1, burstCycleStepsRef.current);
+        const phase1Ticks = 2 * totalSteps;
+        const phase2Ticks = Math.max(16, totalSteps);
+        const cycleTicks = phase1Ticks + phase2Ticks;
+        const tickInCycle = ((step % cycleTicks) + cycleTicks) % cycleTicks;
+        isInSpeedBurstPhase = tickInCycle >= phase1Ticks;
+      }
+
+      const shouldTriggerAudioClick = !speedBurstRef.current
+        ? true
+        : isInSpeedBurstPhase
+        ? // 2x double-speed audible click during burst phase
+          subRef.current === '1/4'
           ? stepInBar % 2 === 0
-          : true);
+          : true
+        : // 1x normal speed during non-burst phase
+          subRef.current === '1/4'
+          ? stepInBar % 4 === 0
+          : stepInBar % 2 === 0;
       let scheduledTime = time;
 
       if (!visualOnlyRef.current && !mutedByGap && shouldTriggerAudioClick) {
@@ -235,7 +258,7 @@ export function useMetronome(options: UseMetronomeOptions = {}) {
         const kind: MetronomeClickKind =
           beatNumber === 1 && isQuarterBeat
             ? 'accent'
-            : isQuarterBeat
+            : isQuarterBeat || (isInSpeedBurstPhase && stepInBar % 2 === 0)
             ? 'beat'
             : 'sub';
 
@@ -477,6 +500,7 @@ export function useMetronome(options: UseMetronomeOptions = {}) {
     setSoundId,
     setVisualOnly,
     setSpeedBurst,
+    setBurstCycleSteps,
     start,
     stop,
     toggle,

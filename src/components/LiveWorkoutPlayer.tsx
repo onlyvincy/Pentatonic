@@ -258,6 +258,13 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
   const [sessionSetEntries, setSessionSetEntries] = useState<SessionSetEntry[]>([]);
   const sessionStartRef = useRef<number>(Date.now());
 
+  const effectiveStepCount = useMemo(() => {
+    if (effectiveDemoSequence && effectiveDemoSequence.length > 0) {
+      return effectiveDemoSequence.length;
+    }
+    return Math.max(1, effectiveFretboardNotes.length);
+  }, [effectiveDemoSequence, effectiveFretboardNotes]);
+
   const metronome = useMetronome({
     initialBpm: initialFirstBpm,
     initialSubdivision: currentExercise?.subdivision ?? '1/8',
@@ -265,7 +272,13 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     initialSound: initialMetronomeSound,
     visualOnly: initialVisualOnly,
     speedBurst: isSpeedBurst,
+    initialBurstCycleSteps: effectiveStepCount,
   });
+
+  useEffect(() => {
+    metronome.setBurstCycleSteps(effectiveStepCount);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveStepCount]);
 
   const handleToggleSpeedBurst = () => {
     setIsSpeedBurst((prev) => {
