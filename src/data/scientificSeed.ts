@@ -757,8 +757,8 @@ export const SEED_EXERCISES: Exercise[] = [
         demoSequence: [
           { notes: [{ string: 2, fret: 10, finger: '3', isRoot: true, label: 'R' }], technique: 'Plettrata' },
           { notes: [{ string: 2, fret: 8, finger: '1', label: 'b7' }], technique: 'Plettrata' },
-          { notes: [{ string: 3, fret: 9, finger: '3', label: '5' }], technique: 'Slide ↓' },
-          { notes: [{ string: 3, fret: 7, finger: '1', label: '4' }], technique: 'Plettrata' },
+          { notes: [{ string: 3, fret: 9, finger: '3', label: '5' }], technique: 'Plettrata' },
+          { notes: [{ string: 3, fret: 7, finger: '1', label: '4' }], technique: 'Slide ↓' },
           { notes: [{ string: 4, fret: 7, finger: '3', isRoot: true, label: 'R' }], technique: 'Plettrata' },
           { notes: [{ string: 4, fret: 5, finger: '1', label: 'b7' }], technique: 'Plettrata' },
           { notes: [{ string: 5, fret: 7, finger: '3', isRoot: true, label: '5' }], technique: 'Target' },

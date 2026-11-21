@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Play, Plus, RotateCcw, X } from 'lucide-react';
+import { BookOpen, Play, Plus, RotateCcw, X } from 'lucide-react';
 import {
   Exercise,
   ExerciseCategory,
@@ -26,6 +26,11 @@ import {
 } from '../utils/arpeggioEngine';
 import { FretboardViewer } from './FretboardViewer';
 import { PathIllustration } from './PathIllustrations';
+import { ExerciseFamilyBriefingModal } from './ExerciseFamilyBriefingModal';
+import {
+  getExerciseFamilyBriefing,
+  getFamilyBriefingSrsStatus,
+} from '../utils/spacedRepetitionCoach';
 
 interface ProgramsAndBuilderProps {
   exercises: Exercise[];
@@ -58,6 +63,9 @@ export const ProgramsAndBuilder: React.FC<ProgramsAndBuilderProps> = ({
 }) => {
   const [showExerciseModal, setShowExerciseModal] = useState(false);
   const [activeExId, setActiveExId] = useState<string | null>(null);
+  const [showBriefingForExId, setShowBriefingForExId] = useState<string | null>(
+    null
+  );
   const [selectedVariantByEx, setSelectedVariantByEx] = useState<
     Record<string, string>
   >({});
@@ -528,6 +536,16 @@ export const ProgramsAndBuilder: React.FC<ProgramsAndBuilderProps> = ({
                 variant="compact"
               />
 
+              {/* Why + Technique & Animated Hands Trigger */}
+              <button
+                type="button"
+                onClick={() => setShowBriefingForExId(ex.id)}
+                className="flex min-h-[42px] w-full items-center justify-center gap-2 rounded-xl border border-white/15 bg-black px-4 py-2 text-xs font-bold text-white/85 hover:border-[#39FF14]/55 hover:text-[#39FF14] transition"
+              >
+                <BookOpen className="h-3.5 w-3.5 text-[#39FF14]" />
+                Perché &amp; Tecnica (Animazione Mani)
+              </button>
+
               {/* Start Single Exercise */}
               <button
                 type="button"
@@ -541,6 +559,17 @@ export const ProgramsAndBuilder: React.FC<ProgramsAndBuilderProps> = ({
                 Allena
               </button>
             </div>
+
+            {showBriefingForExId === ex.id && (
+              <ExerciseFamilyBriefingModal
+                isOpen
+                briefing={getExerciseFamilyBriefing(ex, selectedVariant)}
+                srsStatus={getFamilyBriefingSrsStatus(ex.id)}
+                manualPreview
+                onConfirm={() => setShowBriefingForExId(null)}
+                onClose={() => setShowBriefingForExId(null)}
+              />
+            )}
           </div>
         );
       })()}

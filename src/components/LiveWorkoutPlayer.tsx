@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  BookOpen,
   Check,
   FastForward,
   HelpCircle,
@@ -50,6 +51,13 @@ import {
   pickRecommendedProgression,
 } from '../utils/arpeggioEngine';
 import { FretboardViewer } from './FretboardViewer';
+import { ExerciseFamilyBriefingModal } from './ExerciseFamilyBriefingModal';
+import {
+  FamilyBriefingSrsStatus,
+  getExerciseFamilyBriefing,
+  getFamilyBriefingSrsStatus,
+  markFamilyBriefingSeen,
+} from '../utils/spacedRepetitionCoach';
 
 type SessionBpmUpdateMap = Record<
   string,
@@ -137,6 +145,26 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
   const [recallReturnPhase, setRecallReturnPhase] = useState<'precount' | 'rest'>('precount');
   const demoBetweenTimerRef = useRef<number | null>(null);
   const [showMetronomeOptions, setShowMetronomeOptions] = useState(false);
+  const [showFamilyBriefing, setShowFamilyBriefing] = useState<boolean>(() => {
+    const firstEx = plan.items[0]?.exercise;
+    return firstEx ? getFamilyBriefingSrsStatus(firstEx.id).isDue : false;
+  });
+  const [familyBriefingManualMode, setFamilyBriefingManualMode] =
+    useState(false);
+  const [currentSrsStatus, setCurrentSrsStatus] =
+    useState<FamilyBriefingSrsStatus>(() => {
+      const firstEx = plan.items[0]?.exercise;
+      return firstEx
+        ? getFamilyBriefingSrsStatus(firstEx.id)
+        : {
+            isDue: false,
+            isFirstTime: false,
+            exposures: 0,
+            nextIntervalDays: 1,
+            record: null,
+          };
+    });
+  const checkedSrsExerciseIdxRef = useRef<number>(0);
   const [variantSetsInSession, setVariantSetsInSession] = useState(0);
   const [variantCleanNonBurstInSession, setVariantCleanNonBurstInSession] =
     useState(0);
@@ -228,6 +256,11 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     arpeggioData?.demoSequence ??
     activeVariant?.demoSequence ??
     currentExercise?.demoSequence;
+
+  const familyBriefing = useMemo(() => {
+    if (!currentExercise) return null;
+    return getExerciseFamilyBriefing(currentExercise, activeVariant);
+  }, [currentExercise, activeVariant]);
 
   const resolveVariantBpm = useCallback(
     (ex: Exercise, varId: string | undefined, fallbackBpm: number): number => {
@@ -382,6 +415,57 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     setRestRemainingSec(currentItem.restSec);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [exerciseIdx]);
+
+  useEffect(() => {
+    if (!currentExercise) return;
+    if (
+      phase === 'demo' &&
+      demoContext === 'intro' &&
+      checkedSrsExerciseIdxRef.current !== exerciseIdx
+    ) {
+      checkedSrsExerciseIdxRef.current = exerciseIdx;
+      const srs = getFamilyBriefingSrsStatus(currentExercise.id);
+      setCurrentSrsStatus(srs);
+      if (srs.isDue) {
+        clearDemoBetweenTimer();
+        setFamilyBriefingManualMode(false);
+        setShowFamilyBriefing(true);
+      }
+    }
+  }, [phase, demoContext, exerciseIdx, currentExercise, clearDemoBetweenTimer]);
+
+  const handleConfirmFamilyBriefing = useCallback(() => {
+    if (currentExercise && !familyBriefingManualMode) {
+      markFamilyBriefingSeen(currentExercise.id);
+      setCurrentSrsStatus(getFamilyBriefingSrsStatus(currentExercise.id));
+    }
+    setShowFamilyBriefing(false);
+    const wasManual = familyBriefingManualMode;
+    setFamilyBriefingManualMode(false);
+    if (!wasManual || phase === 'demo') {
+      clearDemoBetweenTimer();
+      setDemoPass(1);
+      setDemoReplayKey((k) => k + 1);
+    }
+  }, [
+    currentExercise,
+    familyBriefingManualMode,
+    phase,
+    clearDemoBetweenTimer,
+  ]);
+
+  const handleOpenManualFamilyBriefing = useCallback(() => {
+    if (!currentExercise) return;
+    clearDemoBetweenTimer();
+    if (phase === 'playing') {
+      setIsSetPaused(true);
+      metronome.stop();
+    }
+    setCurrentSrsStatus(getFamilyBriefingSrsStatus(currentExercise.id));
+    setFamilyBriefingManualMode(true);
+    setShowFamilyBriefing(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentExercise, phase, clearDemoBetweenTimer]);
 
   const startPreCountNow = useCallback(() => {
     clearDemoBetweenTimer();
@@ -987,6 +1071,16 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={handleOpenManualFamilyBriefing}
+              aria-label="Perché e tecnica dell'esercizio"
+              title="Perché e tecnica"
+              className="flex h-8 items-center gap-1 rounded-full border border-white/15 bg-black px-2.5 text-[11px] font-bold text-white/75 hover:border-[#39FF14]/50 hover:text-[#39FF14] transition"
+            >
+              <BookOpen className="h-3.5 w-3.5 text-[#39FF14]" />
+              <span className="hidden sm:inline">Perché &amp; Tecnica</span>
+            </button>
             {(phase === 'precount' || phase === 'playing') && (
               <button
                 type="button"
@@ -1140,7 +1234,8 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
               metronomeSound={metronome.soundId}
               bpm={metronome.bpm}
               speedBurst={isSpeedBurst}
-              autoPlayDemo
+              autoPlayDemo={!showFamilyBriefing}
+              forceStopDemo={showFamilyBriefing}
               replayKey={demoReplayKey}
               onDemoComplete={handleDemoPassComplete}
             />
@@ -1658,6 +1753,20 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
             </button>
           </div>
         </div>
+      )}
+
+      {familyBriefing && (
+        <ExerciseFamilyBriefingModal
+          isOpen={showFamilyBriefing}
+          briefing={familyBriefing}
+          srsStatus={currentSrsStatus}
+          manualPreview={familyBriefingManualMode}
+          onConfirm={handleConfirmFamilyBriefing}
+          onClose={() => {
+            setShowFamilyBriefing(false);
+            setFamilyBriefingManualMode(false);
+          }}
+        />
       )}
     </div>
   );

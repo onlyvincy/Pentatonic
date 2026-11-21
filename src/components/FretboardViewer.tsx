@@ -73,7 +73,9 @@ function getStepArticulation(step: DemoStep | null | undefined): StepArticulatio
   if (step.muted || (step.notes.length === 0 && !step.sustain)) return 'muted';
   const tech = (step.technique || '').toLowerCase();
   if (tech.includes('bend')) return 'bend';
-  if (tech.includes('palm') || tech.includes('p.m.')) return 'palmmute';
+  if (tech.includes('palm') || tech.includes('p.m.') || tech.includes('chug')) {
+    return 'palmmute';
+  }
   if (tech.includes('hammer')) return 'hammer';
   if (tech.includes('pull')) return 'pull';
   if (tech.includes('slide')) return 'slide';
@@ -649,24 +651,55 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
       toFret: number;
     }[] = [];
 
-    for (let i = 1; i < effectiveSteps.length; i++) {
-      const art = getStepArticulation(effectiveSteps[i]);
+    for (let i = 0; i < effectiveSteps.length; i++) {
+      const currStep = effectiveSteps[i];
+      const art = getStepArticulation(currStep);
       if (art !== 'hammer' && art !== 'pull' && art !== 'slide') continue;
-      const prevNote = effectiveSteps[i - 1]?.notes[0];
-      const currNote = effectiveSteps[i]?.notes[0];
-      if (
-        prevNote &&
-        currNote &&
-        prevNote.string === currNote.string &&
-        prevNote.fret !== currNote.fret
-      ) {
-        conns.push({
-          stepIndex: i,
-          kind: art,
-          string: currNote.string,
-          fromFret: prevNote.fret,
-          toFret: currNote.fret,
-        });
+      if (!currStep.notes || currStep.notes.length === 0) continue;
+
+      let prevStep: DemoStep | null = null;
+      for (let p = i - 1; p >= 0; p--) {
+        const cand = effectiveSteps[p];
+        if (cand && !cand.muted && cand.notes.length > 0) {
+          prevStep = cand;
+          break;
+        }
+      }
+
+      let matchedAny = false;
+      for (const currNote of currStep.notes) {
+        const prevNote = prevStep?.notes.find(
+          (pn) => pn.string === currNote.string && pn.fret !== currNote.fret
+        );
+        if (prevNote) {
+          matchedAny = true;
+          conns.push({
+            stepIndex: i,
+            kind: art,
+            string: currNote.string,
+            fromFret: prevNote.fret,
+            toFret: currNote.fret,
+          });
+        }
+      }
+
+      // Synthesize a grace-note entry slide when a slide starts on a new string
+      if (!matchedAny && art === 'slide') {
+        const leadNote = currStep.notes[0];
+        const tech = (currStep.technique || '').toLowerCase();
+        const isDown = tech.includes('↓') || tech.includes('down');
+        const synthFrom = isDown
+          ? leadNote.fret + 2
+          : Math.max(0, leadNote.fret - 2);
+        if (synthFrom !== leadNote.fret) {
+          conns.push({
+            stepIndex: i,
+            kind: 'slide',
+            string: leadNote.string,
+            fromFret: synthFrom,
+            toFret: leadNote.fret,
+          });
+        }
       }
     }
     return conns;
@@ -682,18 +715,105 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
     });
   }, [legatoConnections]);
 
-  const activeLegatoConn = useMemo(
+  const activeLegatoConns = useMemo(
     () =>
       effectiveActiveStepIndex !== null
-        ? legatoConnections.find((c) => c.stepIndex === effectiveActiveStepIndex) ??
-          null
-        : null,
+        ? legatoConnections.filter((c) => c.stepIndex === effectiveActiveStepIndex)
+        : [],
     [legatoConnections, effectiveActiveStepIndex]
   );
 
-  const legatoAnchorKey = activeLegatoConn
-    ? `${activeLegatoConn.string}-${activeLegatoConn.fromFret}`
-    : null;
+  const legatoAnchorKeys = useMemo(() => {
+    const set = new Set<string>();
+    activeLegatoConns.forEach((c) => set.add(`${c.string}-${c.fromFret}`));
+    return set;
+  }, [activeLegatoConns]);
+
+  const activeSlideTargetMap = useMemo(() => {
+    const map = new Map<string, number>();
+    activeLegatoConns.forEach((c) => {
+      if (c.kind === 'slide') {
+        map.set(`${c.string}-${c.toFret}`, c.fromFret);
+      }
+    });
+    return map;
+  }, [activeLegatoConns]);
+
+  const hasStoppataOrPalm = useMemo(
+    () =>
+      effectiveSteps.some((s) => {
+        const a = getStepArticulation(s);
+        return a === 'muted' || a === 'palmmute';
+      }),
+    [effectiveSteps]
+  );
+
+  const mutedTarget = useMemo(() => {
+    if (
+      activeArticulation !== 'muted' ||
+      effectiveActiveStepIndex === null ||
+      !activeStep
+    ) {
+      return null;
+    }
+
+    let refNotes: FretNote[] = [];
+    if (activeStep.notes.length > 0) {
+      refNotes = activeStep.notes;
+    } else {
+      for (let p = effectiveActiveStepIndex - 1; p >= 0; p--) {
+        const cand = effectiveSteps[p];
+        if (cand && !cand.muted && cand.notes.length > 0) {
+          refNotes = cand.notes;
+          break;
+        }
+      }
+      if (refNotes.length === 0) {
+        for (let p = effectiveActiveStepIndex + 1; p < effectiveSteps.length; p++) {
+          const cand = effectiveSteps[p];
+          if (cand && !cand.muted && cand.notes.length > 0) {
+            refNotes = cand.notes;
+            break;
+          }
+        }
+      }
+      if (refNotes.length === 0) {
+        refNotes = notes;
+      }
+    }
+
+    const tech = (activeStep.technique || '').toLowerCase();
+    const isSilenceGate =
+      Boolean(activeStep.sustain) ||
+      tech.includes('pausa') ||
+      tech.includes('silenzio');
+    const isGhost = tech.includes('ghost');
+
+    const strings = Array.from(
+      new Set(refNotes.map((n) => n.string))
+    ).sort((a, b) => a - b) as (1 | 2 | 3 | 4 | 5 | 6)[];
+
+    const fretted = refNotes.filter((n) => n.fret > 0);
+    const rawFret =
+      fretted.length > 0
+        ? fretted[0].fret
+        : refNotes.length > 0
+        ? refNotes[0].fret
+        : 5;
+
+    return {
+      strings: strings.length > 0 ? strings : ([4, 3, 2] as (1 | 2 | 3 | 4 | 5 | 6)[]),
+      rawFret,
+      isSilenceGate,
+      isGhost,
+    };
+  }, [
+    activeArticulation,
+    effectiveActiveStepIndex,
+    activeStep,
+    effectiveSteps,
+    notes,
+  ]);
 
   const previewChordKeys = useMemo(() => {
     if (!isChordPattern || effectiveSteps.length === 0) return null;
@@ -746,7 +866,10 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
   const leftPad = 28;
   const rightPad = 12;
   const topPad =
-    !interactive && (legatoConnections.length > 0 || hasBendSteps) ? 36 : 22;
+    !interactive &&
+    (legatoConnections.length > 0 || hasBendSteps || hasStoppataOrPalm)
+      ? 36
+      : 22;
   const bottomPad = 28;
   const fretWidth = interactive
     ? 44
@@ -939,6 +1062,10 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
           const stringNum = (idx + 1) as 1 | 2 | 3 | 4 | 5 | 6;
           const y = topPad + idx * stringGap;
           const thickness = 0.85 + idx * 0.28;
+          const isMutedDampedString =
+            !interactive &&
+            mutedTarget !== null &&
+            mutedTarget.strings.includes(stringNum);
           const isStringLit = activeStringNumbers.has(stringNum);
           const isBentString =
             !interactive &&
@@ -954,6 +1081,12 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
           const bendLift =
             isBentString && activeBendNote ? (activeBendNote.isHalf ? 12 : 20) : 0;
 
+          const palmNoteOnString =
+            !interactive && activeArticulation === 'palmmute'
+              ? effectiveActiveNotes.find((n) => n.string === stringNum)
+              : undefined;
+          const damperStartX = leftPad + fretCount * fretWidth - 24;
+
           return (
             <g key={`${idx}-${name}`}>
               <text
@@ -962,7 +1095,15 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                 textAnchor="middle"
                 fontSize={11}
                 fontWeight={700}
-                fill={isStringLit ? '#39FF14' : 'rgba(255,255,255,0.45)'}
+                fill={
+                  isStringLit
+                    ? '#39FF14'
+                    : isMutedDampedString
+                    ? mutedTarget?.isSilenceGate
+                      ? 'rgba(255,255,255,0.65)'
+                      : '#FBBF24'
+                    : 'rgba(255,255,255,0.45)'
+                }
               >
                 {name}
               </text>
@@ -982,11 +1123,60 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                   x2={leftPad + fretCount * fretWidth}
                   y2={y}
                   stroke={
-                    isStringLit ? 'rgba(57,255,20,0.88)' : 'rgba(255,255,255,0.24)'
+                    isStringLit
+                      ? 'rgba(57,255,20,0.88)'
+                      : isMutedDampedString
+                      ? mutedTarget?.isSilenceGate
+                        ? 'rgba(255,255,255,0.34)'
+                        : 'rgba(251,191,36,0.62)'
+                      : 'rgba(255,255,255,0.24)'
                   }
-                  strokeWidth={isStringLit ? thickness + 0.8 : thickness}
+                  strokeWidth={
+                    isStringLit || isMutedDampedString
+                      ? thickness + 0.8
+                      : thickness
+                  }
+                  strokeDasharray={
+                    isMutedDampedString && !mutedTarget?.isSilenceGate
+                      ? '6 3'
+                      : undefined
+                  }
                 />
               )}
+
+              {/* Staccato damped sawtooth vibration wave on active palm-muted string */}
+              {palmNoteOnString &&
+                palmNoteOnString.fret >= fretRange.start &&
+                palmNoteOnString.fret <= fretRange.end && (() => {
+                  const noteCx =
+                    leftPad +
+                    (palmNoteOnString.fret - fretRange.start) * fretWidth +
+                    fretWidth / 2;
+                  const waveStart = Math.min(damperStartX - 6, noteCx + 14);
+                  const waveEnd = damperStartX - 2;
+                  if (waveEnd - waveStart < 14) return null;
+                  const seg = (waveEnd - waveStart) / 5;
+                  const waveD = [
+                    `M ${waveStart} ${y}`,
+                    `L ${waveStart + seg} ${y - 4.2}`,
+                    `L ${waveStart + seg * 2} ${y + 3.6}`,
+                    `L ${waveStart + seg * 3} ${y - 2.4}`,
+                    `L ${waveStart + seg * 4} ${y + 1.4}`,
+                    `L ${waveEnd} ${y}`,
+                  ].join(' ');
+                  return (
+                    <path
+                      d={waveD}
+                      fill="none"
+                      stroke="#39FF14"
+                      strokeWidth={1.9}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="animate-palm-mute"
+                      pointerEvents="none"
+                    />
+                  );
+                })()}
 
               {Array.from({ length: fretCount }, (_, fIdx) => {
                 const fretNum = fretRange.start + fIdx;
@@ -995,7 +1185,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                 const note =
                   activeContextChordNoteMap?.get(noteKey) ?? noteMap.get(noteKey);
                 const isHighlighted = activeNoteKeys.has(noteKey);
-                const isLegatoAnchor = legatoAnchorKey === noteKey;
+                const isLegatoAnchor = legatoAnchorKeys.has(noteKey);
                 const isOutOfActiveChordContext =
                   activeContextChordKeys !== null &&
                   !activeContextChordKeys.has(noteKey);
@@ -1020,6 +1210,20 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                   activeBendNote?.note.fret === fretNum;
                 const isPalmMutedNote =
                   isHighlighted && activeArticulation === 'palmmute';
+                const slideFromFret = isHighlighted
+                  ? activeSlideTargetMap.get(noteKey)
+                  : undefined;
+                const clampedSlideFrom =
+                  slideFromFret !== undefined
+                    ? Math.max(
+                        fretRange.start,
+                        Math.min(fretRange.end, slideFromFret)
+                      )
+                    : undefined;
+                const slideDx =
+                  clampedSlideFrom !== undefined && clampedSlideFrom !== fretNum
+                    ? (clampedSlideFrom - fretNum) * fretWidth
+                    : 0;
                 const cyNote = isBentNote ? y - bendLift * 0.42 : y;
 
                 const showEmptyChordDot =
@@ -1098,29 +1302,51 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                             strokeDasharray="3 2"
                           />
                         )}
-                        {isHighlighted && (
+                        {isHighlighted ? (
                           <g
+                            key={`hl-${noteKey}-${effectiveActiveStepIndex ?? 'click'}`}
                             className={
-                              activeArticulation === 'vibrato' ||
-                              activeArticulation === 'sustain'
+                              slideDx !== 0
+                                ? 'animate-fret-slide'
+                                : activeArticulation === 'vibrato' ||
+                                  activeArticulation === 'sustain'
                                 ? 'animate-vibrato'
                                 : isPalmMutedNote
                                 ? 'animate-palm-mute'
                                 : undefined
                             }
+                            style={
+                              slideDx !== 0
+                                ? ({
+                                    '--slide-dx': `${slideDx}px`,
+                                  } as React.CSSProperties)
+                                : undefined
+                            }
                           >
                             {isPalmMutedNote ? (
-                              <rect
-                                x={cx - litRadius - 5}
-                                y={cyNote - litRadius - 5}
-                                width={(litRadius + 5) * 2}
-                                height={(litRadius + 5) * 2}
-                                rx={9}
-                                fill="rgba(57,255,20,0.14)"
-                                stroke="#39FF14"
-                                strokeWidth={1.8}
-                                strokeDasharray="4 2.5"
-                              />
+                              <>
+                                <rect
+                                  x={cx - litRadius - 7}
+                                  y={cyNote - litRadius - 7}
+                                  width={(litRadius + 7) * 2}
+                                  height={(litRadius + 7) * 2}
+                                  rx={10}
+                                  fill="rgba(57,255,20,0.12)"
+                                  stroke="rgba(57,255,20,0.6)"
+                                  strokeWidth={1.3}
+                                  strokeDasharray="3 2.5"
+                                />
+                                <rect
+                                  x={cx - litRadius - 3.5}
+                                  y={cyNote - litRadius - 3.5}
+                                  width={(litRadius + 3.5) * 2}
+                                  height={(litRadius + 3.5) * 2}
+                                  rx={8}
+                                  fill="rgba(57,255,20,0.22)"
+                                  stroke="#39FF14"
+                                  strokeWidth={2}
+                                />
+                              </>
                             ) : (
                               <circle
                                 cx={cx}
@@ -1145,37 +1371,50 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                               stroke="#FFFFFF"
                               strokeWidth={2}
                             />
+                            {textLabel && (
+                              <text
+                                x={cx}
+                                y={cyNote + 4.2}
+                                textAnchor="middle"
+                                fontSize={12}
+                                fontWeight={800}
+                                fill="#000000"
+                              >
+                                {textLabel}
+                              </text>
+                            )}
                           </g>
-                        )}
-                        {!isHighlighted && (
-                          <circle
-                            cx={cx}
-                            cy={y}
-                            r={baseRadius}
-                            fill="#000000"
-                            stroke={
-                              isLegatoAnchor
-                                ? '#39FF14'
-                                : note.isRoot
-                                ? 'rgba(57,255,20,0.88)'
-                                : 'rgba(255,255,255,0.68)'
-                            }
-                            strokeWidth={
-                              isLegatoAnchor || note.isRoot ? 2 : 1.4
-                            }
-                          />
-                        )}
-                        {textLabel && (
-                          <text
-                            x={cx}
-                            y={cyNote + 4.2}
-                            textAnchor="middle"
-                            fontSize={isHighlighted ? 12 : 10.5}
-                            fontWeight={800}
-                            fill={isHighlighted ? '#000000' : '#FFFFFF'}
-                          >
-                            {textLabel}
-                          </text>
+                        ) : (
+                          <>
+                            <circle
+                              cx={cx}
+                              cy={y}
+                              r={baseRadius}
+                              fill="#000000"
+                              stroke={
+                                isLegatoAnchor
+                                  ? '#39FF14'
+                                  : note.isRoot
+                                  ? 'rgba(57,255,20,0.88)'
+                                  : 'rgba(255,255,255,0.68)'
+                              }
+                              strokeWidth={
+                                isLegatoAnchor || note.isRoot ? 2 : 1.4
+                              }
+                            />
+                            {textLabel && (
+                              <text
+                                x={cx}
+                                y={cyNote + 4.2}
+                                textAnchor="middle"
+                                fontSize={10.5}
+                                fontWeight={800}
+                                fill="#FFFFFF"
+                              >
+                                {textLabel}
+                              </text>
+                            )}
+                          </>
                         )}
                         {isBentNote && (
                           <g className="animate-bend-rise" pointerEvents="none">
@@ -1211,37 +1450,276 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
           );
         })}
 
-        {/* Palm Mute Bridge Damper Pill */}
-        {!interactive && activeArticulation === 'palmmute' && (
-          <g className="animate-palm-mute" pointerEvents="none">
-            <rect
-              x={leftPad + fretCount * fretWidth - 28}
-              y={topPad - 6}
-              width={24}
-              height={16}
-              rx={5}
-              fill="#000000"
-              stroke="#39FF14"
-              strokeWidth={1.5}
-            />
-            <text
-              x={leftPad + fretCount * fretWidth - 16}
-              y={topPad + 5.5}
-              textAnchor="middle"
-              fontSize={9}
-              fontWeight={900}
-              fill="#39FF14"
+        {/* Palm Mute Bridge Damper Zone & Chug Indicator */}
+        {!interactive && activeArticulation === 'palmmute' && (() => {
+          const pmStrings =
+            effectiveActiveNotes.length > 0
+              ? effectiveActiveNotes.map((n) => n.string)
+              : [6, 5];
+          const minPmStr = Math.min(...pmStrings);
+          const maxPmStr = Math.max(...pmStrings);
+          const pmTop = topPad + (minPmStr - 1) * stringGap - 11;
+          const pmBottom = topPad + (maxPmStr - 1) * stringGap + 11;
+          const pmHeight = Math.max(24, pmBottom - pmTop);
+          const damperW = 22;
+          const damperX = leftPad + fretCount * fretWidth - damperW - 2;
+          const pillW = 62;
+          const pillX = Math.max(leftPad + 4, damperX - pillW - 6);
+          const pillY = Math.max(6, topPad - 24);
+          const hatchCount = Math.max(2, Math.floor(pmHeight / 9));
+
+          return (
+            <g
+              key={`pm-damper-${effectiveActiveStepIndex}`}
+              className="animate-palm-damper"
+              pointerEvents="none"
             >
-              PM
-            </text>
-          </g>
-        )}
+              {/* Bridge Damper Pad */}
+              <rect
+                x={damperX}
+                y={pmTop}
+                width={damperW}
+                height={pmHeight}
+                rx={8}
+                fill="rgba(57,255,20,0.18)"
+                stroke="#39FF14"
+                strokeWidth={1.8}
+              />
+              {/* Diagonal damper hatching */}
+              {Array.from({ length: hatchCount }, (_, hIdx) => {
+                const hy = pmTop + 6 + hIdx * 9;
+                if (hy > pmTop + pmHeight - 5) return null;
+                return (
+                  <line
+                    key={hIdx}
+                    x1={damperX + 5}
+                    y1={hy + 3}
+                    x2={damperX + damperW - 5}
+                    y2={hy - 3}
+                    stroke="rgba(255,255,255,0.55)"
+                    strokeWidth={1.3}
+                    strokeLinecap="round"
+                  />
+                );
+              })}
+              {/* Downward pressure chevron above pad */}
+              <path
+                d={`M ${damperX + damperW / 2 - 5} ${Math.max(
+                  4,
+                  pmTop - 7
+                )} L ${damperX + damperW / 2} ${Math.max(
+                  8,
+                  pmTop - 2
+                )} L ${damperX + damperW / 2 + 5} ${Math.max(4, pmTop - 7)}`}
+                fill="none"
+                stroke="#39FF14"
+                strokeWidth={1.8}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              {/* P.M. CHUG Pill */}
+              <rect
+                x={pillX}
+                y={pillY}
+                width={pillW}
+                height={17}
+                rx={8.5}
+                fill="#000000"
+                stroke="#39FF14"
+                strokeWidth={1.5}
+              />
+              <text
+                x={pillX + pillW / 2}
+                y={pillY + 11.5}
+                textAnchor="middle"
+                fontSize={8.5}
+                fontWeight={900}
+                fill="#39FF14"
+              >
+                P.M. CHUG
+              </text>
+            </g>
+          );
+        })()}
+
+        {/* Stoppate (Percussive Dead Notes) & Silence Gate Overlay */}
+        {!interactive && mutedTarget && (() => {
+          const clampedFret = Math.max(
+            fretRange.start,
+            Math.min(fretRange.end, mutedTarget.rawFret)
+          );
+          const mutedCx =
+            leftPad + (clampedFret - fretRange.start) * fretWidth + fretWidth / 2;
+          const minStr = Math.min(...mutedTarget.strings);
+          const maxStr = Math.max(...mutedTarget.strings);
+          const clampTop = topPad + (minStr - 1) * stringGap - 13;
+          const clampBottom = topPad + (maxStr - 1) * stringGap + 13;
+          const clampHeight = Math.max(26, clampBottom - clampTop);
+
+          const badgeText = mutedTarget.isSilenceGate
+            ? 'GATE · SILENZIO'
+            : mutedTarget.isGhost
+            ? '✕ GHOST'
+            : '✕ STOPPATA';
+          const badgeW = mutedTarget.isSilenceGate ? 90 : 76;
+          const badgeX = Math.max(
+            leftPad + 2,
+            Math.min(
+              leftPad + fretCount * fretWidth - badgeW - 2,
+              mutedCx - badgeW / 2
+            )
+          );
+          const badgeY = Math.max(4, clampTop - 20);
+          const strumX = Math.min(
+            leftPad + fretCount * fretWidth - 10,
+            mutedCx + 20
+          );
+
+          return (
+            <g
+              key={`muted-fx-${effectiveActiveStepIndex}`}
+              pointerEvents="none"
+            >
+              {/* Left-Hand Damping Clamp Bar */}
+              <rect
+                x={mutedCx - 12}
+                y={clampTop}
+                width={24}
+                height={clampHeight}
+                rx={11}
+                fill={
+                  mutedTarget.isSilenceGate
+                    ? 'rgba(255,255,255,0.08)'
+                    : 'rgba(251,191,36,0.16)'
+                }
+                stroke={
+                  mutedTarget.isSilenceGate
+                    ? 'rgba(255,255,255,0.55)'
+                    : '#FBBF24'
+                }
+                strokeWidth={1.8}
+                strokeDasharray={mutedTarget.isSilenceGate ? '3 3' : '5 2.5'}
+                className="animate-stoppata-hit"
+              />
+
+              {/* Per-String Shockwaves & X Dead-Note Markers */}
+              {mutedTarget.strings.map((sNum) => {
+                const sy = topPad + (sNum - 1) * stringGap;
+                return (
+                  <g key={`mute-x-${sNum}`}>
+                    {!mutedTarget.isSilenceGate && (
+                      <circle
+                        cx={mutedCx}
+                        cy={sy}
+                        r={10}
+                        fill="none"
+                        stroke="#39FF14"
+                        strokeWidth={1.6}
+                        className="animate-stoppata-wave"
+                      />
+                    )}
+                    <g className="animate-stoppata-hit">
+                      {mutedTarget.isSilenceGate ? (
+                        <line
+                          x1={mutedCx - 5}
+                          y1={sy}
+                          x2={mutedCx + 5}
+                          y2={sy}
+                          stroke="#FFFFFF"
+                          strokeWidth={2.4}
+                          strokeLinecap="round"
+                        />
+                      ) : (
+                        <>
+                          <circle
+                            cx={mutedCx}
+                            cy={sy}
+                            r={8}
+                            fill="#000000"
+                            stroke="#FBBF24"
+                            strokeWidth={1.5}
+                          />
+                          <path
+                            d={`M ${mutedCx - 4} ${sy - 4} L ${mutedCx + 4} ${
+                              sy + 4
+                            } M ${mutedCx + 4} ${sy - 4} L ${mutedCx - 4} ${
+                              sy + 4
+                            }`}
+                            stroke="#FFFFFF"
+                            strokeWidth={2.2}
+                            strokeLinecap="round"
+                          />
+                        </>
+                      )}
+                    </g>
+                  </g>
+                );
+              })}
+
+              {/* Vertical Pick-Strum Slash Arrow for Percussive Stoppata */}
+              {!mutedTarget.isSilenceGate && (
+                <g className="animate-stoppata-hit">
+                  <line
+                    x1={strumX}
+                    y1={clampTop + 3}
+                    x2={strumX}
+                    y2={clampBottom - 3}
+                    stroke="#39FF14"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                  />
+                  <path
+                    d={`M ${strumX - 4} ${clampBottom - 8} L ${strumX} ${
+                      clampBottom - 2
+                    } L ${strumX + 4} ${clampBottom - 8}`}
+                    fill="none"
+                    stroke="#39FF14"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </g>
+              )}
+
+              {/* Floating Badge */}
+              <rect
+                x={badgeX}
+                y={badgeY}
+                width={badgeW}
+                height={16}
+                rx={8}
+                fill="#000000"
+                stroke={
+                  mutedTarget.isSilenceGate
+                    ? 'rgba(255,255,255,0.65)'
+                    : '#FBBF24'
+                }
+                strokeWidth={1.4}
+              />
+              <text
+                x={badgeX + badgeW / 2}
+                y={badgeY + 11}
+                textAnchor="middle"
+                fontSize={8.5}
+                fontWeight={900}
+                fill={mutedTarget.isSilenceGate ? '#FFFFFF' : '#FBBF24'}
+              >
+                {badgeText}
+              </text>
+            </g>
+          );
+        })()}
 
         {/* Ad-Hoc Legato & Expressivity Slur Arcs (Hammer-On / Pull-Off / Slide) */}
         {!interactive &&
           uniqueStaticLegatoArcs.map((conn) => {
+            const fromClamped = Math.max(
+              fretRange.start,
+              Math.min(fretRange.end, conn.fromFret)
+            );
+            if (fromClamped === conn.toFret) return null;
             const x1 =
-              leftPad + (conn.fromFret - fretRange.start) * fretWidth + fretWidth / 2;
+              leftPad + (fromClamped - fretRange.start) * fretWidth + fretWidth / 2;
             const x2 =
               leftPad + (conn.toFret - fretRange.start) * fretWidth + fretWidth / 2;
             const y = topPad + (conn.string - 1) * stringGap;
@@ -1258,79 +1736,173 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                 key={`static-${conn.kind}-${conn.string}-${conn.fromFret}-${conn.toFret}`}
                 d={d}
                 fill="none"
-                stroke="rgba(255,255,255,0.22)"
-                strokeWidth={1.5}
+                stroke={
+                  conn.kind === 'slide'
+                    ? 'rgba(57,255,20,0.28)'
+                    : 'rgba(255,255,255,0.22)'
+                }
+                strokeWidth={conn.kind === 'slide' ? 2.2 : 1.5}
                 strokeLinecap="round"
-                strokeDasharray={conn.kind === 'slide' ? '4 3' : undefined}
+                strokeDasharray={conn.kind === 'slide' ? '5 3' : undefined}
                 pointerEvents="none"
               />
             );
           })}
 
-        {!interactive && activeLegatoConn && (() => {
-          const x1 =
-            leftPad +
-            (activeLegatoConn.fromFret - fretRange.start) * fretWidth +
-            fretWidth / 2;
-          const x2 =
-            leftPad +
-            (activeLegatoConn.toFret - fretRange.start) * fretWidth +
-            fretWidth / 2;
-          const y = topPad + (activeLegatoConn.string - 1) * stringGap;
-          const midX = (x1 + x2) / 2;
-          const archDir = activeLegatoConn.kind === 'pull' ? 1 : -1;
-          const archLift = activeLegatoConn.kind === 'slide' ? 0 : 22 * archDir;
-          const d =
-            activeLegatoConn.kind === 'slide'
-              ? `M ${x1} ${y} L ${x2} ${y}`
-              : `M ${x1} ${y + archDir * 6} Q ${midX} ${y + archLift * 1.5} ${x2} ${y + archDir * 6}`;
-          const badgeY =
-            activeLegatoConn.kind === 'slide'
-              ? y - 14
-              : y + archLift * 1.05;
-          const badgeChar =
-            activeLegatoConn.kind === 'hammer'
-              ? 'H'
-              : activeLegatoConn.kind === 'pull'
-              ? 'P'
-              : 'S';
+        {!interactive &&
+          activeLegatoConns.map((conn, connIdx) => {
+            const fromClamped = Math.max(
+              fretRange.start,
+              Math.min(fretRange.end, conn.fromFret)
+            );
+            if (fromClamped === conn.toFret) return null;
+            const x1 =
+              leftPad + (fromClamped - fretRange.start) * fretWidth + fretWidth / 2;
+            const x2 =
+              leftPad + (conn.toFret - fretRange.start) * fretWidth + fretWidth / 2;
+            const y = topPad + (conn.string - 1) * stringGap;
+            const midX = (x1 + x2) / 2;
 
-          return (
-            <g
-              key={`active-legato-${effectiveActiveStepIndex}-${activeLegatoConn.fromFret}-${activeLegatoConn.toFret}`}
-              pointerEvents="none"
-            >
-              <path
-                d={d}
-                pathLength={1}
-                fill="none"
-                stroke="#39FF14"
-                strokeWidth={2.8}
-                strokeLinecap="round"
-                filter={`url(#${svgFilterId})`}
-                className="animate-legato-arc"
-              />
-              <circle
-                cx={midX}
-                cy={badgeY}
-                r={8}
-                fill="#000000"
-                stroke="#39FF14"
-                strokeWidth={1.6}
-              />
-              <text
-                x={midX}
-                y={badgeY + 3.4}
-                textAnchor="middle"
-                fontSize={9}
-                fontWeight={900}
-                fill="#39FF14"
+            if (conn.kind === 'slide') {
+              const dir = x2 >= x1 ? 1 : -1;
+              const arrowTipX = x2 - dir * 13;
+              const pillW = 54;
+              const pillX = Math.max(
+                leftPad + 2,
+                Math.min(
+                  leftPad + fretCount * fretWidth - pillW - 2,
+                  midX - pillW / 2
+                )
+              );
+              const pillY = Math.max(4, y - 24);
+
+              return (
+                <g
+                  key={`active-slide-${effectiveActiveStepIndex}-${conn.string}-${conn.fromFret}-${conn.toFret}`}
+                  pointerEvents="none"
+                >
+                  {/* Dual Parallel Slide Glissando Rails */}
+                  <line
+                    x1={x1}
+                    y1={y - 4.5}
+                    x2={x2}
+                    y2={y - 4.5}
+                    stroke="rgba(57,255,20,0.35)"
+                    strokeWidth={1.3}
+                  />
+                  <line
+                    x1={x1}
+                    y1={y + 4.5}
+                    x2={x2}
+                    y2={y + 4.5}
+                    stroke="rgba(57,255,20,0.35)"
+                    strokeWidth={1.3}
+                  />
+                  {/* Sweeping Neon Motion Trail */}
+                  <path
+                    d={`M ${x1} ${y} L ${x2} ${y}`}
+                    pathLength={1}
+                    fill="none"
+                    stroke="#39FF14"
+                    strokeWidth={3.4}
+                    strokeLinecap="round"
+                    filter={`url(#${svgFilterId})`}
+                    className="animate-legato-arc"
+                  />
+                  {/* Directional Arrowhead */}
+                  <path
+                    d={`M ${arrowTipX - dir * 6} ${y - 4.5} L ${arrowTipX} ${y} L ${
+                      arrowTipX - dir * 6
+                    } ${y + 4.5}`}
+                    fill="none"
+                    stroke="#FFFFFF"
+                    strokeWidth={2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  {/* Origin Ghost Ring */}
+                  <circle
+                    cx={x1}
+                    cy={y}
+                    r={8}
+                    fill="rgba(57,255,20,0.14)"
+                    stroke="rgba(255,255,255,0.65)"
+                    strokeWidth={1.4}
+                    strokeDasharray="3 2"
+                  />
+                  {/* Slide Badge (only once for chord slides) */}
+                  {connIdx === 0 && (
+                    <>
+                      <rect
+                        x={pillX}
+                        y={pillY}
+                        width={pillW}
+                        height={15}
+                        rx={7.5}
+                        fill="#000000"
+                        stroke="#39FF14"
+                        strokeWidth={1.4}
+                      />
+                      <text
+                        x={pillX + pillW / 2}
+                        y={pillY + 10.5}
+                        textAnchor="middle"
+                        fontSize={8.5}
+                        fontWeight={900}
+                        fill="#39FF14"
+                      >
+                        {dir >= 0 ? 'SLIDE ↗' : 'SLIDE ↘'}
+                      </text>
+                    </>
+                  )}
+                </g>
+              );
+            }
+
+            const archDir = conn.kind === 'pull' ? 1 : -1;
+            const archLift = 22 * archDir;
+            const d = `M ${x1} ${y + archDir * 6} Q ${midX} ${
+              y + archLift * 1.5
+            } ${x2} ${y + archDir * 6}`;
+            const badgeY = Math.max(10, Math.min(height - 10, y + archLift * 1.05));
+            const badgeChar = conn.kind === 'hammer' ? 'H' : 'P';
+
+            return (
+              <g
+                key={`active-legato-${effectiveActiveStepIndex}-${conn.string}-${conn.fromFret}-${conn.toFret}`}
+                pointerEvents="none"
               >
-                {badgeChar}
-              </text>
-            </g>
-          );
-        })()}
+                <path
+                  d={d}
+                  pathLength={1}
+                  fill="none"
+                  stroke="#39FF14"
+                  strokeWidth={2.8}
+                  strokeLinecap="round"
+                  filter={`url(#${svgFilterId})`}
+                  className="animate-legato-arc"
+                />
+                <circle
+                  cx={midX}
+                  cy={badgeY}
+                  r={8}
+                  fill="#000000"
+                  stroke="#39FF14"
+                  strokeWidth={1.6}
+                />
+                <text
+                  x={midX}
+                  y={badgeY + 3.4}
+                  textAnchor="middle"
+                  fontSize={9}
+                  fontWeight={900}
+                  fill="#39FF14"
+                >
+                  {badgeChar}
+                </text>
+              </g>
+            );
+          })}
       </svg>
     </div>
   );

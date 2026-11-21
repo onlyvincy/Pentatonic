@@ -54,6 +54,7 @@ import {
   PostOnboardingStep,
 } from './components/PostOnboardingGuide';
 import { CloudSyncModal, CloudSyncStatus } from './components/CloudSyncModal';
+import { clearAllFamilyBriefingSrs } from './utils/spacedRepetitionCoach';
 import { useAppUpdate } from './hooks/useAppUpdate';
 import {
   CloudUserProfile,
@@ -758,6 +759,7 @@ export function App() {
 
   const handleResetDemoData = async () => {
     await clearAllRecordingBlobs();
+    clearAllFamilyBriefingSrs();
     const clean = createCleanProfileAppState();
     setAppState(clean);
     setActiveLivePlan(null);
