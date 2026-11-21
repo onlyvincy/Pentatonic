@@ -410,7 +410,10 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
           </div>
         )}
 
-        {/* Setup & Runtime Configuration Collapsible */}
+        {/* Setup & Runtime Configuration Collapsible (only when not configured via Vercel env or on DB table error) */}
+        {(!configured ||
+          configSource === 'runtime' ||
+          Boolean(syncError?.toLowerCase().includes('user_progress'))) && (
         <div className="rounded-2xl chrome-card overflow-hidden">
           <button
             type="button"
@@ -564,6 +567,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
             </div>
           )}
         </div>
+        )}
       </div>
     </div>
   );
