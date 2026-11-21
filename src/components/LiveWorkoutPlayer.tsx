@@ -31,6 +31,7 @@ import {
   computeWeightedExerciseBpm,
   getLevelFilteredVariants,
   pickNextRecommendedVariant,
+  pickNextVariantInSession,
   shouldEnableSpeedBurstForSkill,
 } from '../utils/overloadEngine';
 import { useMetronome } from '../hooks/useMetronome';
@@ -121,6 +122,16 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
   const [recallReturnPhase, setRecallReturnPhase] = useState<'precount' | 'rest'>('precount');
   const demoBetweenTimerRef = useRef<number | null>(null);
   const [showMetronomeOptions, setShowMetronomeOptions] = useState(false);
+  const [variantSetsInSession, setVariantSetsInSession] = useState(0);
+  const [variantCleanNonBurstInSession, setVariantCleanNonBurstInSession] =
+    useState(0);
+  const [variantBurstFailedInSession, setVariantBurstFailedInSession] =
+    useState(false);
+  const [, setPendingNewVariantDemo] = useState(false);
+  const pendingNewVariantDemoRef = useRef(false);
+  const [burstChallengeBanner, setBurstChallengeBanner] = useState<string | null>(
+    null
+  );
 
   const clearDemoBetweenTimer = useCallback(() => {
     if (demoBetweenTimerRef.current !== null) {
@@ -346,6 +357,12 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     );
     setIsSpeedBurst(nextBurst);
     metronome.setSpeedBurst(nextBurst);
+    setVariantSetsInSession(0);
+    setVariantCleanNonBurstInSession(0);
+    setVariantBurstFailedInSession(false);
+    pendingNewVariantDemoRef.current = false;
+    setPendingNewVariantDemo(false);
+    setBurstChallengeBanner(null);
     setSetRemainingSec(currentItem.durationSec);
     setRestRemainingSec(currentItem.restSec);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -483,7 +500,9 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
   const startNextAfterRest = () => {
     clearDemoBetweenTimer();
     setSetRemainingSec(currentItem?.durationSec ?? 60);
-    if (setNumber === 1) {
+    if (setNumber === 1 || pendingNewVariantDemoRef.current) {
+      pendingNewVariantDemoRef.current = false;
+      setPendingNewVariantDemo(false);
       setDemoContext('intro');
       setDemoPass(1);
       setDemoReplayKey((k) => k + 1);
@@ -522,6 +541,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
       durationSec: Math.max(10, currentItem.durationSec - setRemainingSec),
       cleanliness: score,
       nextRecommendedBpm: nextBpmForScore,
+      speedBurst: isSpeedBurst,
       timestamp: new Date().toISOString(),
     };
 
@@ -597,13 +617,155 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     }));
 
     if (hasMoreSets) {
+      let nextSetBpm = nextBpmForScore;
+      const newVariantSets = variantSetsInSession + 1;
+      const newVariantCleanNonBurst =
+        variantCleanNonBurstInSession + (!isSpeedBurst && score >= 3 ? 1 : 0);
+
+      const allVariants = getLevelFilteredVariants(
+        currentExercise,
+        plan.playerLevel
+      );
+      const defaultVarId = allVariants[0]?.id;
+      const histCleanNonBurst = sessionLogs
+        .flatMap((s) => s.sets)
+        .filter(
+          (st) =>
+            st.exerciseId === currentExercise.id &&
+            (st.variantId ?? defaultVarId) === activeVariant?.id &&
+            !st.speedBurst &&
+            st.cleanliness >= 3
+        ).length;
+
+      const rotateToNextVariant = (bannerText: string) => {
+        const nextVar = pickNextVariantInSession(
+          currentExercise,
+          activeVariant?.id,
+          sessionLogs,
+          nextLoggedSets,
+          plan.playerLevel
+        );
+        setIsSpeedBurst(false);
+        metronome.setSpeedBurst(false);
+        if (nextVar && nextVar.id !== activeVariant?.id) {
+          setSelectedVariantId(nextVar.id);
+          setVariantSetsInSession(0);
+          setVariantCleanNonBurstInSession(0);
+          setVariantBurstFailedInSession(false);
+          pendingNewVariantDemoRef.current = true;
+          setPendingNewVariantDemo(true);
+          nextSetBpm = resolveVariantBpm(
+            currentExercise,
+            nextVar.id,
+            currentItem.targetBpm
+          );
+          setBurstChallengeBanner(bannerText);
+        } else {
+          setVariantSetsInSession(0);
+          setVariantCleanNonBurstInSession(0);
+          setVariantBurstFailedInSession(false);
+          setBurstChallengeBanner(null);
+        }
+      };
+
+      if (currentExercise.id === 'ex-speed-bursts') {
+        if (newVariantSets >= 3) {
+          const nextVar = pickNextVariantInSession(
+            currentExercise,
+            activeVariant?.id,
+            sessionLogs,
+            nextLoggedSets,
+            plan.playerLevel
+          );
+          if (nextVar && nextVar.id !== activeVariant?.id) {
+            setSelectedVariantId(nextVar.id);
+            setVariantSetsInSession(0);
+            setVariantCleanNonBurstInSession(0);
+            setVariantBurstFailedInSession(false);
+            pendingNewVariantDemoRef.current = true;
+            setPendingNewVariantDemo(true);
+            nextSetBpm = resolveVariantBpm(
+              currentExercise,
+              nextVar.id,
+              currentItem.targetBpm
+            );
+            setBurstChallengeBanner(`Nuova Variante: ${nextVar.shortLabel}`);
+          } else {
+            setVariantSetsInSession(newVariantSets);
+            setVariantCleanNonBurstInSession(newVariantCleanNonBurst);
+            setBurstChallengeBanner(null);
+          }
+        } else {
+          setVariantSetsInSession(newVariantSets);
+          setVariantCleanNonBurstInSession(newVariantCleanNonBurst);
+          setBurstChallengeBanner(null);
+        }
+      } else if (isSpeedBurst) {
+        if (score >= 3) {
+          rotateToNextVariant(
+            '🔥 Boss Fight superata! Passiamo alla variante successiva'
+          );
+        } else {
+          setIsSpeedBurst(false);
+          metronome.setSpeedBurst(false);
+          setVariantBurstFailedInSession(true);
+          setBurstChallengeBanner('Burst disattivato · Consolidiamo il ritmo');
+          if (newVariantSets >= 4) {
+            rotateToNextVariant('Nuova Variante sbloccata!');
+          } else {
+            setVariantSetsInSession(newVariantSets);
+            setVariantCleanNonBurstInSession(newVariantCleanNonBurst);
+          }
+        }
+      } else {
+        const readyForBossFight =
+          currentExercise.gapClickMode !== '1-in-4' &&
+          !variantBurstFailedInSession &&
+          (newVariantCleanNonBurst >= 2 ||
+            (newVariantCleanNonBurst >= 1 && histCleanNonBurst >= 2));
+
+        if (readyForBossFight && newVariantSets < 3) {
+          setIsSpeedBurst(true);
+          metronome.setSpeedBurst(true);
+          nextSetBpm = Math.max(40, Math.round(metronome.bpm * 0.92));
+          setVariantSetsInSession(newVariantSets);
+          setVariantCleanNonBurstInSession(newVariantCleanNonBurst);
+          setBurstChallengeBanner(
+            '⚡ SFIDA SPEED BURST (1/8 → 1/16) · BPM calibrati (-8%)'
+          );
+        } else if (newVariantSets >= 3) {
+          const nextVar = pickNextVariantInSession(
+            currentExercise,
+            activeVariant?.id,
+            sessionLogs,
+            nextLoggedSets,
+            plan.playerLevel
+          );
+          rotateToNextVariant(
+            nextVar && nextVar.id !== activeVariant?.id
+              ? `Nuova Variante: ${nextVar.shortLabel}`
+              : 'Nuova Variante sbloccata!'
+          );
+        } else {
+          setVariantSetsInSession(newVariantSets);
+          setVariantCleanNonBurstInSession(newVariantCleanNonBurst);
+          setBurstChallengeBanner(null);
+        }
+      }
+
       setSetNumber((s) => s + 1);
-      metronome.setBpm(nextBpmForScore);
+      metronome.setBpm(nextSetBpm);
       setRestRemainingSec(currentItem.restSec);
       setPhase('rest');
     } else if (hasMoreExercises) {
       setExerciseIdx((idx) => idx + 1);
       setSetNumber(1);
+      setVariantSetsInSession(0);
+      setVariantCleanNonBurstInSession(0);
+      setVariantBurstFailedInSession(false);
+      pendingNewVariantDemoRef.current = false;
+      setPendingNewVariantDemo(false);
+      setBurstChallengeBanner(null);
       setRestRemainingSec(currentItem.restSec);
       setPhase('rest');
     } else {
@@ -884,6 +1046,18 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
         {/* 2. FULL-SCREEN PRE-TIMER WITH METRONOME (4-3-2-1) */}
         {phase === 'precount' && (
           <div className="flex min-h-full flex-col items-center justify-center p-6 text-center">
+            {burstChallengeBanner && (
+              <div
+                className={`mb-4 inline-flex items-center rounded-full border px-3.5 py-1 text-xs font-black tracking-wide ${
+                  burstChallengeBanner.includes('disattivato')
+                    ? 'border-white/25 bg-white/5 text-white/80'
+                    : 'border-[#39FF14]/50 bg-[#39FF14]/12 text-[#39FF14]'
+                }`}
+              >
+                {burstChallengeBanner}
+              </div>
+            )}
+
             <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/50 tabular-nums">
               {metronome.bpm} BPM • S{setNumber}/{currentItem.sets}
             </div>
@@ -1009,6 +1183,18 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
 
             {/* Center Minimal Timer + BPM + Beat Dots */}
             <div className="my-auto flex flex-col items-center gap-5">
+              {burstChallengeBanner && (
+                <div
+                  className={`inline-flex items-center rounded-full border px-3.5 py-1 text-[11px] font-black tracking-wide text-center ${
+                    burstChallengeBanner.includes('disattivato')
+                      ? 'border-white/25 bg-white/5 text-white/80'
+                      : 'border-[#39FF14]/50 bg-[#39FF14]/12 text-[#39FF14]'
+                  }`}
+                >
+                  {burstChallengeBanner}
+                </div>
+              )}
+
               {/* 4 Minimal Beat Lights */}
               <div className="flex items-center justify-center gap-3">
                 {[1, 2, 3, 4].map((beat) => {
@@ -1156,6 +1342,17 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
         {/* 4. FULL-SCREEN REST */}
         {phase === 'rest' && (
           <div className="flex min-h-full flex-col items-center justify-center p-6 text-center">
+            {burstChallengeBanner && (
+              <div
+                className={`mb-4 inline-flex items-center rounded-full border px-3.5 py-1 text-xs font-black tracking-wide ${
+                  burstChallengeBanner.includes('disattivato')
+                    ? 'border-white/25 bg-white/5 text-white/80'
+                    : 'border-[#39FF14]/50 bg-[#39FF14]/12 text-[#39FF14]'
+                }`}
+              >
+                {burstChallengeBanner}
+              </div>
+            )}
             <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/50">
               Pausa • Prossima {metronome.bpm} BPM
             </div>

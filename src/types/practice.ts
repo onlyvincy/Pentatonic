@@ -186,6 +186,7 @@ export interface SetLog {
   durationSec: number;
   cleanliness: CleanlinessScore;
   nextRecommendedBpm: number;
+  speedBurst?: boolean;
   timestamp: string;
   savedRecordingId?: string;
   note?: string;
