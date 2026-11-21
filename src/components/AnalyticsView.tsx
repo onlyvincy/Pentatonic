@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Download, RotateCcw, Upload } from 'lucide-react';
+import { Cloud, Download, RotateCcw, Upload } from 'lucide-react';
 import {
   AppState,
   Exercise,
@@ -25,6 +25,8 @@ interface AnalyticsViewProps {
   onDeleteRecording: (recordingId: string) => void;
   onImportState: (imported: AppState) => void;
   onResetDemoData: () => void;
+  onOpenCloudModal?: () => void;
+  cloudUserEmail?: string | null;
 }
 
 export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
@@ -37,6 +39,8 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   onDeleteRecording,
   onImportState,
   onResetDemoData,
+  onOpenCloudModal,
+  cloudUserEmail,
 }) => {
   const [selectedExId, setSelectedExId] = useState<string>('all');
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
@@ -360,6 +364,20 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             <RotateCcw className="h-3 w-3" />
             Azzera
           </button>
+          {onOpenCloudModal && (
+            <button
+              type="button"
+              onClick={onOpenCloudModal}
+              className={`flex items-center gap-1.5 rounded-full chrome-pill px-3 py-1.5 text-[11px] font-bold transition ${
+                cloudUserEmail
+                  ? 'border-[#39FF14]/45 text-[#39FF14] hover:border-[#39FF14]/75'
+                  : 'text-white hover:border-white/50'
+              }`}
+            >
+              <Cloud className="h-3 w-3 text-[#39FF14]" />
+              {cloudUserEmail ? `Cloud Sync • ${cloudUserEmail}` : 'Cloud Sync'}
+            </button>
+          )}
         </div>
 
         {syncMessage && (

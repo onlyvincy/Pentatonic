@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { defineConfig, type Plugin } from 'vite';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 
@@ -34,13 +34,39 @@ function pwaVersionStampPlugin(buildId: string): Plugin {
   };
 }
 
-export default defineConfig({
-  plugins: [react(), tailwindcss(), pwaVersionStampPlugin(BUILD_ID)],
-  define: {
-    __APP_BUILD_ID__: JSON.stringify(BUILD_ID),
-  },
-  server: {
-    port: 5173,
-    host: true,
-  },
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  const SUPABASE_URL =
+    env.VITE_SUPABASE_URL ||
+    env.NEXT_PUBLIC_SUPABASE_URL ||
+    env.SUPABASE_URL ||
+    process.env.VITE_SUPABASE_URL ||
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    process.env.SUPABASE_URL ||
+    '';
+  const SUPABASE_ANON_KEY =
+    env.VITE_SUPABASE_ANON_KEY ||
+    env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+    env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    env.SUPABASE_ANON_KEY ||
+    process.env.VITE_SUPABASE_ANON_KEY ||
+    process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.SUPABASE_ANON_KEY ||
+    '';
+
+  return {
+    plugins: [react(), tailwindcss(), pwaVersionStampPlugin(BUILD_ID)],
+    define: {
+      __APP_BUILD_ID__: JSON.stringify(BUILD_ID),
+      __SUPABASE_URL__: JSON.stringify(SUPABASE_URL),
+      __SUPABASE_ANON_KEY__: JSON.stringify(SUPABASE_ANON_KEY),
+    },
+    server: {
+      port: 5173,
+      host: true,
+    },
+  };
 });

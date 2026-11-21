@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BarChart3,
+  Cloud,
   Compass,
   Flame,
   Radio,
@@ -47,7 +48,18 @@ import { TunerAndCheatSheet } from './components/TunerAndCheatSheet';
 import { AnalyticsView } from './components/AnalyticsView';
 import { LiveWorkoutPlayer } from './components/LiveWorkoutPlayer';
 import { OnboardingFlow } from './components/OnboardingFlow';
+import { CloudSyncModal, CloudSyncStatus } from './components/CloudSyncModal';
 import { useAppUpdate } from './hooks/useAppUpdate';
+import {
+  CloudUserProfile,
+  computeSyncFingerprint,
+  getCurrentCloudUser,
+  isSupabaseConfigured,
+  mergeAppStates,
+  onCloudAuthStateChange,
+  pullCloudProgress,
+  pushCloudProgress,
+} from './services/supabaseCloud';
 
 export type NavTab = 'today' | 'programs' | 'analytics' | 'tuner';
 
@@ -77,80 +89,98 @@ function applyLevelBaselineToUnpracticed(
   });
 }
 
+function hydrateAppState(saved: AppState): AppState {
+  const seedById = new Map(SEED_EXERCISES.map((ex) => [ex.id, ex]));
+  const activeSavedExercises = (saved.exercises ?? []).filter(
+    (ex) => seedById.has(ex.id) || ex.isCustom
+  );
+  const savedIds = new Set(activeSavedExercises.map((ex) => ex.id));
+  const hydratedSavedExercises = activeSavedExercises.map((ex) => {
+    const seed = seedById.get(ex.id);
+    if (!seed) return ex;
+    return {
+      ...ex,
+      pillarName: seed.pillarName,
+      title: seed.title,
+      description: seed.description,
+      scientificRationale: seed.scientificRationale,
+      category: seed.category,
+      subdivision: seed.subdivision,
+      speedBurst: seed.speedBurst,
+      fretboardNotes: seed.fretboardNotes,
+      demoSequence: seed.demoSequence,
+      variants: seed.variants,
+      activeVariantId: seed.variants?.some((v) => v.id === ex.activeVariantId)
+        ? ex.activeVariantId
+        : seed.activeVariantId,
+    };
+  });
+  const missingSeedExercises = SEED_EXERCISES.filter(
+    (seed) => !savedIds.has(seed.id)
+  );
+  const hydratedExercises = [
+    ...hydratedSavedExercises,
+    ...missingSeedExercises,
+  ];
+  const migratedSessionLogs = (saved.sessionLogs ?? []).map((log) => ({
+    ...log,
+    sets: log.sets.map((st) => ({
+      ...st,
+      exerciseId: LEGACY_EXERCISE_ID_MAP[st.exerciseId] ?? st.exerciseId,
+    })),
+  }));
+  const migratedRecordings = (saved.feedRecordings ?? []).map((rec) => ({
+    ...rec,
+    exerciseId: LEGACY_EXERCISE_ID_MAP[rec.exerciseId] ?? rec.exerciseId,
+  }));
+
+  const savedPlan = saved.settings?.scientificPlan;
+  const generatedPlan = savedPlan
+    ? generateScientificPrescription(savedPlan.answers, hydratedExercises)
+    : createDefaultScientificPrescription(
+        hydratedExercises,
+        saved.settings.activeProgramId,
+        saved.settings.selectedPreset
+      );
+
+  const customDoses = (savedPlan?.doses ?? []).filter(
+    (d) => d.roleLabel === 'Esercizio Personale'
+  );
+  const generatedWithoutCustom = generatedPlan.doses.filter(
+    (d) => !customDoses.some((cd) => cd.exerciseId === d.exerciseId)
+  );
+  const hydratedPlan: ScientificPlanPrescription = savedPlan
+    ? {
+        ...generatedPlan,
+        id: savedPlan.id,
+        createdAt: savedPlan.createdAt,
+        doses: [...generatedWithoutCustom, ...customDoses],
+      }
+    : generatedPlan;
+
+  const calibratedExercises = applyLevelBaselineToUnpracticed(
+    hydratedExercises,
+    migratedSessionLogs,
+    hydratedPlan.answers.level
+  );
+
+  return {
+    ...saved,
+    exercises: calibratedExercises,
+    sessionLogs: migratedSessionLogs,
+    feedRecordings: migratedRecordings,
+    settings: {
+      ...saved.settings,
+      scientificPlan: hydratedPlan,
+    },
+  };
+}
+
 export function App() {
   const [appState, setAppState] = useState<AppState>(() => {
     const saved = loadPersistedState();
     if (!saved) return createInitialAppState();
-    const seedById = new Map(SEED_EXERCISES.map((ex) => [ex.id, ex]));
-    const activeSavedExercises = saved.exercises.filter(
-      (ex) => seedById.has(ex.id) || ex.isCustom
-    );
-    const savedIds = new Set(activeSavedExercises.map((ex) => ex.id));
-    const hydratedSavedExercises = activeSavedExercises.map((ex) => {
-      const seed = seedById.get(ex.id);
-      if (!seed) return ex;
-      return {
-        ...ex,
-        pillarName: seed.pillarName,
-        title: seed.title,
-        description: seed.description,
-        scientificRationale: seed.scientificRationale,
-        category: seed.category,
-        subdivision: seed.subdivision,
-        speedBurst: seed.speedBurst,
-        fretboardNotes: seed.fretboardNotes,
-        demoSequence: seed.demoSequence,
-        variants: seed.variants,
-        activeVariantId: seed.variants?.some((v) => v.id === ex.activeVariantId)
-          ? ex.activeVariantId
-          : seed.activeVariantId,
-      };
-    });
-    const missingSeedExercises = SEED_EXERCISES.filter(
-      (seed) => !savedIds.has(seed.id)
-    );
-    const hydratedExercises = [
-      ...hydratedSavedExercises,
-      ...missingSeedExercises,
-    ];
-    const migratedSessionLogs = (saved.sessionLogs ?? []).map((log) => ({
-      ...log,
-      sets: log.sets.map((st) => ({
-        ...st,
-        exerciseId: LEGACY_EXERCISE_ID_MAP[st.exerciseId] ?? st.exerciseId,
-      })),
-    }));
-    const migratedRecordings = (saved.feedRecordings ?? []).map((rec) => ({
-      ...rec,
-      exerciseId: LEGACY_EXERCISE_ID_MAP[rec.exerciseId] ?? rec.exerciseId,
-    }));
-    const hydratedPlan = saved.settings.scientificPlan
-      ? generateScientificPrescription(
-          saved.settings.scientificPlan.answers,
-          hydratedExercises
-        )
-      : createDefaultScientificPrescription(
-          hydratedExercises,
-          saved.settings.activeProgramId,
-          saved.settings.selectedPreset
-        );
-
-    const calibratedExercises = applyLevelBaselineToUnpracticed(
-      hydratedExercises,
-      migratedSessionLogs,
-      hydratedPlan.answers.level
-    );
-
-    return {
-      ...saved,
-      exercises: calibratedExercises,
-      sessionLogs: migratedSessionLogs,
-      feedRecordings: migratedRecordings,
-      settings: {
-        ...saved.settings,
-        scientificPlan: hydratedPlan,
-      },
-    };
+    return hydrateAppState(saved);
   });
 
   const [activeTab, setActiveTab] = useState<NavTab>('today');
@@ -160,9 +190,182 @@ export function App() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const appUpdate = useAppUpdate();
 
+  const [cloudUser, setCloudUser] = useState<CloudUserProfile | null>(null);
+  const [syncStatus, setSyncStatus] = useState<CloudSyncStatus>('idle');
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [showCloudModal, setShowCloudModal] = useState<boolean>(false);
+  const [authConfigVersion, setAuthConfigVersion] = useState<number>(0);
+
+  const appStateRef = useRef(appState);
+  appStateRef.current = appState;
+  const cloudUserRef = useRef(cloudUser);
+  cloudUserRef.current = cloudUser;
+  const initialCloudSyncDoneRef = useRef<string | null>(null);
+  const lastPushedFingerprintRef = useRef<string>('');
+  const isSyncingRef = useRef<boolean>(false);
+
+  const syncWithCloud = useCallback(
+    async (overrideUser?: CloudUserProfile | null) => {
+      const activeUser = overrideUser ?? cloudUserRef.current;
+      if (!activeUser || isSyncingRef.current) return;
+      isSyncingRef.current = true;
+      setSyncStatus('syncing');
+      setSyncError(null);
+      try {
+        const { state: remoteState } = await pullCloudProgress(activeUser.id);
+        const currentLocal = appStateRef.current;
+        const nextMerged = remoteState
+          ? hydrateAppState(mergeAppStates(currentLocal, remoteState))
+          : {
+              ...currentLocal,
+              settings: {
+                ...currentLocal.settings,
+                cloudSyncEnabled: true,
+              },
+            };
+
+        const mergedFingerprint = computeSyncFingerprint(nextMerged);
+        const remoteFingerprint = remoteState
+          ? computeSyncFingerprint(hydrateAppState(remoteState))
+          : '';
+
+        let finalSyncedAt = nextMerged.settings.lastSyncedAt;
+        if (!remoteState || mergedFingerprint !== remoteFingerprint) {
+          const pushed = await pushCloudProgress(activeUser.id, nextMerged);
+          finalSyncedAt = pushed.syncedAt;
+        }
+
+        const finalState: AppState = {
+          ...nextMerged,
+          settings: {
+            ...nextMerged.settings,
+            cloudSyncEnabled: true,
+            lastSyncedAt: finalSyncedAt ?? new Date().toISOString(),
+          },
+        };
+
+        lastPushedFingerprintRef.current = computeSyncFingerprint(finalState);
+        initialCloudSyncDoneRef.current = activeUser.id;
+        setAppState(finalState);
+        setSyncStatus('synced');
+      } catch (err) {
+        const msg =
+          err instanceof Error
+            ? err.message
+            : 'Errore sincronizzazione cloud.';
+        setSyncStatus('error');
+        setSyncError(msg);
+      } finally {
+        isSyncingRef.current = false;
+      }
+    },
+    []
+  );
+
   useEffect(() => {
     savePersistedState(appState);
   }, [appState]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured()) {
+      setCloudUser(null);
+      initialCloudSyncDoneRef.current = null;
+      return;
+    }
+
+    let active = true;
+    void getCurrentCloudUser()
+      .then((user) => {
+        if (!active) return;
+        setCloudUser(user);
+        if (user) {
+          void syncWithCloud(user);
+        } else {
+          initialCloudSyncDoneRef.current = null;
+          setSyncStatus('idle');
+        }
+      })
+      .catch((err) => {
+        if (!active) return;
+        setSyncStatus('error');
+        setSyncError(
+          err instanceof Error ? err.message : 'Errore autenticazione cloud.'
+        );
+      });
+
+    const unsubscribe = onCloudAuthStateChange((user) => {
+      if (!active) return;
+      setCloudUser(user);
+      if (user) {
+        void syncWithCloud(user);
+      } else {
+        initialCloudSyncDoneRef.current = null;
+        lastPushedFingerprintRef.current = '';
+        setSyncStatus('idle');
+        setSyncError(null);
+      }
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [authConfigVersion, syncWithCloud]);
+
+  useEffect(() => {
+    if (!cloudUser) return;
+    if (initialCloudSyncDoneRef.current !== cloudUser.id) return;
+    const fingerprint = computeSyncFingerprint(appState);
+    if (fingerprint === lastPushedFingerprintRef.current) return;
+
+    const timerId = window.setTimeout(() => {
+      const activeUser = cloudUserRef.current;
+      if (!activeUser || isSyncingRef.current) return;
+      const latestState = appStateRef.current;
+      const latestFingerprint = computeSyncFingerprint(latestState);
+      if (latestFingerprint === lastPushedFingerprintRef.current) return;
+
+      setSyncStatus('syncing');
+      setSyncError(null);
+      void pushCloudProgress(activeUser.id, latestState)
+        .then(({ syncedAt }) => {
+          lastPushedFingerprintRef.current = latestFingerprint;
+          setAppState((prev) => ({
+            ...prev,
+            settings: {
+              ...prev.settings,
+              cloudSyncEnabled: true,
+              lastSyncedAt: syncedAt,
+            },
+          }));
+          setSyncStatus('synced');
+        })
+        .catch((err) => {
+          setSyncStatus('error');
+          setSyncError(
+            err instanceof Error ? err.message : 'Errore salvataggio cloud.'
+          );
+        });
+    }, 1200);
+
+    return () => window.clearTimeout(timerId);
+  }, [appState, cloudUser]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (
+        document.visibilityState === 'visible' &&
+        cloudUserRef.current &&
+        !isSyncingRef.current
+      ) {
+        void syncWithCloud(cloudUserRef.current);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [syncWithCloud]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
@@ -319,40 +522,110 @@ export function App() {
     setActiveLivePlan(plan);
   };
 
+  type SessionBpmUpdateMap = Record<
+    string,
+    {
+      targetBpm: number;
+      bestCleanBpm?: number;
+      activeVariantId?: string;
+      variantBpms?: Record<string, number>;
+    }
+  >;
+
+  const applySessionUpsertToState = useCallback(
+    (
+      prev: AppState,
+      sessionLog: WorkoutSessionLog,
+      updatedBpmByExercise: SessionBpmUpdateMap,
+      newRecordings: FeedRecording[] = []
+    ): AppState => {
+      const existingIdx = prev.sessionLogs.findIndex(
+        (s) => s.id === sessionLog.id
+      );
+      let nextSessionLogs: WorkoutSessionLog[];
+      if (sessionLog.sets.length === 0) {
+        nextSessionLogs =
+          existingIdx >= 0
+            ? prev.sessionLogs.filter((s) => s.id !== sessionLog.id)
+            : prev.sessionLogs;
+      } else if (existingIdx >= 0) {
+        nextSessionLogs = prev.sessionLogs.map((s) =>
+          s.id === sessionLog.id ? sessionLog : s
+        );
+      } else {
+        nextSessionLogs = [sessionLog, ...prev.sessionLogs];
+      }
+
+      const baselineById = new Map(
+        (activeLivePlan?.items ?? []).map((it) => [it.exerciseId, it.exercise])
+      );
+
+      return {
+        ...prev,
+        sessionLogs: nextSessionLogs,
+        feedRecordings:
+          newRecordings.length > 0
+            ? [...newRecordings, ...prev.feedRecordings]
+            : prev.feedRecordings,
+        exercises: prev.exercises.map((ex) => {
+          const upd = updatedBpmByExercise[ex.id];
+          const baselineEx = baselineById.get(ex.id);
+          if (!upd) {
+            if (!baselineEx) return ex;
+            return {
+              ...ex,
+              currentTargetBpm: baselineEx.currentTargetBpm,
+              bestCleanBpm: baselineEx.bestCleanBpm,
+              activeVariantId: baselineEx.activeVariantId,
+              variantBpms: baselineEx.variantBpms,
+            };
+          }
+          const baseBest = baselineEx?.bestCleanBpm ?? ex.bestCleanBpm;
+          const baseVariantBpms =
+            baselineEx?.variantBpms ?? ex.variantBpms ?? {};
+          return {
+            ...ex,
+            currentTargetBpm: upd.targetBpm,
+            bestCleanBpm:
+              upd.bestCleanBpm && upd.bestCleanBpm > baseBest
+                ? upd.bestCleanBpm
+                : baseBest,
+            activeVariantId: upd.activeVariantId ?? ex.activeVariantId,
+            variantBpms: upd.variantBpms
+              ? { ...baseVariantBpms, ...upd.variantBpms }
+              : ex.variantBpms,
+          };
+        }),
+      };
+    },
+    [activeLivePlan]
+  );
+
+  const handleSaveSessionProgress = useCallback(
+    (
+      sessionLog: WorkoutSessionLog,
+      updatedBpmByExercise: SessionBpmUpdateMap
+    ) => {
+      setAppState((prev) =>
+        applySessionUpsertToState(prev, sessionLog, updatedBpmByExercise)
+      );
+    },
+    [applySessionUpsertToState]
+  );
+
   const handleCompleteSession = (
     sessionLog: WorkoutSessionLog,
     newRecordings: FeedRecording[],
-    updatedBpmByExercise: Record<
-      string,
-      {
-        targetBpm: number;
-        bestCleanBpm?: number;
-        activeVariantId?: string;
-        variantBpms?: Record<string, number>;
-      }
-    >
+    updatedBpmByExercise: SessionBpmUpdateMap
   ) => {
-    setAppState((prev) => ({
-      ...prev,
-      sessionLogs: [sessionLog, ...prev.sessionLogs],
-      feedRecordings: [...newRecordings, ...prev.feedRecordings],
-      exercises: prev.exercises.map((ex) => {
-        const upd = updatedBpmByExercise[ex.id];
-        if (!upd) return ex;
-        return {
-          ...ex,
-          currentTargetBpm: upd.targetBpm,
-          bestCleanBpm:
-            upd.bestCleanBpm && upd.bestCleanBpm > ex.bestCleanBpm
-              ? upd.bestCleanBpm
-              : ex.bestCleanBpm,
-          activeVariantId: upd.activeVariantId ?? ex.activeVariantId,
-          variantBpms: upd.variantBpms
-            ? { ...(ex.variantBpms ?? {}), ...upd.variantBpms }
-            : ex.variantBpms,
-        };
-      }),
-    }));
+    setAppState((prev) =>
+      applySessionUpsertToState(
+        prev,
+        sessionLog,
+        updatedBpmByExercise,
+        newRecordings
+      )
+    );
     setActiveLivePlan(null);
     showToast(`Allenamento salvato • ${sessionLog.sets.length} serie`);
     if (newRecordings.length > 0) {
@@ -450,16 +723,29 @@ export function App() {
   // Interactive Diagnostic Quiz (first onboarding or on-demand recalibration)
   if (!appState.settings.hasCompletedOnboarding || showDiagnosticQuiz) {
     return (
-      <OnboardingFlow
-        exercises={appState.exercises}
-        showIntroSlides={!appState.settings.hasCompletedOnboarding}
-        onFinishQuiz={handleFinishQuiz}
-        onCancel={
-          appState.settings.hasCompletedOnboarding
-            ? () => setShowDiagnosticQuiz(false)
-            : undefined
-        }
-      />
+      <>
+        <OnboardingFlow
+          exercises={appState.exercises}
+          showIntroSlides={!appState.settings.hasCompletedOnboarding}
+          onFinishQuiz={handleFinishQuiz}
+          onOpenCloudLogin={() => setShowCloudModal(true)}
+          onCancel={
+            appState.settings.hasCompletedOnboarding
+              ? () => setShowDiagnosticQuiz(false)
+              : undefined
+          }
+        />
+        <CloudSyncModal
+          isOpen={showCloudModal}
+          onClose={() => setShowCloudModal(false)}
+          user={cloudUser}
+          syncStatus={syncStatus}
+          syncError={syncError}
+          lastSyncedAt={appState.settings.lastSyncedAt}
+          onForceSync={() => syncWithCloud()}
+          onAuthConfigured={() => setAuthConfigVersion((v) => v + 1)}
+        />
+      </>
     );
   }
 
@@ -502,10 +788,50 @@ export function App() {
             })}
           </nav>
 
-          {/* Chrome Streak Pill */}
-          <div className="flex items-center gap-1.5 rounded-full chrome-pill px-3 py-1.5 text-xs font-bold text-slate-100 tabular-nums shrink-0">
-            <Flame className="h-3.5 w-3.5 text-[#39FF14] drop-shadow-[0_0_6px_rgba(57,255,20,0.75)]" />
-            <span>{nerd.currentStreakDays} di fila</span>
+          {/* Chrome Streak Pill + Cloud / Google Account */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <div className="flex items-center gap-1.5 rounded-full chrome-pill px-2.5 sm:px-3 py-1.5 text-[11px] sm:text-xs font-bold text-slate-100 tabular-nums shrink-0">
+              <Flame className="h-3.5 w-3.5 text-[#39FF14] drop-shadow-[0_0_6px_rgba(57,255,20,0.75)]" />
+              <span>{nerd.currentStreakDays} di fila</span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowCloudModal(true)}
+              aria-label={cloudUser ? 'Account Cloud' : 'Accedi al Cloud'}
+              className="relative flex items-center gap-1.5 rounded-full chrome-pill px-2.5 sm:px-3 py-1.5 text-[11px] sm:text-xs font-bold text-slate-100 hover:border-white/40 transition shrink-0"
+            >
+              {cloudUser ? (
+                <>
+                  {cloudUser.avatarUrl ? (
+                    <img
+                      src={cloudUser.avatarUrl}
+                      alt={cloudUser.fullName ?? cloudUser.email ?? 'Account'}
+                      className="h-4 w-4 rounded-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#39FF14]/20 text-[9px] font-black text-[#39FF14]">
+                      {(cloudUser.fullName || cloudUser.email || 'U')[0].toUpperCase()}
+                    </span>
+                  )}
+                  <span
+                    className={`h-2 w-2 rounded-full ${
+                      syncStatus === 'error'
+                        ? 'bg-red-400 shadow-[0_0_8px_rgba(248,113,113,0.85)]'
+                        : syncStatus === 'syncing'
+                          ? 'bg-amber-300 animate-pulse-fast'
+                          : 'bg-[#39FF14] shadow-[0_0_8px_rgba(57,255,20,0.85)]'
+                    }`}
+                  />
+                </>
+              ) : (
+                <>
+                  <Cloud className="h-3.5 w-3.5 text-[#39FF14]" />
+                  <span>Accedi</span>
+                </>
+              )}
+            </button>
           </div>
         </div>
         <div className="chrome-hairline w-full opacity-60" />
@@ -588,10 +914,12 @@ export function App() {
             onToggleBenchmark={handleToggleBenchmark}
             onDeleteRecording={handleDeleteRecording}
             onImportState={(imported) => {
-              setAppState(imported);
+              setAppState(hydrateAppState(imported));
               showToast('Backup importato');
             }}
             onResetDemoData={handleResetDemoData}
+            onOpenCloudModal={() => setShowCloudModal(true)}
+            cloudUserEmail={cloudUser?.email ?? null}
           />
         )}
 
@@ -643,10 +971,23 @@ export function App() {
           onChangeMetronomeSound={(sound) =>
             updateSettings({ metronomeSound: sound })
           }
+          onSaveProgress={handleSaveSessionProgress}
           onCompleteSession={handleCompleteSession}
           onCancel={() => setActiveLivePlan(null)}
         />
       )}
+
+      {/* Cloud Sync & Google Account Modal */}
+      <CloudSyncModal
+        isOpen={showCloudModal}
+        onClose={() => setShowCloudModal(false)}
+        user={cloudUser}
+        syncStatus={syncStatus}
+        syncError={syncError}
+        lastSyncedAt={appState.settings.lastSyncedAt}
+        onForceSync={() => syncWithCloud()}
+        onAuthConfigured={() => setAuthConfigVersion((v) => v + 1)}
+      />
     </div>
   );
 }

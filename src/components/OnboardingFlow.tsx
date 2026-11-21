@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
+  Cloud,
   Dumbbell,
   Flame,
   Gauge,
@@ -39,6 +40,7 @@ interface OnboardingFlowProps {
     launchWorkoutNow: boolean
   ) => void;
   onCancel?: () => void;
+  onOpenCloudLogin?: () => void;
 }
 
 interface DraftQuizAnswers {
@@ -145,6 +147,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   showIntroSlides = false,
   onFinishQuiz,
   onCancel,
+  onOpenCloudLogin,
 }) => {
   const [phase, setPhase] = useState<'intro' | 'quiz'>(
     showIntroSlides ? 'intro' : 'quiz'
@@ -325,65 +328,80 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         </div>
       )}
 
-      <header className="relative z-10 mx-auto flex w-full max-w-xl items-center justify-between px-5 pt-4 pb-2">
-        <div className="flex items-center gap-2.5">
-          {canGoBack ? (
-            <button
-              type="button"
-              onClick={handleHeaderBack}
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-black border border-white/15 text-white hover:border-white/40 active:scale-90 transition"
-              aria-label="Torna indietro"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </button>
-          ) : (
-            <img
-              src="/icon.svg"
-              alt="The Shredding Lab"
-              className="h-8 w-8 rounded-xl shrink-0 ring-1 ring-slate-200/35 shadow-[0_0_14px_rgba(57,255,20,0.22)]"
-            />
-          )}
-          <span className="text-[11px] font-bold uppercase tracking-widest text-white/55 tabular-nums">
-            {phase === 'intro'
-              ? `${introSlide + 1} / ${INTRO_SLIDE_COUNT}`
-              : `Quiz ${step} / 3`}
-          </span>
+      <header className="relative z-10 mx-auto flex w-full max-w-xl flex-col gap-2 px-5 pt-4 pb-2">
+        <div className="flex w-full items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5">
+            {canGoBack ? (
+              <button
+                type="button"
+                onClick={handleHeaderBack}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-black border border-white/15 text-white hover:border-white/40 active:scale-90 transition"
+                aria-label="Torna indietro"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </button>
+            ) : (
+              <img
+                src="/icon.svg"
+                alt="The Shredding Lab"
+                className="h-8 w-8 rounded-xl shrink-0 ring-1 ring-slate-200/35 shadow-[0_0_14px_rgba(57,255,20,0.22)]"
+              />
+            )}
+            <span className="text-[11px] font-bold uppercase tracking-widest text-white/55 tabular-nums">
+              {phase === 'intro'
+                ? `${introSlide + 1} / ${INTRO_SLIDE_COUNT}`
+                : `Quiz ${step} / 3`}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-1 w-20 sm:w-28">
+              {Array.from({ length: totalProgressSegments }, (_, idx) => {
+                const n = idx + 1;
+                return (
+                  <div
+                    key={n}
+                    className={`h-1 flex-1 rounded-full transition-all duration-300 ${
+                      n <= activeProgressSegment ? 'bg-[#39FF14]' : 'bg-white/15'
+                    }`}
+                  />
+                );
+              })}
+            </div>
+            {phase === 'intro' && (
+              <button
+                type="button"
+                onClick={startQuizPhase}
+                className="rounded-full border border-white/15 px-2.5 py-1 text-[11px] font-bold text-white/60 hover:border-white/35 hover:text-white transition"
+              >
+                Salta
+              </button>
+            )}
+            {onCancel && (
+              <button
+                type="button"
+                onClick={onCancel}
+                aria-label="Chiudi"
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-black text-white/60 hover:text-white active:scale-90 transition"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1 w-28">
-            {Array.from({ length: totalProgressSegments }, (_, idx) => {
-              const n = idx + 1;
-              return (
-                <div
-                  key={n}
-                  className={`h-1 flex-1 rounded-full transition-all duration-300 ${
-                    n <= activeProgressSegment ? 'bg-[#39FF14]' : 'bg-white/15'
-                  }`}
-                />
-              );
-            })}
+        {onOpenCloudLogin && (
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={onOpenCloudLogin}
+              className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-black/80 px-3 py-1 text-[11px] font-bold text-slate-200 hover:border-[#39FF14]/55 hover:text-white transition"
+            >
+              <Cloud className="h-3 w-3 text-[#39FF14]" />
+              Hai già un account? Accedi
+            </button>
           </div>
-          {phase === 'intro' && (
-            <button
-              type="button"
-              onClick={startQuizPhase}
-              className="rounded-full border border-white/15 px-2.5 py-1 text-[11px] font-bold text-white/60 hover:border-white/35 hover:text-white transition"
-            >
-              Salta
-            </button>
-          )}
-          {onCancel && (
-            <button
-              type="button"
-              onClick={onCancel}
-              aria-label="Chiudi"
-              className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-black text-white/60 hover:text-white active:scale-90 transition"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
-        </div>
+        )}
       </header>
 
       <main

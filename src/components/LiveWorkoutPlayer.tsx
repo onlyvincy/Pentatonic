@@ -51,24 +51,30 @@ import {
 } from '../utils/arpeggioEngine';
 import { FretboardViewer } from './FretboardViewer';
 
+type SessionBpmUpdateMap = Record<
+  string,
+  {
+    targetBpm: number;
+    bestCleanBpm?: number;
+    activeVariantId?: string;
+    variantBpms?: Record<string, number>;
+  }
+>;
+
 interface LiveWorkoutPlayerProps {
   plan: ScaledWorkoutPlan;
   sessionLogs?: WorkoutSessionLog[];
   initialVisualOnly: boolean;
   initialMetronomeSound?: MetronomeSoundId;
   onChangeMetronomeSound?: (sound: MetronomeSoundId) => void;
+  onSaveProgress?: (
+    sessionLog: WorkoutSessionLog,
+    updatedBpmByExercise: SessionBpmUpdateMap
+  ) => void;
   onCompleteSession: (
     sessionLog: WorkoutSessionLog,
     newRecordings: FeedRecording[],
-    updatedBpmByExercise: Record<
-      string,
-      {
-        targetBpm: number;
-        bestCleanBpm?: number;
-        activeVariantId?: string;
-        variantBpms?: Record<string, number>;
-      }
-    >
+    updatedBpmByExercise: SessionBpmUpdateMap
   ) => void;
   onCancel: () => void;
 }
@@ -107,9 +113,18 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
   initialVisualOnly,
   initialMetronomeSound = 'woodblock',
   onChangeMetronomeSound,
+  onSaveProgress,
   onCompleteSession,
   onCancel,
 }) => {
+  const sessionIdRef = useRef<string>(`sess-${Date.now()}`);
+  const sessionDateRef = useRef<string>(new Date().toISOString());
+  const sessionStartRef = useRef<number>(Date.now());
+
+  const priorSessionLogs = useMemo(
+    () => sessionLogs.filter((s) => s.id !== sessionIdRef.current),
+    [sessionLogs]
+  );
   const [exerciseIdx, setExerciseIdx] = useState(0);
   const [setNumber, setSetNumber] = useState(1);
   // Full-screen single-focus sequence:
@@ -157,22 +172,12 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     if (!firstEx) return false;
     return shouldEnableSpeedBurstForSkill(
       firstEx,
-      sessionLogs,
+      priorSessionLogs,
       plan.playerLevel
     );
   });
 
-  const [bpmOverrides, setBpmOverrides] = useState<
-    Record<
-      string,
-      {
-        targetBpm: number;
-        bestCleanBpm?: number;
-        activeVariantId?: string;
-        variantBpms?: Record<string, number>;
-      }
-    >
-  >({});
+  const [bpmOverrides, setBpmOverrides] = useState<SessionBpmUpdateMap>({});
 
   const [variantBpmMap, setVariantBpmMap] = useState<
     Record<string, Record<string, number>>
@@ -185,7 +190,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
       return (
         pickNextRecommendedVariant(
           first.exercise,
-          sessionLogs,
+          priorSessionLogs,
           first.preferredVariantId,
           plan.playerLevel
         )?.id ?? null
@@ -201,7 +206,9 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
   }, [currentExercise, selectedVariantId, plan.playerLevel]);
 
   const [selectedArpeggioProgressionId, setSelectedArpeggioProgressionId] =
-    useState<string>(() => pickRecommendedProgression(sessionLogs.length).id);
+    useState<string>(
+      () => pickRecommendedProgression(priorSessionLogs.length).id
+    );
 
   const isArpeggioExercise = currentExercise?.id === ARPEGGIO_EXERCISE_ID;
   const arpeggioData = useMemo(() => {
@@ -228,11 +235,15 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
         return variantBpmMap[ex.id][varId];
       }
       return (
-        computeWeightedExerciseBpm(ex, sessionLogs, varId, plan.playerLevel)
-          .nextSessionBpm || fallbackBpm
+        computeWeightedExerciseBpm(
+          ex,
+          priorSessionLogs,
+          varId,
+          plan.playerLevel
+        ).nextSessionBpm || fallbackBpm
       );
     },
-    [variantBpmMap, sessionLogs, plan.playerLevel]
+    [variantBpmMap, priorSessionLogs, plan.playerLevel]
   );
 
   const currentComfortBpm = useMemo(() => {
@@ -249,19 +260,19 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     if (!first) return 68;
     const initVar = pickNextRecommendedVariant(
       first.exercise,
-      sessionLogs,
+      priorSessionLogs,
       first.preferredVariantId,
       plan.playerLevel
     );
     const comfort = computeWeightedExerciseBpm(
       first.exercise,
-      sessionLogs,
+      priorSessionLogs,
       initVar?.id,
       plan.playerLevel
     ).nextSessionBpm;
     // Set 1 of every workout starts below capacity (-15%) to warm up cleanly
     return calculateWarmupBpm(comfort);
-  }, [plan.items, plan.playerLevel, sessionLogs]);
+  }, [plan.items, plan.playerLevel, priorSessionLogs]);
 
   const [precountBeat, setPrecountBeat] = useState(4);
   const [setRemainingSec, setSetRemainingSec] = useState(
@@ -274,7 +285,11 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
 
   const [loggedSets, setLoggedSets] = useState<SetLog[]>([]);
   const [sessionSetEntries, setSessionSetEntries] = useState<SessionSetEntry[]>([]);
-  const sessionStartRef = useRef<number>(Date.now());
+  const pendingSetIdRef = useRef<string | null>(null);
+  const pendingDurationSecRef = useRef<number | null>(null);
+  const provisionalSetRef = useRef<SetLog | null>(null);
+  const provisionalOverridesRef = useRef<SessionBpmUpdateMap | null>(null);
+  const hasTriggeredFinishForSetRef = useRef<boolean>(false);
 
   const effectiveStepCount = useMemo(() => {
     if (effectiveDemoSequence && effectiveDemoSequence.length > 0) {
@@ -336,7 +351,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     if (!currentItem || !currentExercise) return;
     const pickedVar = pickNextRecommendedVariant(
       currentExercise,
-      sessionLogs,
+      priorSessionLogs,
       currentItem.preferredVariantId,
       plan.playerLevel
     );
@@ -352,7 +367,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     metronome.setGapClickMode(currentExercise.gapClickMode);
     const nextBurst = shouldEnableSpeedBurstForSkill(
       currentExercise,
-      sessionLogs,
+      priorSessionLogs,
       plan.playerLevel
     );
     setIsSpeedBurst(nextBurst);
@@ -430,6 +445,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
 
   const startPlayingNow = useCallback(() => {
     unlockSharedAudioContext().catch(() => {});
+    hasTriggeredFinishForSetRef.current = false;
     setPhase('playing');
     setIsSetPaused(false);
     metronome.start();
@@ -458,27 +474,203 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
-  const finishActiveSet = () => {
-    metronome.stop();
-    setPhase('rating');
-  };
+  const buildSessionLogSnapshot = useCallback(
+    (sets: SetLog[]): WorkoutSessionLog => {
+      const elapsedMin = Math.max(
+        1,
+        Math.round((Date.now() - sessionStartRef.current) / 60000)
+      );
+      const avgClean =
+        sets.length > 0
+          ? Number(
+              (
+                sets.reduce((acc, s) => acc + s.cleanliness, 0) / sets.length
+              ).toFixed(1)
+            )
+          : 4.0;
+
+      return {
+        id: sessionIdRef.current,
+        workoutId: plan.workout.id,
+        workoutTitle: plan.workout.title,
+        date: sessionDateRef.current,
+        durationPreset: plan.preset,
+        totalMinutes: elapsedMin,
+        sets,
+        averageCleanliness: avgClean,
+      };
+    },
+    [plan.preset, plan.workout.id, plan.workout.title]
+  );
+
+  const computeSetOutcome = useCallback(
+    (
+      score: CleanlinessScore,
+      setId: string,
+      durationSecOverride?: number
+    ) => {
+      if (!currentItem || !currentExercise) return null;
+
+      const feedback = calculateGoldilocksNextBpm(
+        metronome.bpm,
+        currentComfortBpm,
+        score,
+        setNumber
+      );
+      const nextBpmForScore = feedback.nextBpm;
+
+      const newSetLog: SetLog = {
+        id: setId,
+        exerciseId: currentExercise.id,
+        variantId: activeVariant?.id,
+        variantLabel: activeVariant?.shortLabel,
+        setNumber,
+        bpm: metronome.bpm,
+        durationSec:
+          durationSecOverride ??
+          Math.max(10, currentItem.durationSec - setRemainingSec),
+        cleanliness: score,
+        nextRecommendedBpm: nextBpmForScore,
+        speedBurst: isSpeedBurst,
+        timestamp: new Date().toISOString(),
+      };
+
+      const nextLoggedSets = [...loggedSets, newSetLog];
+
+      const existingVariantBpms = {
+        ...(currentExercise.variantBpms ?? {}),
+        ...(variantBpmMap[currentExercise.id] ?? {}),
+      };
+      const savedVariantBpm =
+        setNumber === 1 && score >= 3
+          ? Math.max(currentComfortBpm, nextBpmForScore)
+          : nextBpmForScore;
+      const updatedExVariantBpms = activeVariant
+        ? { ...existingVariantBpms, [activeVariant.id]: savedVariantBpm }
+        : existingVariantBpms;
+
+      // Keep the exact same variant for all sets of this exercise within the workout;
+      // variant rotation happens automatically across different workouts via pickNextRecommendedVariant.
+      const updatedExerciseForCalc: Exercise = {
+        ...currentExercise,
+        variantBpms: updatedExVariantBpms,
+        activeVariantId: activeVariant?.id,
+      };
+
+      const syntheticHistory: WorkoutSessionLog[] = [
+        ...priorSessionLogs,
+        {
+          id: 'sess-in-progress',
+          workoutId: plan.workout.id,
+          workoutTitle: plan.workout.title,
+          date: sessionDateRef.current,
+          durationPreset: plan.preset,
+          totalMinutes: 1,
+          sets: nextLoggedSets,
+          averageCleanliness: score,
+        },
+      ];
+
+      const newWeighted = computeWeightedExerciseBpm(
+        updatedExerciseForCalc,
+        syntheticHistory,
+        activeVariant?.id,
+        plan.playerLevel
+      );
+
+      const prevBest =
+        bpmOverrides[currentExercise.id]?.bestCleanBpm ??
+        currentExercise.bestCleanBpm;
+      const newBest =
+        score >= 4 && metronome.bpm > prevBest ? metronome.bpm : prevBest;
+
+      const nextBpmOverrides: SessionBpmUpdateMap = {
+        ...bpmOverrides,
+        [currentExercise.id]: {
+          targetBpm: newWeighted.weightedBpm,
+          bestCleanBpm: newBest,
+          activeVariantId: activeVariant?.id,
+          variantBpms: updatedExVariantBpms,
+        },
+      };
+
+      return {
+        newSetLog,
+        nextLoggedSets,
+        updatedExVariantBpms,
+        nextBpmOverrides,
+        nextBpmForScore,
+      };
+    },
+    [
+      activeVariant,
+      bpmOverrides,
+      currentComfortBpm,
+      currentExercise,
+      currentItem,
+      isSpeedBurst,
+      loggedSets,
+      metronome.bpm,
+      plan.playerLevel,
+      plan.preset,
+      plan.workout.id,
+      plan.workout.title,
+      priorSessionLogs,
+      setNumber,
+      setRemainingSec,
+      variantBpmMap,
+    ]
+  );
+
+  const finishActiveSet = useCallback(
+    (durationSecOverride?: number) => {
+      if (hasTriggeredFinishForSetRef.current) return;
+      hasTriggeredFinishForSetRef.current = true;
+      metronome.stop();
+      if (currentItem && currentExercise) {
+        const setId = `set-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
+        const elapsedSec =
+          durationSecOverride ??
+          Math.max(10, currentItem.durationSec - setRemainingSec);
+        pendingSetIdRef.current = setId;
+        pendingDurationSecRef.current = elapsedSec;
+        const provisional = computeSetOutcome(4, setId, elapsedSec);
+        if (provisional) {
+          provisionalSetRef.current = provisional.newSetLog;
+          provisionalOverridesRef.current = provisional.nextBpmOverrides;
+          onSaveProgress?.(
+            buildSessionLogSnapshot(provisional.nextLoggedSets),
+            provisional.nextBpmOverrides
+          );
+        }
+      }
+      setPhase('rating');
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      buildSessionLogSnapshot,
+      computeSetOutcome,
+      currentExercise,
+      currentItem,
+      onSaveProgress,
+      setRemainingSec,
+    ]
+  );
 
   // Active set countdown timer
   useEffect(() => {
     if (phase !== 'playing' || isSetPaused) return;
     const timer = window.setInterval(() => {
-      setSetRemainingSec((prev) => {
-        if (prev <= 1) {
-          window.clearInterval(timer);
-          finishActiveSet();
-          return 0;
-        }
-        return prev - 1;
-      });
+      setSetRemainingSec((prev) => (prev <= 1 ? 0 : prev - 1));
     }, 1000);
     return () => window.clearInterval(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, isSetPaused]);
+
+  useEffect(() => {
+    if (phase === 'playing' && setRemainingSec === 0) {
+      finishActiveSet(currentItem?.durationSec ?? 60);
+    }
+  }, [phase, setRemainingSec, finishActiveSet, currentItem?.durationSec]);
 
   // Rest countdown timer -> automatic demo for new exercise (Set 1), or pre-timer for Set 2+
   useEffect(() => {
@@ -499,6 +691,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
 
   const startNextAfterRest = () => {
     clearDemoBetweenTimer();
+    hasTriggeredFinishForSetRef.current = false;
     setSetRemainingSec(currentItem?.durationSec ?? 60);
     if (setNumber === 1 || pendingNewVariantDemoRef.current) {
       pendingNewVariantDemoRef.current = false;
@@ -520,32 +713,32 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
   const handleRateSet = (score: CleanlinessScore) => {
     if (!currentItem || !currentExercise) return;
 
-    const feedback = calculateGoldilocksNextBpm(
-      metronome.bpm,
-      currentComfortBpm,
-      score,
-      setNumber
-    );
-    const nextBpmForScore = feedback.nextBpm;
+    const setId =
+      pendingSetIdRef.current ??
+      `set-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
+    const elapsedSec =
+      pendingDurationSecRef.current ??
+      Math.max(10, currentItem.durationSec - setRemainingSec);
+
+    pendingSetIdRef.current = null;
+    pendingDurationSecRef.current = null;
+    provisionalSetRef.current = null;
+    provisionalOverridesRef.current = null;
+
+    const outcome = computeSetOutcome(score, setId, elapsedSec);
+    if (!outcome) return;
+
+    const {
+      newSetLog,
+      nextLoggedSets,
+      updatedExVariantBpms,
+      nextBpmOverrides,
+      nextBpmForScore,
+    } = outcome;
 
     const hasMoreSets = setNumber < currentItem.sets;
     const hasMoreExercises = exerciseIdx < plan.items.length - 1;
 
-    const newSetLog: SetLog = {
-      id: `set-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
-      exerciseId: currentExercise.id,
-      variantId: activeVariant?.id,
-      variantLabel: activeVariant?.shortLabel,
-      setNumber,
-      bpm: metronome.bpm,
-      durationSec: Math.max(10, currentItem.durationSec - setRemainingSec),
-      cleanliness: score,
-      nextRecommendedBpm: nextBpmForScore,
-      speedBurst: isSpeedBurst,
-      timestamp: new Date().toISOString(),
-    };
-
-    const nextLoggedSets = [...loggedSets, newSetLog];
     setLoggedSets(nextLoggedSets);
     setSessionSetEntries((prev) => [
       ...prev,
@@ -554,67 +747,17 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
         exerciseTitle: currentExercise.title,
       },
     ]);
-
-    const existingVariantBpms = {
-      ...(currentExercise.variantBpms ?? {}),
-      ...(variantBpmMap[currentExercise.id] ?? {}),
-    };
-    const savedVariantBpm =
-      setNumber === 1 && score >= 3
-        ? Math.max(currentComfortBpm, nextBpmForScore)
-        : nextBpmForScore;
-    const updatedExVariantBpms = activeVariant
-      ? { ...existingVariantBpms, [activeVariant.id]: savedVariantBpm }
-      : existingVariantBpms;
-
     setVariantBpmMap((prev) => ({
       ...prev,
       [currentExercise.id]: updatedExVariantBpms,
     }));
+    setBpmOverrides(nextBpmOverrides);
 
-    // Keep the exact same variant for all sets of this exercise within the workout;
-    // variant rotation happens automatically across different workouts via pickNextRecommendedVariant.
-    const updatedExerciseForCalc: Exercise = {
-      ...currentExercise,
-      variantBpms: updatedExVariantBpms,
-      activeVariantId: activeVariant?.id,
-    };
-
-    const syntheticHistory: WorkoutSessionLog[] = [
-      ...sessionLogs,
-      {
-        id: 'sess-in-progress',
-        workoutId: plan.workout.id,
-        workoutTitle: plan.workout.title,
-        date: new Date().toISOString(),
-        durationPreset: plan.preset,
-        totalMinutes: 1,
-        sets: nextLoggedSets,
-        averageCleanliness: score,
-      },
-    ];
-
-    const newWeighted = computeWeightedExerciseBpm(
-      updatedExerciseForCalc,
-      syntheticHistory,
-      activeVariant?.id,
-      plan.playerLevel
+    // Save immediately after every rated set so progress and BPM gains are never lost
+    onSaveProgress?.(
+      buildSessionLogSnapshot(nextLoggedSets),
+      nextBpmOverrides
     );
-
-    const prevBest =
-      bpmOverrides[currentExercise.id]?.bestCleanBpm ?? currentExercise.bestCleanBpm;
-    const newBest =
-      score >= 4 && metronome.bpm > prevBest ? metronome.bpm : prevBest;
-
-    setBpmOverrides((prev) => ({
-      ...prev,
-      [currentExercise.id]: {
-        targetBpm: newWeighted.weightedBpm,
-        bestCleanBpm: newBest,
-        activeVariantId: activeVariant?.id,
-        variantBpms: updatedExVariantBpms,
-      },
-    }));
 
     if (hasMoreSets) {
       let nextSetBpm = nextBpmForScore;
@@ -627,7 +770,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
         plan.playerLevel
       );
       const defaultVarId = allVariants[0]?.id;
-      const histCleanNonBurst = sessionLogs
+      const histCleanNonBurst = priorSessionLogs
         .flatMap((s) => s.sets)
         .filter(
           (st) =>
@@ -641,7 +784,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
         const nextVar = pickNextVariantInSession(
           currentExercise,
           activeVariant?.id,
-          sessionLogs,
+          priorSessionLogs,
           nextLoggedSets,
           plan.playerLevel
         );
@@ -673,7 +816,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
           const nextVar = pickNextVariantInSession(
             currentExercise,
             activeVariant?.id,
-            sessionLogs,
+            priorSessionLogs,
             nextLoggedSets,
             plan.playerLevel
           );
@@ -737,7 +880,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
           const nextVar = pickNextVariantInSession(
             currentExercise,
             activeVariant?.id,
-            sessionLogs,
+            priorSessionLogs,
             nextLoggedSets,
             plan.playerLevel
           );
@@ -775,33 +918,31 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
 
   const handleFinishAndSaveWorkout = () => {
     const finalSets: SetLog[] = sessionSetEntries.map((entry) => entry.setLog);
+    onCompleteSession(buildSessionLogSnapshot(finalSets), [], bpmOverrides);
+  };
 
-    const elapsedMin = Math.max(
-      1,
-      Math.round((Date.now() - sessionStartRef.current) / 60000)
-    );
-    const avgClean =
-      finalSets.length > 0
-        ? Number(
-            (
-              finalSets.reduce((acc, s) => acc + s.cleanliness, 0) /
-              finalSets.length
-            ).toFixed(1)
-          )
-        : 4.0;
-
-    const sessionLog: WorkoutSessionLog = {
-      id: `sess-${Date.now()}`,
-      workoutId: plan.workout.id,
-      workoutTitle: plan.workout.title,
-      date: new Date().toISOString(),
-      durationPreset: plan.preset,
-      totalMinutes: elapsedMin,
-      sets: finalSets,
-      averageCleanliness: avgClean,
-    };
-
-    onCompleteSession(sessionLog, [], bpmOverrides);
+  const handleClosePlayer = () => {
+    metronome.stop();
+    clearDemoBetweenTimer();
+    if (phase === 'rating' && provisionalSetRef.current) {
+      const finalSets = [...loggedSets, provisionalSetRef.current];
+      const finalOverrides = provisionalOverridesRef.current ?? bpmOverrides;
+      onCompleteSession(
+        buildSessionLogSnapshot(finalSets),
+        [],
+        finalOverrides
+      );
+      return;
+    }
+    if (loggedSets.length > 0) {
+      onCompleteSession(
+        buildSessionLogSnapshot(loggedSets),
+        [],
+        bpmOverrides
+      );
+      return;
+    }
+    onCancel();
   };
 
   const formatMMSS = (sec: number) => {
@@ -828,10 +969,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
           <div className="flex items-center gap-2.5 min-w-0">
             <button
               type="button"
-              onClick={() => {
-                metronome.stop();
-                onCancel();
-              }}
+              onClick={handleClosePlayer}
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black border border-white/15 text-white hover:border-white/40 transition"
               aria-label="Chiudi allenamento"
             >
@@ -1328,7 +1466,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={finishActiveSet}
+                  onClick={() => finishActiveSet()}
                   className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-white px-4 py-2.5 text-xs sm:text-sm font-black text-black hover:bg-white/90 transition"
                 >
                   <Square className="h-3.5 w-3.5 fill-current" />
@@ -1390,8 +1528,14 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
         {phase === 'summary' && (
           <div className="mx-auto flex min-h-full w-full max-w-lg flex-col justify-between gap-6 px-4 py-6">
             <div className="space-y-4">
-              <div className="flex items-baseline justify-between border-b border-white/15 pb-3">
-                <h2 className="text-2xl font-black text-white">Completato</h2>
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/15 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <h2 className="text-2xl font-black text-white">Completato</h2>
+                  <span className="inline-flex items-center gap-1 rounded-full border border-[#39FF14]/45 bg-[#39FF14]/12 px-2.5 py-0.5 text-[11px] font-bold text-[#39FF14]">
+                    <Check className="h-3 w-3 stroke-[3]" />
+                    Salvato automaticamente
+                  </span>
+                </div>
                 <div className="text-xs font-bold text-white/50 tabular-nums">
                   {loggedSets.length} serie ·{' '}
                   {loggedSets.length > 0
@@ -1495,6 +1639,15 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
             <button
               type="button"
               onClick={() => {
+                pendingSetIdRef.current = null;
+                pendingDurationSecRef.current = null;
+                provisionalSetRef.current = null;
+                provisionalOverridesRef.current = null;
+                hasTriggeredFinishForSetRef.current = false;
+                onSaveProgress?.(
+                  buildSessionLogSnapshot(loggedSets),
+                  bpmOverrides
+                );
                 setSetRemainingSec(currentItem.durationSec);
                 setPrecountBeat(4);
                 setPhase('precount');
