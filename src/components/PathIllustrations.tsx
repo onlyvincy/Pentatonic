@@ -1,5 +1,5 @@
 import React from 'react';
-import { PathId } from '../types/practice';
+import { InstrumentType, PathId } from '../types/practice';
 
 interface PathIllustrationProps {
   pathId: PathId;
@@ -10,6 +10,151 @@ export const PathIllustration: React.FC<PathIllustrationProps> = ({
   pathId,
   className = 'w-full h-full',
 }) => {
+  if (pathId === 'groove_pocket') {
+    return (
+      <svg
+        viewBox="0 0 240 160"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        className={className}
+        aria-hidden="true"
+      >
+        <defs>
+          <radialGradient id="bass-pocket-glow" cx="50%" cy="50%" r="55%">
+            <stop offset="0%" stopColor="#39FF14" stopOpacity="0.24" />
+            <stop offset="100%" stopColor="#39FF14" stopOpacity="0" />
+          </radialGradient>
+        </defs>
+
+        <circle cx="120" cy="80" r="76" fill="url(#bass-pocket-glow)" />
+
+        {/* 4-String Bass Neck Grid */}
+        <path
+          d="M28 46 L212 38 L212 122 L28 114 Z"
+          fill="#090909"
+          stroke="rgba(255,255,255,0.16)"
+          strokeWidth="1.2"
+        />
+        <line x1="70" y1="44" x2="70" y2="116" stroke="rgba(255,255,255,0.16)" strokeWidth="1.2" />
+        <line x1="116" y1="42" x2="116" y2="118" stroke="rgba(255,255,255,0.16)" strokeWidth="1.2" />
+        <line x1="164" y1="40" x2="164" y2="120" stroke="rgba(255,255,255,0.16)" strokeWidth="1.2" />
+
+        {/* 4 Thick Bass Strings */}
+        {[0, 1, 2, 3].map((i) => {
+          const yL = 56 + i * 16;
+          const yR = 51 + i * 19;
+          return (
+            <line
+              key={i}
+              x1="28"
+              y1={yL}
+              x2="212"
+              y2={yR}
+              stroke={i >= 2 ? 'rgba(57,255,20,0.55)' : 'rgba(255,255,255,0.34)'}
+              strokeWidth={1.6 + i * 0.55}
+            />
+          );
+        })}
+
+        {/* Root & Octave Pocket Anchor Dots */}
+        <circle cx="93" cy="100" r="6" fill="#39FF14" stroke="#FFFFFF" strokeWidth="1.8" />
+        <circle cx="140" cy="68" r="5.5" fill="#FFFFFF" stroke="#39FF14" strokeWidth="1.6" />
+        <line
+          x1="98"
+          y1="96"
+          x2="135"
+          y2="71"
+          stroke="#39FF14"
+          strokeWidth="1.8"
+          strokeDasharray="3 3"
+        />
+
+        {/* Bass Pocket Waveform Bars */}
+        <rect x="44" y="132" width="10" height="18" rx="2.5" fill="#39FF14" />
+        <rect x="62" y="141" width="8" height="9" rx="2" fill="rgba(251,191,36,0.55)" />
+        <rect x="78" y="136" width="10" height="14" rx="2.5" fill="#FFFFFF" />
+        <rect x="96" y="142" width="8" height="8" rx="2" fill="rgba(255,255,255,0.28)" />
+        <rect x="112" y="132" width="10" height="18" rx="2.5" fill="#39FF14" />
+        <rect x="130" y="141" width="8" height="9" rx="2" fill="rgba(251,191,36,0.55)" />
+        <rect x="146" y="135" width="10" height="15" rx="2.5" fill="#FFFFFF" />
+        <rect x="164" y="138" width="28" height="12" rx="3" fill="rgba(57,255,20,0.22)" stroke="#39FF14" strokeWidth="1.2" />
+      </svg>
+    );
+  }
+
+  if (pathId === 'modern_bass') {
+    return (
+      <svg
+        viewBox="0 0 240 160"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        className={className}
+        aria-hidden="true"
+      >
+        <defs>
+          <radialGradient id="bass-modern-glow" cx="50%" cy="46%" r="55%">
+            <stop offset="0%" stopColor="#39FF14" stopOpacity="0.28" />
+            <stop offset="100%" stopColor="#39FF14" stopOpacity="0" />
+          </radialGradient>
+        </defs>
+
+        <circle cx="122" cy="78" r="76" fill="url(#bass-modern-glow)" />
+
+        {/* 4-String Modern Bass Neck */}
+        <path
+          d="M26 48 L214 36 L214 124 L26 112 Z"
+          fill="#090909"
+          stroke="rgba(255,255,255,0.16)"
+          strokeWidth="1.2"
+        />
+        <line x1="68" y1="46" x2="68" y2="114" stroke="rgba(255,255,255,0.16)" strokeWidth="1.2" />
+        <line x1="114" y1="43" x2="114" y2="117" stroke="rgba(255,255,255,0.16)" strokeWidth="1.2" />
+        <line x1="160" y1="40" x2="160" y2="120" stroke="rgba(255,255,255,0.16)" strokeWidth="1.2" />
+
+        {/* 4 Thick Bass Strings */}
+        {[0, 1, 2, 3].map((i) => {
+          const yL = 58 + i * 15;
+          const yR = 50 + i * 19;
+          return (
+            <line
+              key={i}
+              x1="26"
+              y1={yL}
+              x2="214"
+              y2={yR}
+              stroke={i === 0 || i === 3 ? 'rgba(57,255,20,0.68)' : 'rgba(255,255,255,0.28)'}
+              strokeWidth={1.6 + i * 0.55}
+            />
+          );
+        })}
+
+        {/* Slap Thumb Impact Halo on Low E */}
+        <circle cx="91" cy="103" r="11" fill="rgba(57,255,20,0.18)" stroke="#39FF14" strokeWidth="1.5" />
+        <circle cx="91" cy="103" r="5" fill="#39FF14" />
+
+        {/* Pop Upward Vector on High G */}
+        <circle cx="137" cy="54" r="6" fill="#FFFFFF" stroke="#39FF14" strokeWidth="1.8" />
+        <path
+          d="M137 42 L137 24 M131 30 L137 22 L143 30"
+          stroke="#39FF14"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+
+        {/* Fast Legato / Slide Trail */}
+        <path
+          d="M150 76 Q174 62 198 74"
+          stroke="#FFFFFF"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeDasharray="4 2"
+        />
+        <circle cx="198" cy="74" r="4.5" fill="#39FF14" />
+      </svg>
+    );
+  }
+
   if (pathId === 'rhythm') {
     return (
       <svg
@@ -209,12 +354,15 @@ export const PathIllustration: React.FC<PathIllustrationProps> = ({
 interface IniziaButtonIllustrationProps {
   isHolding?: boolean;
   holdProgress?: number;
+  instrument?: InstrumentType;
 }
 
 export const IniziaButtonIllustration: React.FC<
   IniziaButtonIllustrationProps
-> = ({ isHolding = false, holdProgress = 0 }) => {
+> = ({ isHolding = false, holdProgress = 0, instrument = 'guitar' }) => {
   const glowOpacity = isHolding ? 0.28 + holdProgress * 0.34 : 0.24;
+  const isBass = instrument === 'bass';
+  const stringOffsets = isBass ? [-21, -7, 7, 21] : [-25, -15, -5, 5, 15, 25];
   return (
     <svg
       viewBox="0 0 200 200"
@@ -267,8 +415,8 @@ export const IniziaButtonIllustration: React.FC<
           strokeWidth="1"
         />
 
-        {/* Perspective 6 Metallic Guitar Strings across the Stage */}
-        {[-25, -15, -5, 5, 15, 25].map((dy, idx) => (
+        {/* Perspective Guitar or Bass Strings across the Stage */}
+        {stringOffsets.map((dy, idx) => (
           <line
             key={idx}
             x1="12"
@@ -276,10 +424,10 @@ export const IniziaButtonIllustration: React.FC<
             x2="188"
             y2={84 + dy * 1.15}
             stroke={
-              idx === 2 ? 'rgba(57,255,20,0.78)' : 'url(#inizia-chrome)'
+              idx === (isBass ? 2 : 2) ? 'rgba(57,255,20,0.78)' : 'url(#inizia-chrome)'
             }
             strokeOpacity={idx === 2 ? 1 : 0.32}
-            strokeWidth={0.85 + idx * 0.18}
+            strokeWidth={isBass ? 1.5 + idx * 0.45 : 0.85 + idx * 0.18}
           />
         ))}
 
@@ -334,9 +482,10 @@ export const IniziaButtonIllustration: React.FC<
   );
 };
 
-export const CoachVectorEmblem: React.FC<{ className?: string }> = ({
-  className = 'h-6 w-6',
-}) => (
+export const CoachVectorEmblem: React.FC<{
+  className?: string;
+  instrument?: InstrumentType;
+}> = ({ className = 'h-6 w-6', instrument = 'guitar' }) => (
   <svg
     viewBox="0 0 40 40"
     fill="none"
@@ -351,18 +500,45 @@ export const CoachVectorEmblem: React.FC<{ className?: string }> = ({
         <stop offset="100%" stopColor="#E2E8F0" />
       </linearGradient>
     </defs>
-    <line x1="5" y1="14" x2="35" y2="12" stroke="url(#coach-chrome)" strokeOpacity="0.45" strokeWidth="1" />
-    <line x1="5" y1="20" x2="35" y2="20" stroke="rgba(57,255,20,0.55)" strokeWidth="1.2" />
-    <line x1="5" y1="26" x2="35" y2="28" stroke="url(#coach-chrome)" strokeOpacity="0.45" strokeWidth="1" />
-    <path
-      d="M20 6C28.5 6 33 11.5 33 18.5C33 26.5 24 33.5 20 35C16 33.5 7 26.5 7 18.5C7 11.5 11.5 6 20 6Z"
-      fill="#39FF14"
-      stroke="url(#coach-chrome)"
-      strokeWidth="1.4"
-    />
+    {instrument === 'bass' ? (
+      <>
+        {[12, 17, 23, 28].map((y, idx) => (
+          <line
+            key={y}
+            x1="5"
+            y1={y}
+            x2="35"
+            y2={y}
+            stroke={idx >= 2 ? 'rgba(57,255,20,0.55)' : 'url(#coach-chrome)'}
+            strokeOpacity={idx >= 2 ? 0.9 : 0.45}
+            strokeWidth={1 + idx * 0.35}
+          />
+        ))}
+        <circle
+          cx="20"
+          cy="20"
+          r="12"
+          fill="#050608"
+          stroke="#39FF14"
+          strokeWidth="2"
+        />
+      </>
+    ) : (
+      <>
+        <line x1="5" y1="14" x2="35" y2="12" stroke="url(#coach-chrome)" strokeOpacity="0.45" strokeWidth="1" />
+        <line x1="5" y1="20" x2="35" y2="20" stroke="rgba(57,255,20,0.55)" strokeWidth="1.2" />
+        <line x1="5" y1="26" x2="35" y2="28" stroke="url(#coach-chrome)" strokeOpacity="0.45" strokeWidth="1" />
+        <path
+          d="M20 6C28.5 6 33 11.5 33 18.5C33 26.5 24 33.5 20 35C16 33.5 7 26.5 7 18.5C7 11.5 11.5 6 20 6Z"
+          fill="#39FF14"
+          stroke="url(#coach-chrome)"
+          strokeWidth="1.4"
+        />
+      </>
+    )}
     <path
       d="M13 20H16.5L18.5 15.5L21.5 24.5L23.5 20H27"
-      stroke="#050608"
+      stroke={instrument === 'bass' ? '#39FF14' : '#050608'}
       strokeWidth="2.1"
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -370,8 +546,12 @@ export const CoachVectorEmblem: React.FC<{ className?: string }> = ({
   </svg>
 );
 
-export const OnboardingHeroGuitarBg: React.FC<{ className?: string }> = ({
+export const OnboardingHeroGuitarBg: React.FC<{
+  className?: string;
+  instrument?: InstrumentType;
+}> = ({
   className = 'w-full h-full',
+  instrument = 'guitar',
 }) => (
   <svg
     viewBox="0 0 420 560"
@@ -466,9 +646,9 @@ export const OnboardingHeroGuitarBg: React.FC<{ className?: string }> = ({
         opacity="0.7"
       />
 
-      {/* Ethereal Fading Guitar Strings Dissolving Upward into the Dream */}
-      {[-15, -9, -3, 3, 9, 15].map((dx, idx) => {
-        const isNeon = idx === 3;
+      {/* Ethereal Fading Strings Dissolving Upward into the Dream */}
+      {(instrument === 'bass' ? [-14, -5, 5, 14] : [-15, -9, -3, 3, 9, 15]).map((dx, idx) => {
+        const isNeon = instrument === 'bass' ? idx === 2 : idx === 3;
         return (
           <line
             key={`dream-str-${idx}`}
@@ -477,7 +657,15 @@ export const OnboardingHeroGuitarBg: React.FC<{ className?: string }> = ({
             x2={210 + dx * 1.45}
             y2="465"
             stroke={isNeon ? 'url(#dream-string-neon)' : 'url(#dream-string-fade)'}
-            strokeWidth={isNeon ? '1.8' : '0.9'}
+            strokeWidth={
+              instrument === 'bass'
+                ? isNeon
+                  ? '2.8'
+                  : '1.8'
+                : isNeon
+                ? '1.8'
+                : '0.9'
+            }
             filter={isNeon ? 'url(#dream-blur-whisper)' : undefined}
           />
         );

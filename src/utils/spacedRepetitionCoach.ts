@@ -3,6 +3,8 @@ import {
   Exercise,
   ExerciseCategory,
   ExerciseVariant,
+  InstrumentType,
+  getExerciseInstrument,
 } from '../types/practice';
 
 export const SPACED_REPETITION_INTERVAL_DAYS = [1, 3, 7, 14, 30, 60] as const;
@@ -122,7 +124,12 @@ export type TechniqueId =
   | 'hammer-pull'
   | 'bending-vibrato'
   | 'pick-escape'
-  | 'barre-clamp';
+  | 'barre-clamp'
+  | 'bass-fingerstyle'
+  | 'bass-slap-pop'
+  | 'bass-ghost-pocket'
+  | 'bass-muting-simandl'
+  | 'bass-legato-slide';
 
 export interface TechniqueGuide {
   id: TechniqueId;
@@ -298,6 +305,106 @@ export const TECHNIQUE_GUIDES: Record<TechniqueId, TechniqueGuide> = {
     commonMistake:
       'Stringere troppo con il pollice piegando la falange dell’indice e creando zone d’ombra sulla 2ª o 3ª corda.',
   },
+  'bass-fingerstyle': {
+    id: 'bass-fingerstyle',
+    name: 'Fingerstyle Alternato & Raking',
+    subtitle: 'Alternanza Indice–Medio (i–m) ed economia discendente',
+    whatItIs:
+      'La tecnica fondamentale del basso elettrico alterna in modo regolare indice (i) e medio (m) pizzicando verso l’alto e fermando il dito sulla corda superiore (rest stroke). Quando scendi verso una corda più grave puoi usare il raking lasciando cadere lo stesso dito con continuità.',
+    howToSteps: [
+      'Appoggia il pollice destro sul pickup o sulla corda più grave sopra a quella che stai suonando (Floating Thumb).',
+      'Pizzica alternando sempre indice e medio (i–m) con la stessa corsa e pressione per ottenere volume identico.',
+      'Scendendo da G→D→A→E sfrutta il raking lasciando appoggiare naturalmente il dito sulla corda appena sotto.',
+    ],
+    handFocus: {
+      leftHand:
+        'Rilassa le dita vicino alla barretta metallica e rilascia la pressione al momento giusto per evitare code sonore.',
+      rightHand:
+        'Movimento fluido dalla nocca di indice e medio: niente strappi col braccio, tocco pieno sul polpastrello.',
+    },
+    commonMistake:
+      'Ripetere sempre lo stesso dito salendo sulle corde acute (perdendo fluidità) oppure pizzicare troppo vicino al ponte perdendo corpo.',
+  },
+  'bass-slap-pop': {
+    id: 'bass-slap-pop',
+    name: 'Slap & Pop (Thumb Bounce & Pluck)',
+    subtitle: 'Rotazione di polso: pollice percussivo + strappo indice',
+    whatItIs:
+      'Lo Slap colpisce la corda grave contro gli ultimi tasti usando l’osso laterale del pollice che rimbalza subito per lasciarla vibrare; il Pop aggancia da sotto la corda acuta (D o G) con l’indice e la rilascia con uno schiocco brillante e definito.',
+    howToSteps: [
+      'Tieni il pollice parallelo alle corde e colpisci sopra la fine della tastiera ruotando il polso come una maniglia.',
+      'Fai rimbalzare immediatamente il pollice fuori dalla corda: non lasciarlo appoggiato dopo il colpo (tranne nel Double Thumb).',
+      'Per il Pop infila appena la punta dell’indice sotto D o G e ruota il polso verso l’alto senza tirare via la mano dal basso.',
+    ],
+    handFocus: {
+      leftHand:
+        'Alza leggermente le dita sinistre tra una nota e l’altra per creare le "dead notes" percussive al centro del groove.',
+      rightHand:
+        'Rotazione rilassata dell’avambraccio: il pollice colpisce E/A mentre indice (o medio) strappano D/G.',
+    },
+    commonMistake:
+      'Colpire le corde con il gomito rigido invece che ruotando l’avambraccio, o agganciare troppo in profondità la corda durante il Pop.',
+  },
+  'bass-ghost-pocket': {
+    id: 'bass-ghost-pocket',
+    name: 'Pocket Groove & Ghost Notes (1/16)',
+    subtitle: 'Lock con la cassa + note fantasma percussive (×)',
+    whatItIs:
+      'Il "pocket" nasce dal controllo millimetrico sia dell’attacco sia di quando fermi la nota. Le ghost notes (note fantasma smorzate con la mano sinistra) riempiono gli spazi in sedicesimi trasformando la tua linea di basso in una batteria melodica.',
+    howToSteps: [
+      'Blocca la nota precedente sollevando appena la pressione delle dita sinistre senza staccarle dalle corde.',
+      'Suona il colpo destro sulle corde smorzate usando 2–3 dita sinistre insieme per evitare armonici acuti sui tasti 5, 7 e 12.',
+      'Mantieni il movimento costante dei sedicesimi nella testa anche durante le battute mute (Gap Click).',
+    ],
+    handFocus: {
+      leftHand:
+        'Alterna pressione piena sulle note reali e sfioramento leggero a 2–3 dita sulle ghost notes (×).',
+      rightHand:
+        'Pizzicata costante di indice e medio con accenti netti sul battere della cassa e dinamica più morbida sulle ghost.',
+    },
+    commonMistake:
+      'Premere con un solo dito sul tasto 5 o 7 durante una ghost note (creando un fischio armonico) o trascurare la durata delle note.',
+  },
+  'bass-muting-simandl': {
+    id: 'bass-muting-simandl',
+    name: 'Simandl 1–2–4 & Floating Thumb Muting',
+    subtitle: 'Ergonomia sui tasti larghi e silenzio assoluto sulle 4 corde',
+    whatItIs:
+      'Sul basso a scala lunga i primi tasti sono molto distanti: usare il sistema Simandl (1–2–4: indice, medio e anulare+mignolo uniti) evita stiramenti, mentre il Floating Thumb sposta il pollice destro sulle corde gravi per spegnere ogni ronzio.',
+    howToSteps: [
+      'Dal 1° al 4° tasto copri 3 tasti con Indice (1), Medio (2) e Anulare+Mignolo insieme (4).',
+      'Dal 5° tasto in su passa progressivamente a 1 dito per tasto (1–2–3–4) tenendo le dita vicine alla tastiera.',
+      'Quando suoni su D o G, appoggia il lato del pollice destro sulle corde E e A per tenerle completamente mute.',
+    ],
+    handFocus: {
+      leftHand:
+        'Pollice sinistro centrato dietro il manico opposto al medio; la parte piatta delle dita sfiora le corde più acute sotto.',
+      rightHand:
+        'Floating Thumb: il pollice destro segue la mano verso il basso appoggiandosi sulle corde gravi inutilizzate.',
+    },
+    commonMistake:
+      'Allargare forzatamente 1–2–3–4 al 1° tasto irrigidendo il polso, oppure lasciare il pollice fisso sul pickup lasciando vibrare la corda Mi.',
+  },
+  'bass-legato-slide': {
+    id: 'bass-legato-slide',
+    name: 'Legato 4 Corde & Slide Espressivi',
+    subtitle: 'Hammer-On, Pull-Off e collegamenti fluidi sul manico',
+    whatItIs:
+      'Hammer-On, Pull-Off e Slide permettono di eseguire fill fluidi e linee cantabili su tutta la lunghezza del manico del basso senza dover pizzicare ogni singola nota con la mano destra.',
+    howToSteps: [
+      'Nell’Hammer-On abbassa il dito con decisione proprio dietro la barretta del tasto per sfruttare la massa delle corde del basso.',
+      'Nel Pull-Off tira leggermente la corda verso il basso con il polpastrello mentre la rilasci, mantenendo fermo il dito sotto.',
+      'Negli Slide tieni la pressione costante sul tasto e guarda in anticipo la nota di arrivo prima di spostare il braccio.',
+    ],
+    handFocus: {
+      leftHand:
+        'Articolazione decisa dalle nocche e pollice sciolto dietro il manico che scorre come un binario negli spostamenti.',
+      rightHand:
+        'Pizzica la prima nota con tocco pieno e usa il Floating Thumb per evitare che le corde vicine risuonino durante lo slide.',
+    },
+    commonMistake:
+      'Eseguire Hammer-On al centro del tasto (suono spento sulle corde spesse del basso) o perdere pressione a metà slide.',
+  },
 };
 
 export interface ExerciseFamilyBriefing {
@@ -412,6 +519,122 @@ const FAMILY_BRIEFINGS_BY_ID: Record<
     ],
     primaryTechniques: ['barre-clamp', 'string-muting'],
   },
+  'ex-bass-fingerstyle': {
+    whyYouDoIt:
+      'Costruisce equilibrio perfetto tra indice e medio (i–m), cambi di corda puliti e raking discendente economico per sostenere qualsiasi velocità.',
+    dailySoundBenefits: [
+      'Ogni nota di una linea in ottavi o sedicesimi esce con lo stesso peso, attacco e presenza.',
+      'Passi da una corda all’altra e scendi con il raking senza incastrarti o perdere il tempo.',
+      'Reggi brani veloci dall’inizio alla fine senza affaticare l’avambraccio destro.',
+    ],
+    primaryTechniques: ['bass-fingerstyle', 'bass-muting-simandl'],
+  },
+  'ex-bass-pocket-groove': {
+    whyYouDoIt:
+      'Allena il tuo orologio interno durante le battute mute (Gap Click) e coordina note tenute, staccati e ghost notes percussive in sedicesimi.',
+    dailySoundBenefits: [
+      'Il tuo groove regge da solo in sala prove e dal vivo agganciandosi esattamente alla cassa della batteria.',
+      'Le linee funk, pop e rock acquistano "bounce" e dinamica professionale grazie alle ghost notes.',
+      'Impari a controllare quando fermare ogni nota tanto quanto quando colpirla.',
+    ],
+    primaryTechniques: ['bass-ghost-pocket', 'bass-muting-simandl'],
+  },
+  'ex-bass-slap-pop': {
+    whyYouDoIt:
+      'Sviluppa la rotazione elastica del polso destro per colpire con precisione col pollice (Thumb) e strappare con l’indice (Pop) integrando dead notes e hammer-on.',
+    dailySoundBenefits: [
+      'Ottieni uno slap definito e pieno senza colpi sporchi sulle corde vicine.',
+      'Sfrutti ottave, dead notes e legature per creare groove funk moderni immediati.',
+      'Mantieni un timing solido anche alternando rapidamente registro grave e registro acuto.',
+    ],
+    primaryTechniques: ['bass-slap-pop', 'bass-ghost-pocket'],
+  },
+  'ex-bass-arpeggios': {
+    whyYouDoIt:
+      'Trasforma i giri armonici in linee di basso consapevoli basate sui gradi (1–3–5–7–8) e ottave, senza schemi o accordi chitarristici.',
+    dailySoundBenefits: [
+      'Sai sempre su quale nota appoggiarti quando la band cambia accordo invece di restare fermo sulla sola tonica.',
+      'Crei walking bass, groove disco/soul in ottave e passaggi melodici in qualsiasi tonalità.',
+      'Visualizzi immediatamente la mappa degli intervalli sotto le dita sulle 4 corde.',
+    ],
+    primaryTechniques: ['bass-fingerstyle', 'bass-muting-simandl'],
+  },
+  'ex-bass-spider-muting': {
+    whyYouDoIt:
+      'Combina la postura Simandl 1–2–4 sui tasti larghi, l’indipendenza 1–2–3–4 dal 5° tasto e lo String Muting a due mani con Floating Thumb.',
+    dailySoundBenefits: [
+      'Suoni i primi tasti senza stirare o stancare il polso sinistro.',
+      'Anulare e mignolo acquistano forza e precisione pari a indice e medio.',
+      'Elimini ronzii e vibrazioni delle corde a vuoto anche ad alto volume in band.',
+    ],
+    primaryTechniques: ['bass-muting-simandl', 'bass-fingerstyle'],
+  },
+  'ex-bass-neck-legato': {
+    whyYouDoIt:
+      'Collega tutto il manico a 4 corde tramite pentatoniche, slide diagonali, scale su corda singola e articolazioni Hammer-On / Pull-Off.',
+    dailySoundBenefits: [
+      'Ti muovi con sicurezza dal 1° al 12° tasto senza restare intrappolato in una sola posizione.',
+      'I tuoi fill di raccordo tra una battuta e l’altra suonano fluidi, morbidi e musicali.',
+      'Padroneggi il legato sulle corde spesse del basso ottenendo un volume pieno anche senza pizzicare.',
+    ],
+    primaryTechniques: ['bass-legato-slide', 'bass-muting-simandl'],
+  },
+};
+
+const BASS_FALLBACK_BY_CATEGORY: Record<
+  ExerciseCategory,
+  Omit<ExerciseFamilyBriefing, 'familyId' | 'title'>
+> = {
+  rhythm: {
+    whyYouDoIt:
+      'Costruisce pocket solido con la batteria, controllo della durata delle note e precisione nelle ghost notes.',
+    dailySoundBenefits: [
+      'Il tuo groove rimane dritto e affidabile sia in sala prove che dal vivo.',
+      'Controlli perfettamente pause, staccati e dinamiche in sedicesimi.',
+      'Dai spinta ritmica immediata a qualsiasi giro armonico.',
+    ],
+    primaryTechniques: ['bass-ghost-pocket', 'bass-fingerstyle'],
+  },
+  picking: {
+    whyYouDoIt:
+      'Coordina indice e medio della mano destra sui cambi corda e nel raking per suonare veloce e uniforme.',
+    dailySoundBenefits: [
+      'Attacco costante e definito tra indice e medio su tutte e 4 le corde.',
+      'Cambi corda puliti senza perdere il flusso ritmico.',
+      'Resistenza e rilassamento anche su linee in ottavi e sedicesimi veloci.',
+    ],
+    primaryTechniques: ['bass-fingerstyle', 'bass-muting-simandl'],
+  },
+  pentatonic: {
+    whyYouDoIt:
+      'Espande il tuo vocabolario di basslines, triadi, ottave e collegamenti lungo tutte le 4 corde.',
+    dailySoundBenefits: [
+      'Segui i cambi armonici con linee musicali e variegate.',
+      'Colleghi facilmente registri gravi e acuti tramite slide e posizioni mobili.',
+      'Visualizzi subito tonica, terza, quinta e ottava sotto la mano.',
+    ],
+    primaryTechniques: ['bass-legato-slide', 'bass-fingerstyle'],
+  },
+  legato: {
+    whyYouDoIt:
+      'Allena articolazione, slap & pop percussivo e forza indipendente della mano sinistra sulle corde spesse.',
+    dailySoundBenefits: [
+      'Slap & Pop puliti con ottima separazione tra corde gravi e acute.',
+      'Hammer-on e pull-off pieni e definiti nei fill e passaggi moderni.',
+      'Maggiore espressività dinamica in ogni brano.',
+    ],
+    primaryTechniques: ['bass-slap-pop', 'bass-legato-slide'],
+  },
+  fretboard: {
+    whyYouDoIt:
+      'Migliora ergonomia Simandl 1–2–4, apertura delle dita e muting silenzioso sulle 4 corde.',
+    dailySoundBenefits: [
+      'Zero corde a vuoto che risuonano indesiderate.',
+      'Meno fatica sul polso nei primi tasti a scala lunga.',
+      'Precisione chirurgica dell’intonazione su tutta la tastiera.',
+    ],
+    primaryTechniques: ['bass-muting-simandl', 'bass-fingerstyle'],
+  },
 };
 
 const FALLBACK_BY_CATEGORY: Record<
@@ -470,9 +693,44 @@ const FALLBACK_BY_CATEGORY: Record<
   },
 };
 
-function detectTechniquesFromSteps(steps?: DemoStep[]): TechniqueId[] {
+function detectTechniquesFromSteps(
+  steps?: DemoStep[],
+  instrument: InstrumentType = 'guitar'
+): TechniqueId[] {
   if (!steps || steps.length === 0) return [];
   const found = new Set<TechniqueId>();
+
+  if (instrument === 'bass') {
+    for (const step of steps) {
+      const tech = (step.technique || '').toLowerCase();
+      if (tech.includes('slap') || tech.includes('pop') || tech.includes('thumb')) {
+        found.add('bass-slap-pop');
+      }
+      if (
+        step.muted ||
+        tech.includes('ghost') ||
+        tech.includes('dead') ||
+        tech.includes('silenzio') ||
+        tech.includes('staccato')
+      ) {
+        found.add('bass-ghost-pocket');
+      }
+      if (
+        tech.includes('slide') ||
+        tech.includes('hammer') ||
+        tech.includes('pull')
+      ) {
+        found.add('bass-legato-slide');
+      }
+      if (tech.includes('raking') || tech.includes('indice') || tech.includes('fingerstyle')) {
+        found.add('bass-fingerstyle');
+      }
+      if (tech.includes('simandl') || tech.includes('muting') || tech.includes('pollice')) {
+        found.add('bass-muting-simandl');
+      }
+    }
+    return Array.from(found);
+  }
 
   for (const step of steps) {
     const tech = (step.technique || '').toLowerCase();
@@ -508,13 +766,17 @@ export function getExerciseFamilyBriefing(
   exercise: Exercise,
   activeVariant?: ExerciseVariant
 ): ExerciseFamilyBriefing {
+  const instrument = getExerciseInstrument(exercise);
+  const fallbackMap =
+    instrument === 'bass' ? BASS_FALLBACK_BY_CATEGORY : FALLBACK_BY_CATEGORY;
   const base =
     FAMILY_BRIEFINGS_BY_ID[exercise.id] ??
-    FALLBACK_BY_CATEGORY[exercise.category] ??
-    FALLBACK_BY_CATEGORY.fretboard;
+    fallbackMap[exercise.category] ??
+    fallbackMap.fretboard;
 
   const detectedFromVariant = detectTechniquesFromSteps(
-    activeVariant?.demoSequence ?? exercise.demoSequence
+    activeVariant?.demoSequence ?? exercise.demoSequence,
+    instrument
   );
   const mergedTechniques: TechniqueId[] = [...base.primaryTechniques];
   for (const techId of detectedFromVariant) {

@@ -12,6 +12,8 @@ import {
   AppState,
   Exercise,
   FeedRecording,
+  InstrumentMode,
+  InstrumentType,
   PlayerLevelId,
   ScaledWorkoutPlan,
   ScientificPlanPrescription,
@@ -19,9 +21,12 @@ import {
   UserSettings,
   WorkoutSessionLog,
   WorkoutTemplate,
+  getExerciseInstrument,
 } from './types/practice';
 import {
-  SEED_EXERCISES,
+  ALL_SEED_EXERCISES,
+  ALL_SEED_PROGRAMS,
+  ALL_SEED_WORKOUTS,
   createCleanProfileAppState,
   createInitialAppState,
 } from './data/scientificSeed';
@@ -34,6 +39,7 @@ import {
 import {
   LEGACY_EXERCISE_ID_MAP,
   buildSessionPlanFromPrescription,
+  createDefaultBassPrescription,
   createDefaultScientificPrescription,
   generateScientificPrescription,
 } from './utils/scientificPrescription';
@@ -47,7 +53,10 @@ import { ProgramsAndBuilder } from './components/ProgramsAndBuilder';
 import { TunerAndCheatSheet } from './components/TunerAndCheatSheet';
 import { AnalyticsView } from './components/AnalyticsView';
 import { LiveWorkoutPlayer } from './components/LiveWorkoutPlayer';
-import { OnboardingFlow } from './components/OnboardingFlow';
+import {
+  OnboardingCompletionResult,
+  OnboardingFlow,
+} from './components/OnboardingFlow';
 import {
   BeforeInstallPromptEvent,
   PostOnboardingGuide,
@@ -97,7 +106,8 @@ function writeStoredPostOnboardingStep(step: PostOnboardingStep | null): void {
 function applyLevelBaselineToUnpracticed(
   exercises: Exercise[],
   sessionLogs: WorkoutSessionLog[],
-  level?: PlayerLevelId
+  level?: PlayerLevelId,
+  instrumentFilter?: InstrumentType
 ): Exercise[] {
   const practicedIds = new Set(
     sessionLogs.flatMap((log) => log.sets.map((st) => st.exerciseId))
@@ -105,6 +115,9 @@ function applyLevelBaselineToUnpracticed(
   const levelBpm = getStartingBpmForLevel(level);
   return exercises.map((ex) => {
     if (ex.isCustom) return ex;
+    if (instrumentFilter && getExerciseInstrument(ex) !== instrumentFilter) {
+      return ex;
+    }
     const hasVariantHistory =
       ex.variantBpms && Object.keys(ex.variantBpms).length > 0;
     if (practicedIds.has(ex.id) || hasVariantHistory) {
@@ -120,8 +133,8 @@ function applyLevelBaselineToUnpracticed(
   });
 }
 
-function hydrateAppState(saved: AppState): AppState {
-  const seedById = new Map(SEED_EXERCISES.map((ex) => [ex.id, ex]));
+export function hydrateAppState(saved: AppState): AppState {
+  const seedById = new Map(ALL_SEED_EXERCISES.map((ex) => [ex.id, ex]));
   const activeSavedExercises = (saved.exercises ?? []).filter(
     (ex) => seedById.has(ex.id) || ex.isCustom
   );
@@ -131,6 +144,7 @@ function hydrateAppState(saved: AppState): AppState {
     if (!seed) return ex;
     return {
       ...ex,
+      instrument: seed.instrument ?? ex.instrument,
       pillarName: seed.pillarName,
       title: seed.title,
       description: seed.description,
@@ -146,13 +160,26 @@ function hydrateAppState(saved: AppState): AppState {
         : seed.activeVariantId,
     };
   });
-  const missingSeedExercises = SEED_EXERCISES.filter(
+  const missingSeedExercises = ALL_SEED_EXERCISES.filter(
     (seed) => !savedIds.has(seed.id)
   );
   const hydratedExercises = [
     ...hydratedSavedExercises,
     ...missingSeedExercises,
   ];
+
+  const savedWorkoutIds = new Set((saved.workouts ?? []).map((w) => w.id));
+  const hydratedWorkouts = [
+    ...(saved.workouts ?? []),
+    ...ALL_SEED_WORKOUTS.filter((w) => !savedWorkoutIds.has(w.id)),
+  ];
+
+  const savedProgramIds = new Set((saved.programs ?? []).map((p) => p.id));
+  const hydratedPrograms = [
+    ...(saved.programs ?? []),
+    ...ALL_SEED_PROGRAMS.filter((p) => !savedProgramIds.has(p.id)),
+  ];
+
   const migratedSessionLogs = (saved.sessionLogs ?? []).map((log) => ({
     ...log,
     sets: log.sets.map((st) => ({
@@ -165,44 +192,103 @@ function hydrateAppState(saved: AppState): AppState {
     exerciseId: LEGACY_EXERCISE_ID_MAP[rec.exerciseId] ?? rec.exerciseId,
   }));
 
+  const guitarExercises = hydratedExercises.filter(
+    (e) => getExerciseInstrument(e) === 'guitar'
+  );
+  const bassExercises = hydratedExercises.filter(
+    (e) => getExerciseInstrument(e) === 'bass'
+  );
+  const guitarIds = new Set(guitarExercises.map((e) => e.id));
+  const bassIds = new Set(bassExercises.map((e) => e.id));
+
   const savedPlan = saved.settings?.scientificPlan;
   const generatedPlan = savedPlan
-    ? generateScientificPrescription(savedPlan.answers, hydratedExercises)
+    ? generateScientificPrescription(
+        { ...savedPlan.answers, instrument: 'guitar' },
+        guitarExercises
+      )
     : createDefaultScientificPrescription(
-        hydratedExercises,
-        saved.settings.activeProgramId,
-        saved.settings.selectedPreset
+        guitarExercises,
+        saved.settings?.activeProgramId,
+        saved.settings?.selectedPreset
       );
 
-  const customDoses = (savedPlan?.doses ?? []).filter(
-    (d) => d.roleLabel === 'Esercizio Personale'
+  const customGuitarDoses = (savedPlan?.doses ?? []).filter(
+    (d) => d.roleLabel === 'Esercizio Personale' && guitarIds.has(d.exerciseId)
   );
-  const generatedWithoutCustom = generatedPlan.doses.filter(
-    (d) => !customDoses.some((cd) => cd.exerciseId === d.exerciseId)
+  const generatedGuitarWithoutCustom = generatedPlan.doses.filter(
+    (d) => !customGuitarDoses.some((cd) => cd.exerciseId === d.exerciseId)
   );
   const hydratedPlan: ScientificPlanPrescription = savedPlan
     ? {
         ...generatedPlan,
         id: savedPlan.id,
         createdAt: savedPlan.createdAt,
-        doses: [...generatedWithoutCustom, ...customDoses],
+        doses: [...generatedGuitarWithoutCustom, ...customGuitarDoses],
       }
     : generatedPlan;
 
-  const calibratedExercises = applyLevelBaselineToUnpracticed(
+  const savedBassPlan = saved.settings?.bassScientificPlan;
+  const generatedBassPlan = savedBassPlan
+    ? generateScientificPrescription(
+        { ...savedBassPlan.answers, instrument: 'bass' },
+        bassExercises
+      )
+    : createDefaultBassPrescription(
+        bassExercises,
+        saved.settings?.selectedPreset
+      );
+
+  const customBassDoses = (savedBassPlan?.doses ?? []).filter(
+    (d) => d.roleLabel === 'Esercizio Personale' && bassIds.has(d.exerciseId)
+  );
+  const generatedBassWithoutCustom = generatedBassPlan.doses.filter(
+    (d) => !customBassDoses.some((cd) => cd.exerciseId === d.exerciseId)
+  );
+  const hydratedBassPlan: ScientificPlanPrescription = savedBassPlan
+    ? {
+        ...generatedBassPlan,
+        id: savedBassPlan.id,
+        createdAt: savedBassPlan.createdAt,
+        doses: [...generatedBassWithoutCustom, ...customBassDoses],
+      }
+    : generatedBassPlan;
+
+  const guitarCalibrated = applyLevelBaselineToUnpracticed(
     hydratedExercises,
     migratedSessionLogs,
-    hydratedPlan.answers.level
+    hydratedPlan.answers.level,
+    'guitar'
   );
+  const calibratedExercises = applyLevelBaselineToUnpracticed(
+    guitarCalibrated,
+    migratedSessionLogs,
+    hydratedBassPlan.answers.level,
+    'bass'
+  );
+
+  const instrumentMode: InstrumentMode =
+    saved.settings?.instrumentMode ?? 'guitar';
+  const activeInstrument: InstrumentType =
+    instrumentMode === 'bass'
+      ? 'bass'
+      : instrumentMode === 'guitar'
+      ? 'guitar'
+      : saved.settings?.activeInstrument ?? 'guitar';
 
   return {
     ...saved,
     exercises: calibratedExercises,
+    workouts: hydratedWorkouts,
+    programs: hydratedPrograms,
     sessionLogs: migratedSessionLogs,
     feedRecordings: migratedRecordings,
     settings: {
       ...saved.settings,
+      instrumentMode,
+      activeInstrument,
       scientificPlan: hydratedPlan,
+      bassScientificPlan: hydratedBassPlan,
     },
   };
 }
@@ -429,15 +515,74 @@ export function App() {
     window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
   }, [activeTab]);
 
+  const instrumentMode: InstrumentMode =
+    appState.settings.instrumentMode ?? 'guitar';
+  const activeInstrument: InstrumentType =
+    instrumentMode === 'bass'
+      ? 'bass'
+      : instrumentMode === 'guitar'
+      ? 'guitar'
+      : appState.settings.activeInstrument ?? 'guitar';
+
+  const exerciseById = useMemo(
+    () => new Map(appState.exercises.map((e) => [e.id, e])),
+    [appState.exercises]
+  );
+
+  const activeExercises = useMemo(
+    () =>
+      appState.exercises.filter(
+        (ex) => getExerciseInstrument(ex) === activeInstrument
+      ),
+    [appState.exercises, activeInstrument]
+  );
+
+  const activeSessionLogs = useMemo(
+    () =>
+      appState.sessionLogs.filter((log) => {
+        if (log.instrument === 'bass' || log.instrument === 'guitar') {
+          return log.instrument === activeInstrument;
+        }
+        const firstExId = log.sets[0]?.exerciseId;
+        const firstEx = firstExId ? exerciseById.get(firstExId) : undefined;
+        if (firstEx) {
+          return getExerciseInstrument(firstEx) === activeInstrument;
+        }
+        const inferred: InstrumentType = log.workoutId.includes('bass')
+          ? 'bass'
+          : 'guitar';
+        return inferred === activeInstrument;
+      }),
+    [appState.sessionLogs, exerciseById, activeInstrument]
+  );
+
+  const activeRecordings = useMemo(
+    () =>
+      appState.feedRecordings.filter((rec) => {
+        if (rec.instrument === 'bass' || rec.instrument === 'guitar') {
+          return rec.instrument === activeInstrument;
+        }
+        const ex = exerciseById.get(rec.exerciseId);
+        return getExerciseInstrument(ex) === activeInstrument;
+      }),
+    [appState.feedRecordings, exerciseById, activeInstrument]
+  );
+
   const nerd = useMemo(
     () =>
       computeNerdTelemetry(
-        appState.exercises,
-        appState.sessionLogs,
+        activeExercises,
+        activeSessionLogs,
         appState.settings.weeklyGoalDays,
-        'all'
+        'all',
+        activeInstrument
       ),
-    [appState.exercises, appState.sessionLogs, appState.settings.weeklyGoalDays]
+    [
+      activeExercises,
+      activeSessionLogs,
+      appState.settings.weeklyGoalDays,
+      activeInstrument,
+    ]
   );
 
   const showToast = (msg: string) => {
@@ -454,50 +599,111 @@ export function App() {
     }));
   };
 
-  const activePrescription: ScientificPlanPrescription = useMemo(
-    () =>
+  const activePrescription: ScientificPlanPrescription = useMemo(() => {
+    if (activeInstrument === 'bass') {
+      return (
+        appState.settings.bassScientificPlan ||
+        createDefaultBassPrescription(
+          activeExercises,
+          appState.settings.selectedPreset
+        )
+      );
+    }
+    return (
       appState.settings.scientificPlan ||
       createDefaultScientificPrescription(
-        appState.exercises,
+        activeExercises,
         appState.settings.activeProgramId,
         appState.settings.selectedPreset
-      ),
-    [
-      appState.settings.scientificPlan,
-      appState.exercises,
-      appState.settings.activeProgramId,
-      appState.settings.selectedPreset,
-    ]
-  );
-
-  const handleFinishQuiz = (
-    prescription: ScientificPlanPrescription,
-    launchWorkoutNow: boolean
-  ) => {
-    const isFirstOnboarding = !appState.settings.hasCompletedOnboarding;
-    const calibratedExercises = applyLevelBaselineToUnpracticed(
-      appState.exercises,
-      appState.sessionLogs,
-      prescription.answers.level
+      )
     );
-    setAppState((prev) => ({
-      ...prev,
-      exercises: applyLevelBaselineToUnpracticed(
-        prev.exercises,
-        prev.sessionLogs,
-        prescription.answers.level
-      ),
-      settings: {
-        ...prev.settings,
-        weeklyGoalDays: prescription.answers.weeklyDays,
-        selectedPreset: prescription.answers.sessionPreset,
-        hasCompletedOnboarding: true,
-        scientificPlan: prescription,
-      },
-    }));
+  }, [
+    activeInstrument,
+    appState.settings.bassScientificPlan,
+    appState.settings.scientificPlan,
+    activeExercises,
+    appState.settings.activeProgramId,
+    appState.settings.selectedPreset,
+  ]);
+
+  const handleFinishQuiz = (result: OnboardingCompletionResult) => {
+    const isFirstOnboarding = !appState.settings.hasCompletedOnboarding;
+
+    let calibratedExercises = appState.exercises;
+    if (result.guitarPrescription) {
+      calibratedExercises = applyLevelBaselineToUnpracticed(
+        calibratedExercises,
+        appState.sessionLogs,
+        result.guitarPrescription.answers.level,
+        'guitar'
+      );
+    }
+    if (result.bassPrescription) {
+      calibratedExercises = applyLevelBaselineToUnpracticed(
+        calibratedExercises,
+        appState.sessionLogs,
+        result.bassPrescription.answers.level,
+        'bass'
+      );
+    }
+
+    const referencePlan =
+      result.activeInstrument === 'bass'
+        ? result.bassPrescription ?? result.guitarPrescription
+        : result.guitarPrescription ?? result.bassPrescription;
+
+    setAppState((prev) => {
+      let nextExercises = prev.exercises;
+      if (result.guitarPrescription) {
+        nextExercises = applyLevelBaselineToUnpracticed(
+          nextExercises,
+          prev.sessionLogs,
+          result.guitarPrescription.answers.level,
+          'guitar'
+        );
+      }
+      if (result.bassPrescription) {
+        nextExercises = applyLevelBaselineToUnpracticed(
+          nextExercises,
+          prev.sessionLogs,
+          result.bassPrescription.answers.level,
+          'bass'
+        );
+      }
+
+      return {
+        ...prev,
+        exercises: nextExercises,
+        settings: {
+          ...prev.settings,
+          instrumentMode: result.instrumentMode,
+          activeInstrument: result.activeInstrument,
+          activeProgramId:
+            result.activeInstrument === 'bass'
+              ? 'prog-bass-daily-all'
+              : 'prog-daily-all',
+          weeklyGoalDays:
+            referencePlan?.answers.weeklyDays ?? prev.settings.weeklyGoalDays,
+          selectedPreset:
+            referencePlan?.answers.sessionPreset ?? prev.settings.selectedPreset,
+          hasCompletedOnboarding: true,
+          scientificPlan:
+            result.guitarPrescription ?? prev.settings.scientificPlan,
+          bassScientificPlan:
+            result.bassPrescription ?? prev.settings.bassScientificPlan,
+        },
+      };
+    });
+
     setShowDiagnosticQuiz(false);
     setActiveTab('today');
-    showToast('Piano scientifico calibrato!');
+    showToast(
+      result.instrumentMode === 'both'
+        ? 'Piani Chitarra & Basso calibrati!'
+        : result.instrumentMode === 'bass'
+        ? 'Piano Basso calibrato!'
+        : 'Piano scientifico calibrato!'
+    );
 
     if (isFirstOnboarding) {
       const nextStep: PostOnboardingStep = cloudUser ? 'install' : 'google';
@@ -505,13 +711,16 @@ export function App() {
       writeStoredPostOnboardingStep(nextStep);
     }
 
-    if (launchWorkoutNow) {
+    if (result.launchWorkoutNow && referencePlan) {
+      const scopedExercises = calibratedExercises.filter(
+        (ex) => getExerciseInstrument(ex) === result.activeInstrument
+      );
       setActiveLivePlan(
         buildSessionPlanFromPrescription(
-          prescription,
-          calibratedExercises,
+          referencePlan,
+          scopedExercises,
           appState.sessionLogs,
-          prescription.answers.sessionPreset
+          referencePlan.answers.sessionPreset
         )
       );
     }
@@ -523,8 +732,8 @@ export function App() {
   ) => {
     const plan = buildSessionPlanFromPrescription(
       activePrescription,
-      appState.exercises,
-      appState.sessionLogs,
+      activeExercises,
+      activeSessionLogs,
       preset,
       selectedExerciseIds
     );
@@ -535,16 +744,18 @@ export function App() {
     exercise: Exercise,
     preferredVariantId?: string
   ) => {
+    const exInstrument = getExerciseInstrument(exercise);
     const playerLevel = activePrescription.answers.level;
     const startTargetBpm = computeWeightedExerciseBpm(
       exercise,
-      appState.sessionLogs,
+      activeSessionLogs,
       preferredVariantId,
       playerLevel
     ).nextSessionBpm;
 
     const singleWorkout: WorkoutTemplate = {
       id: `wk-single-${exercise.id}`,
+      instrument: exInstrument,
       title: exercise.title,
       subtitle: exercise.description,
       programId: appState.settings.activeProgramId,
@@ -564,6 +775,7 @@ export function App() {
     };
     const plan: ScaledWorkoutPlan = {
       workout: singleWorkout,
+      instrument: exInstrument,
       preset: 15,
       modeLabel: 'Esercizio Singolo',
       modeDescription: exercise.description,
@@ -700,36 +912,57 @@ export function App() {
 
   const handleCreateExercise = (newEx: Exercise) => {
     setAppState((prev) => {
+      const exInstrument = getExerciseInstrument(newEx);
+      const nextExercises = [newEx, ...prev.exercises];
+      const newDose = {
+        exerciseId: newEx.id,
+        role: 'secondario' as const,
+        roleLabel: 'Esercizio Personale',
+        weeklyMinSets: 4,
+        weeklyOptimalSets: 7,
+        setsPerSession: 2,
+        setDurationSec: newEx.defaultSetDurationSec,
+        restSec: newEx.defaultRestSec,
+        coachMethod: 'Protocollo Personale',
+        scientificRationale: newEx.description,
+      };
+
+      if (exInstrument === 'bass') {
+        const currentBassPlan =
+          prev.settings.bassScientificPlan ||
+          createDefaultBassPrescription(
+            nextExercises,
+            prev.settings.selectedPreset
+          );
+        return {
+          ...prev,
+          exercises: nextExercises,
+          settings: {
+            ...prev.settings,
+            bassScientificPlan: {
+              ...currentBassPlan,
+              doses: [...currentBassPlan.doses, newDose],
+            },
+          },
+        };
+      }
+
       const currentPlan =
         prev.settings.scientificPlan ||
         createDefaultScientificPrescription(
-          prev.exercises,
+          nextExercises,
           prev.settings.activeProgramId,
           prev.settings.selectedPreset
         );
 
       return {
         ...prev,
-        exercises: [newEx, ...prev.exercises],
+        exercises: nextExercises,
         settings: {
           ...prev.settings,
           scientificPlan: {
             ...currentPlan,
-            doses: [
-              ...currentPlan.doses,
-              {
-                exerciseId: newEx.id,
-                role: 'secondario',
-                roleLabel: 'Esercizio Personale',
-                weeklyMinSets: 4,
-                weeklyOptimalSets: 7,
-                setsPerSession: 2,
-                setDurationSec: newEx.defaultSetDurationSec,
-                restSec: newEx.defaultRestSec,
-                coachMethod: 'Protocollo Personale',
-                scientificRationale: newEx.description,
-              },
-            ],
+            doses: [...currentPlan.doses, newDose],
           },
         },
       };
@@ -795,6 +1028,8 @@ export function App() {
         <OnboardingFlow
           exercises={appState.exercises}
           showIntroSlides={!appState.settings.hasCompletedOnboarding}
+          initialInstrumentMode={instrumentMode}
+          initialActiveInstrument={activeInstrument}
           onFinishQuiz={handleFinishQuiz}
           onOpenCloudLogin={() => setShowCloudModal(true)}
           onCancel={
@@ -888,8 +1123,34 @@ export function App() {
             })}
           </nav>
 
-          {/* Chrome Streak Pill + Cloud / Google Account */}
+          {/* Chrome Streak Pill + Instrument Switcher (when Entrambi) + Cloud Account */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {instrumentMode === 'both' && (
+              <div
+                className="hidden sm:flex items-center rounded-full chrome-pill p-0.5"
+                role="group"
+                aria-label="Seleziona strumento attivo"
+              >
+                {(['guitar', 'bass'] as const).map((inst) => {
+                  const active = activeInstrument === inst;
+                  return (
+                    <button
+                      key={inst}
+                      type="button"
+                      onClick={() => updateSettings({ activeInstrument: inst })}
+                      className={`rounded-full px-2.5 py-1 text-[11px] font-black transition ${
+                        active
+                          ? 'bg-[#39FF14] text-black shadow-[0_0_10px_rgba(57,255,20,0.45)]'
+                          : 'text-slate-300/70 hover:text-white'
+                      }`}
+                    >
+                      {inst === 'guitar' ? 'Chitarra' : 'Basso'}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
             <div className="flex items-center gap-1.5 rounded-full chrome-pill px-2.5 sm:px-3 py-1.5 text-[11px] sm:text-xs font-bold text-slate-100 tabular-nums shrink-0">
               <Flame className="h-3.5 w-3.5 text-[#39FF14] drop-shadow-[0_0_6px_rgba(57,255,20,0.75)]" />
               <span>{nerd.currentStreakDays} di fila</span>
@@ -934,6 +1195,33 @@ export function App() {
             </button>
           </div>
         </div>
+        {instrumentMode === 'both' && (
+          <div className="flex sm:hidden items-center justify-center px-4 pb-2">
+            <div
+              className="grid grid-cols-2 w-full max-w-xs rounded-full chrome-pill p-0.5"
+              role="group"
+              aria-label="Seleziona strumento attivo"
+            >
+              {(['guitar', 'bass'] as const).map((inst) => {
+                const active = activeInstrument === inst;
+                return (
+                  <button
+                    key={inst}
+                    type="button"
+                    onClick={() => updateSettings({ activeInstrument: inst })}
+                    className={`rounded-full py-1 text-[11px] font-black transition ${
+                      active
+                        ? 'bg-[#39FF14] text-black shadow-[0_0_10px_rgba(57,255,20,0.45)]'
+                        : 'text-slate-300/70 hover:text-white'
+                    }`}
+                  >
+                    {inst === 'guitar' ? 'Chitarra (6 corde)' : 'Basso (4 corde)'}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
         <div className="chrome-hairline w-full opacity-60" />
       </header>
 
@@ -980,8 +1268,9 @@ export function App() {
       <main className="mx-auto w-full min-w-0 max-w-4xl px-4 py-4 sm:py-5">
         {activeTab === 'today' && (
           <TodayDashboard
-            exercises={appState.exercises}
-            sessionLogs={appState.sessionLogs}
+            instrument={activeInstrument}
+            exercises={activeExercises}
+            sessionLogs={activeSessionLogs}
             prescription={activePrescription}
             selectedPreset={appState.settings.selectedPreset}
             weeklyGoalDays={appState.settings.weeklyGoalDays}
@@ -993,8 +1282,9 @@ export function App() {
 
         {activeTab === 'programs' && (
           <ProgramsAndBuilder
-            exercises={appState.exercises}
-            sessionLogs={appState.sessionLogs}
+            instrument={activeInstrument}
+            exercises={activeExercises}
+            sessionLogs={activeSessionLogs}
             prescription={activePrescription}
             onOpenDiagnosticQuiz={() => setShowDiagnosticQuiz(true)}
             onNavigateToToday={() => setActiveTab('today')}
@@ -1005,10 +1295,11 @@ export function App() {
 
         {activeTab === 'analytics' && (
           <AnalyticsView
+            instrument={activeInstrument}
             appState={appState}
-            exercises={appState.exercises}
-            sessionLogs={appState.sessionLogs}
-            recordings={appState.feedRecordings}
+            exercises={activeExercises}
+            sessionLogs={activeSessionLogs}
+            recordings={activeRecordings}
             settings={appState.settings}
             onUpdateSettings={updateSettings}
             onToggleBenchmark={handleToggleBenchmark}
@@ -1019,12 +1310,14 @@ export function App() {
             }}
             onResetDemoData={handleResetDemoData}
             onOpenCloudModal={() => setShowCloudModal(true)}
+            onOpenDiagnosticQuiz={() => setShowDiagnosticQuiz(true)}
             cloudUserEmail={cloudUser?.email ?? null}
           />
         )}
 
         {activeTab === 'tuner' && (
           <TunerAndCheatSheet
+            instrument={activeInstrument}
             initialMetronomeSound={appState.settings.metronomeSound ?? 'woodblock'}
             onChangeMetronomeSound={(sound) =>
               updateSettings({ metronomeSound: sound })
@@ -1065,7 +1358,7 @@ export function App() {
       {activeLivePlan && (
         <LiveWorkoutPlayer
           plan={activeLivePlan}
-          sessionLogs={appState.sessionLogs}
+          sessionLogs={activeSessionLogs}
           initialVisualOnly={appState.settings.visualMetronomeOnly}
           initialMetronomeSound={appState.settings.metronomeSound ?? 'woodblock'}
           onChangeMetronomeSound={(sound) =>

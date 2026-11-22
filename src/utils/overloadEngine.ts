@@ -442,7 +442,10 @@ export function shouldEnableSpeedBurstForSkill(
   _sessionLogs: WorkoutSessionLog[] = [],
   _playerLevel?: PlayerLevelId
 ): boolean {
-  return exercise.id === 'ex-speed-bursts';
+  return (
+    exercise.id === 'ex-speed-bursts' ||
+    exercise.id === 'ex-bass-fingerstyle'
+  );
 }
 
 /**
@@ -891,6 +894,38 @@ export const CANONICAL_PILLARS: {
     setsByPreset: {
       45: { sets: 3, durationSec: 120, restSec: 20 },
     },
+  },
+];
+
+export const BASS_CANONICAL_PILLARS: {
+  pillarNumber: number;
+  exerciseId: string;
+  pillarLabel: string;
+}[] = [
+  {
+    pillarNumber: 1,
+    exerciseId: 'ex-bass-fingerstyle',
+    pillarLabel: 'Pilastro 1 • Fingerstyle & Raking',
+  },
+  {
+    pillarNumber: 2,
+    exerciseId: 'ex-bass-pocket-groove',
+    pillarLabel: 'Pilastro 2 • Pocket & Ghost Notes',
+  },
+  {
+    pillarNumber: 3,
+    exerciseId: 'ex-bass-slap-pop',
+    pillarLabel: 'Pilastro 3 • Slap & Pop',
+  },
+  {
+    pillarNumber: 4,
+    exerciseId: 'ex-bass-arpeggios',
+    pillarLabel: 'Pilastro 4 • Arpeggi & Basslines',
+  },
+  {
+    pillarNumber: 5,
+    exerciseId: 'ex-bass-neck-legato',
+    pillarLabel: 'Pilastro 5 • Manico 4 Corde & Legato',
   },
 ];
 

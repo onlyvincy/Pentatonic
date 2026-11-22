@@ -4,21 +4,29 @@ import {
   DemoStep,
   FretNote,
   GapClickMode,
+  InstrumentType,
   MetronomeSoundId,
   Subdivision,
 } from '../types/practice';
 import { useMetronome } from '../hooks/useMetronome';
 import {
+  BASS_STRING_LABELS,
   METRONOME_SOUNDS,
+  playBassFrequency,
   playGuitarFrequency,
   playSoftMetronomeTick,
   recoverPlaybackAfterMic,
   setIosMicSessionActive,
   unlockSharedAudioContext,
 } from '../utils/guitarSynth';
+import {
+  PitchStabilizer,
+  StabilizedPitch,
+  detectPitch,
+} from '../utils/pitchDetector';
 import { FretboardViewer } from './FretboardViewer';
 
-type TuningId = 'eadgbe' | 'facgce' | 'daeac#e' | 'dadf#ad';
+type TuningId = 'eadgbe' | 'facgce' | 'daeac#e' | 'dadf#ad' | 'eadg';
 type ScaleId =
   | 'minor-pent'
   | 'major-pent'
@@ -47,25 +55,163 @@ interface TuningPreset {
   /** Primary root pitch class (0=C .. 11=B) for scales in this tuning */
   minorRootPc: number;
   majorRootPc: number;
-  /** Ordered 6th string -> 1st string */
+  /** Ordered lowest string -> highest string */
   strings6To1: TuningStringDef[];
   chords: ChordCheat[];
 }
 
-const NOTE_NAMES = [
-  'C',
-  'C#',
-  'D',
-  'D#',
-  'E',
-  'F',
-  'F#',
-  'G',
-  'G#',
-  'A',
-  'A#',
-  'B',
-] as const;
+interface BassArpeggioCheat {
+  id: string;
+  name: string;
+  subtitle: string;
+  notes: FretNote[];
+  demoSequence: DemoStep[];
+}
+
+const BASS_STANDARD_PRESET: TuningPreset = {
+  id: 'eadg',
+  label: 'EADG',
+  minorRootPc: 9, // A minor
+  majorRootPc: 9, // A major
+  strings6To1: [
+    { stringNum: 4, noteLabel: 'E1', shortName: 'E', freq: 41.2034, midi: 28 },
+    { stringNum: 3, noteLabel: 'A1', shortName: 'A', freq: 55.0, midi: 33 },
+    { stringNum: 2, noteLabel: 'D2', shortName: 'D', freq: 73.4162, midi: 38 },
+    { stringNum: 1, noteLabel: 'G2', shortName: 'G', freq: 97.9989, midi: 43 },
+  ],
+  chords: [],
+};
+
+const BASS_ARPEGGIO_CHEATS: BassArpeggioCheat[] = [
+  {
+    id: 'barp-min-triad',
+    name: 'Triade Minore (Am)',
+    subtitle: 'R – b3 – 5 – 8',
+    notes: [
+      { string: 4, fret: 5, label: 'R', isRoot: true, finger: '1' },
+      { string: 3, fret: 3, label: 'b3', finger: '1' },
+      { string: 3, fret: 7, label: '5', finger: '4' },
+      { string: 2, fret: 7, label: '8', isRoot: true, finger: '3' },
+    ],
+    demoSequence: [
+      { notes: [{ string: 4, fret: 5, label: 'R', isRoot: true, finger: '1' }] },
+      { notes: [{ string: 3, fret: 3, label: 'b3', finger: '1' }] },
+      { notes: [{ string: 3, fret: 7, label: '5', finger: '4' }] },
+      { notes: [{ string: 2, fret: 7, label: '8', isRoot: true, finger: '3' }] },
+      { notes: [{ string: 3, fret: 7, label: '5', finger: '4' }] },
+      { notes: [{ string: 3, fret: 3, label: 'b3', finger: '1' }] },
+      { notes: [{ string: 4, fret: 5, label: 'R', isRoot: true, finger: '1' }] },
+      { notes: [{ string: 3, fret: 7, label: '5', finger: '4' }] },
+    ],
+  },
+  {
+    id: 'barp-maj-triad',
+    name: 'Triade Maggiore (A)',
+    subtitle: 'R – 3 – 5 – 8',
+    notes: [
+      { string: 4, fret: 5, label: 'R', isRoot: true, finger: '2' },
+      { string: 3, fret: 4, label: '3', finger: '1' },
+      { string: 3, fret: 7, label: '5', finger: '4' },
+      { string: 2, fret: 7, label: '8', isRoot: true, finger: '4' },
+    ],
+    demoSequence: [
+      { notes: [{ string: 4, fret: 5, label: 'R', isRoot: true, finger: '2' }] },
+      { notes: [{ string: 3, fret: 4, label: '3', finger: '1' }] },
+      { notes: [{ string: 3, fret: 7, label: '5', finger: '4' }] },
+      { notes: [{ string: 2, fret: 7, label: '8', isRoot: true, finger: '4' }] },
+      { notes: [{ string: 3, fret: 7, label: '5', finger: '4' }] },
+      { notes: [{ string: 3, fret: 4, label: '3', finger: '1' }] },
+      { notes: [{ string: 4, fret: 5, label: 'R', isRoot: true, finger: '2' }] },
+      { notes: [{ string: 3, fret: 7, label: '5', finger: '4' }] },
+    ],
+  },
+  {
+    id: 'barp-m7',
+    name: 'Minore 7 (Am7)',
+    subtitle: 'R – b3 – 5 – b7',
+    notes: [
+      { string: 4, fret: 5, label: 'R', isRoot: true, finger: '1' },
+      { string: 3, fret: 3, label: 'b3', finger: '1' },
+      { string: 3, fret: 7, label: '5', finger: '4' },
+      { string: 2, fret: 5, label: 'b7', finger: '1' },
+      { string: 2, fret: 7, label: '8', isRoot: true, finger: '3' },
+    ],
+    demoSequence: [
+      { notes: [{ string: 4, fret: 5, label: 'R', isRoot: true, finger: '1' }] },
+      { notes: [{ string: 3, fret: 3, label: 'b3', finger: '1' }] },
+      { notes: [{ string: 3, fret: 7, label: '5', finger: '4' }] },
+      { notes: [{ string: 2, fret: 5, label: 'b7', finger: '1' }] },
+      { notes: [{ string: 2, fret: 7, label: '8', isRoot: true, finger: '3' }] },
+      { notes: [{ string: 2, fret: 5, label: 'b7', finger: '1' }] },
+      { notes: [{ string: 3, fret: 7, label: '5', finger: '4' }] },
+      { notes: [{ string: 3, fret: 3, label: 'b3', finger: '1' }] },
+    ],
+  },
+  {
+    id: 'barp-dom7',
+    name: 'Dominante 7 (A7)',
+    subtitle: 'R – 3 – 5 – b7',
+    notes: [
+      { string: 4, fret: 5, label: 'R', isRoot: true, finger: '2' },
+      { string: 3, fret: 4, label: '3', finger: '1' },
+      { string: 3, fret: 7, label: '5', finger: '4' },
+      { string: 2, fret: 5, label: 'b7', finger: '2' },
+      { string: 2, fret: 7, label: '8', isRoot: true, finger: '4' },
+    ],
+    demoSequence: [
+      { notes: [{ string: 4, fret: 5, label: 'R', isRoot: true, finger: '2' }] },
+      { notes: [{ string: 3, fret: 4, label: '3', finger: '1' }] },
+      { notes: [{ string: 3, fret: 7, label: '5', finger: '4' }] },
+      { notes: [{ string: 2, fret: 5, label: 'b7', finger: '2' }] },
+      { notes: [{ string: 2, fret: 7, label: '8', isRoot: true, finger: '4' }] },
+      { notes: [{ string: 2, fret: 5, label: 'b7', finger: '2' }] },
+      { notes: [{ string: 3, fret: 7, label: '5', finger: '4' }] },
+      { notes: [{ string: 3, fret: 4, label: '3', finger: '1' }] },
+    ],
+  },
+  {
+    id: 'barp-maj7',
+    name: 'Maggiore 7 (Amaj7)',
+    subtitle: 'R – 3 – 5 – 7',
+    notes: [
+      { string: 4, fret: 5, label: 'R', isRoot: true, finger: '2' },
+      { string: 3, fret: 4, label: '3', finger: '1' },
+      { string: 3, fret: 7, label: '5', finger: '4' },
+      { string: 2, fret: 6, label: '7', finger: '3' },
+      { string: 2, fret: 7, label: '8', isRoot: true, finger: '4' },
+    ],
+    demoSequence: [
+      { notes: [{ string: 4, fret: 5, label: 'R', isRoot: true, finger: '2' }] },
+      { notes: [{ string: 3, fret: 4, label: '3', finger: '1' }] },
+      { notes: [{ string: 3, fret: 7, label: '5', finger: '4' }] },
+      { notes: [{ string: 2, fret: 6, label: '7', finger: '3' }] },
+      { notes: [{ string: 2, fret: 7, label: '8', isRoot: true, finger: '4' }] },
+      { notes: [{ string: 2, fret: 6, label: '7', finger: '3' }] },
+      { notes: [{ string: 3, fret: 7, label: '5', finger: '4' }] },
+      { notes: [{ string: 3, fret: 4, label: '3', finger: '1' }] },
+    ],
+  },
+  {
+    id: 'barp-octaves',
+    name: 'Ottave & Quinta (A5/8)',
+    subtitle: 'R – 5 – 8',
+    notes: [
+      { string: 4, fret: 5, label: 'R', isRoot: true, finger: '1' },
+      { string: 3, fret: 7, label: '5', finger: '3' },
+      { string: 2, fret: 7, label: '8', isRoot: true, finger: '4' },
+    ],
+    demoSequence: [
+      { notes: [{ string: 4, fret: 5, label: 'R', isRoot: true, finger: '1' }] },
+      { notes: [{ string: 2, fret: 7, label: '8', isRoot: true, finger: '4' }] },
+      { notes: [{ string: 4, fret: 5, label: 'R', isRoot: true, finger: '1' }] },
+      { notes: [{ string: 3, fret: 7, label: '5', finger: '3' }] },
+      { notes: [{ string: 4, fret: 5, label: 'R', isRoot: true, finger: '1' }] },
+      { notes: [{ string: 2, fret: 7, label: '8', isRoot: true, finger: '4' }] },
+      { notes: [{ string: 3, fret: 7, label: '5', finger: '3' }] },
+      { notes: [{ string: 2, fret: 7, label: '8', isRoot: true, finger: '4' }] },
+    ],
+  },
+];
 
 const SCALE_DEFS: {
   id: ScaleId;
@@ -250,18 +396,26 @@ function buildScaleForTuning(
   const notes: FretNote[] = [];
 
   if (def.extended) {
-    // Diagonal extended Minor Pentatonic sweeping upward from low frets to fret 12 across all 6 strings
-    const stringWindows: Record<number, [number, number]> = {
-      6: [2, 5],
-      5: [3, 7],
-      4: [4, 8],
-      3: [5, 9],
-      2: [7, 11],
-      1: [8, 12],
-    };
+    // Diagonal extended Minor Pentatonic sweeping upward from low frets to fret 12
+    const stringWindows: Record<number, [number, number]> =
+      preset.id === 'eadg'
+        ? {
+            4: [2, 5],
+            3: [3, 7],
+            2: [5, 9],
+            1: [5, 12],
+          }
+        : {
+            6: [2, 5],
+            5: [3, 7],
+            4: [4, 8],
+            3: [5, 9],
+            2: [7, 11],
+            1: [8, 12],
+          };
 
     for (const s of preset.strings6To1) {
-      const [minF, maxF] = stringWindows[s.stringNum];
+      const [minF, maxF] = stringWindows[s.stringNum] ?? [3, 7];
       for (let fret = minF; fret <= maxF; fret++) {
         const interval = (((s.midi + fret - rootPc) % 12) + 12) % 12;
         if (def.intervals.includes(interval)) {
@@ -313,96 +467,8 @@ function buildScaleForTuning(
   return { notes, demoSequence };
 }
 
-/**
- * YIN-inspired normalized autocorrelation pitch detector optimized for guitar range (65 Hz - 1100 Hz).
- */
-function detectPitchHz(
-  buffer: Float32Array,
-  sampleRate: number
-): { freq: number; rms: number } | null {
-  const n = buffer.length;
-  let rms = 0;
-  for (let i = 0; i < n; i++) {
-    rms += buffer[i] * buffer[i];
-  }
-  rms = Math.sqrt(rms / n);
-  if (rms < 0.01) return null;
-
-  const minLag = Math.max(16, Math.floor(sampleRate / 1100));
-  const maxLag = Math.min(Math.floor(n / 2), Math.floor(sampleRate / 65));
-  if (maxLag <= minLag) return null;
-
-  const diff = new Float32Array(maxLag + 1);
-  for (let lag = minLag; lag <= maxLag; lag++) {
-    let sum = 0;
-    const limit = n - lag;
-    for (let i = 0; i < limit; i++) {
-      const d = buffer[i] - buffer[i + lag];
-      sum += d * d;
-    }
-    diff[lag] = sum;
-  }
-
-  const cmndf = new Float32Array(maxLag + 1);
-  cmndf[0] = 1;
-  let runningSum = 0;
-  for (let lag = 1; lag <= maxLag; lag++) {
-    runningSum += diff[lag];
-    cmndf[lag] =
-      lag < minLag
-        ? 1
-        : runningSum > 0
-        ? (diff[lag] * (lag - minLag + 1)) / runningSum
-        : 1;
-  }
-
-  const threshold = 0.16;
-  let bestLag = -1;
-  for (let lag = minLag; lag <= maxLag; lag++) {
-    if (cmndf[lag] < threshold) {
-      while (lag + 1 <= maxLag && cmndf[lag + 1] < cmndf[lag]) {
-        lag++;
-      }
-      bestLag = lag;
-      break;
-    }
-  }
-
-  if (bestLag === -1) {
-    let minVal = Infinity;
-    for (let lag = minLag; lag <= maxLag; lag++) {
-      if (cmndf[lag] < minVal) {
-        minVal = cmndf[lag];
-        bestLag = lag;
-      }
-    }
-    if (minVal > 0.28 || bestLag <= 0) return null;
-  }
-
-  let refinedLag = bestLag;
-  if (bestLag > minLag && bestLag < maxLag) {
-    const y0 = cmndf[bestLag - 1];
-    const y1 = cmndf[bestLag];
-    const y2 = cmndf[bestLag + 1];
-    const denom = 2 * (y0 - 2 * y1 + y2);
-    if (Math.abs(denom) > 1e-6) {
-      refinedLag = bestLag + (y0 - y2) / denom;
-    }
-  }
-
-  const freq = sampleRate / refinedLag;
-  if (!Number.isFinite(freq) || freq < 65 || freq > 1100) return null;
-  return { freq, rms };
-}
-
-interface DetectedPitch {
-  freq: number;
-  noteName: string;
-  octave: number;
-  cents: number;
-}
-
 interface TunerAndCheatSheetProps {
+  instrument?: InstrumentType;
   initialMetronomeSound?: MetronomeSoundId;
   onChangeMetronomeSound?: (sound: MetronomeSoundId) => void;
 }
@@ -415,14 +481,20 @@ const GAP_MODES: { id: GapClickMode; label: string }[] = [
 ];
 
 export const TunerAndCheatSheet: React.FC<TunerAndCheatSheetProps> = ({
+  instrument = 'guitar',
   initialMetronomeSound = 'woodblock',
   onChangeMetronomeSound,
 }) => {
   const [toolMode, setToolMode] = useState<'tuner' | 'metronome'>('tuner');
   const [tuningId, setTuningId] = useState<TuningId>('eadgbe');
   const [showTuningPicker, setShowTuningPicker] = useState(false);
-  const [cheatMode, setCheatMode] = useState<'scales' | 'chords'>('scales');
+  const [cheatMode, setCheatMode] = useState<'scales' | 'chords' | 'arpeggios'>('scales');
   const [selectedScaleId, setSelectedScaleId] = useState<ScaleId>('minor-pent');
+  const [selectedBassArpId, setSelectedBassArpId] = useState<string>(
+    BASS_ARPEGGIO_CHEATS[0].id
+  );
+  const instrumentRef = useRef<InstrumentType>(instrument);
+  instrumentRef.current = instrument;
 
   const metronome = useMetronome({
     initialBpm: 90,
@@ -437,20 +509,50 @@ export const TunerAndCheatSheet: React.FC<TunerAndCheatSheetProps> = ({
 
   const [isListening, setIsListening] = useState(false);
   const [micBlocked, setMicBlocked] = useState(false);
-  const [detected, setDetected] = useState<DetectedPitch | null>(null);
+  const [audioSuspended, setAudioSuspended] = useState(false);
+  const [inputLevel, setInputLevel] = useState(0);
+  const [detected, setDetected] = useState<StabilizedPitch | null>(null);
 
   const streamRef = useRef<MediaStream | null>(null);
   const tunerCtxRef = useRef<AudioContext | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const highpassRef = useRef<BiquadFilterNode | null>(null);
+  const lowpassRef = useRef<BiquadFilterNode | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
+  const pcmBufferRef = useRef<Float32Array<ArrayBuffer> | null>(null);
+  const stabilizerRef = useRef<PitchStabilizer>(new PitchStabilizer());
+  const lastValidPitchAtRef = useRef<number>(0);
+  const lastMeterUiAtRef = useRef<number>(0);
   const rafRef = useRef<number | null>(null);
-  const smoothCentsRef = useRef<number>(0);
   const mountedRef = useRef(true);
   const startingRef = useRef(false);
 
+  useEffect(() => {
+    setShowTuningPicker(false);
+    setDetected(null);
+    stabilizerRef.current.reset();
+    lastValidPitchAtRef.current = 0;
+
+    if (highpassRef.current) {
+      highpassRef.current.frequency.value = instrument === 'bass' ? 28 : 55;
+    }
+    if (lowpassRef.current) {
+      lowpassRef.current.frequency.value = instrument === 'bass' ? 420 : 1200;
+    }
+
+    if (instrument === 'bass') {
+      setCheatMode((prev) => (prev === 'chords' ? 'arpeggios' : prev));
+    } else {
+      setCheatMode((prev) => (prev === 'arpeggios' ? 'scales' : prev));
+    }
+  }, [instrument]);
+
   const activeTuning = useMemo(
-    () => TUNING_PRESETS.find((t) => t.id === tuningId) ?? TUNING_PRESETS[0],
-    [tuningId]
+    () =>
+      instrument === 'bass'
+        ? BASS_STANDARD_PRESET
+        : TUNING_PRESETS.find((t) => t.id === tuningId) ?? TUNING_PRESETS[0],
+    [instrument, tuningId]
   );
 
   const stopTuner = useCallback(() => {
@@ -460,11 +562,18 @@ export const TunerAndCheatSheet: React.FC<TunerAndCheatSheetProps> = ({
     }
     try {
       sourceRef.current?.disconnect();
+      highpassRef.current?.disconnect();
+      lowpassRef.current?.disconnect();
     } catch {
       // ignore
     }
     sourceRef.current = null;
+    highpassRef.current = null;
+    lowpassRef.current = null;
     analyserRef.current = null;
+    pcmBufferRef.current = null;
+    stabilizerRef.current.reset();
+    lastValidPitchAtRef.current = 0;
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
@@ -476,6 +585,8 @@ export const TunerAndCheatSheet: React.FC<TunerAndCheatSheetProps> = ({
     }
     startingRef.current = false;
     recoverPlaybackAfterMic();
+    setAudioSuspended(false);
+    setInputLevel(0);
     setIsListening(false);
   }, []);
 
@@ -484,30 +595,73 @@ export const TunerAndCheatSheet: React.FC<TunerAndCheatSheetProps> = ({
     const ctx = tunerCtxRef.current;
     if (!analyser || !ctx) return;
 
-    const buf = new Float32Array(analyser.fftSize);
+    if ((ctx.state as string) !== 'running') {
+      setAudioSuspended(true);
+      rafRef.current = window.requestAnimationFrame(analyzePitchFrame);
+      return;
+    }
+    setAudioSuspended(false);
+
+    if (!pcmBufferRef.current || pcmBufferRef.current.length !== analyser.fftSize) {
+      pcmBufferRef.current = new Float32Array(analyser.fftSize);
+    }
+    const buf = pcmBufferRef.current;
     analyser.getFloatTimeDomainData(buf);
-    const res = detectPitchHz(buf, ctx.sampleRate);
+
+    const res = detectPitch(buf, {
+      instrument: instrumentRef.current,
+      sampleRate: ctx.sampleRate,
+    });
+
+    const now = performance.now();
+    if (now - lastMeterUiAtRef.current >= 65) {
+      lastMeterUiAtRef.current = now;
+      let meterRms = res?.rms ?? 0;
+      if (!res) {
+        let sum = 0;
+        const step = 16;
+        for (let i = 0; i < buf.length; i += step) {
+          sum += buf[i] * buf[i];
+        }
+        meterRms = Math.sqrt(sum / Math.ceil(buf.length / step));
+      }
+      const normalized = Math.max(0, Math.min(1, meterRms / 0.035));
+      setInputLevel(normalized);
+    }
 
     if (res) {
-      const midiFloat = 69 + 12 * Math.log2(res.freq / 440);
-      const nearestMidi = Math.round(midiFloat);
-      const rawCents = Math.round((midiFloat - nearestMidi) * 100);
-      smoothCentsRef.current = smoothCentsRef.current * 0.55 + rawCents * 0.45;
-      const cents = Math.max(-50, Math.min(50, Math.round(smoothCentsRef.current)));
-
-      const noteIdx = ((nearestMidi % 12) + 12) % 12;
-      const noteName = NOTE_NAMES[noteIdx];
-      const octave = Math.floor(nearestMidi / 12) - 1;
-
-      setDetected({
-        freq: Number(res.freq.toFixed(1)),
-        noteName,
-        octave,
-        cents,
-      });
+      lastValidPitchAtRef.current = now;
+      const stabilized = stabilizerRef.current.push(res.freq, now);
+      if (stabilized) {
+        setDetected(stabilized);
+      }
+    } else if (
+      lastValidPitchAtRef.current > 0 &&
+      now - lastValidPitchAtRef.current > 2200
+    ) {
+      lastValidPitchAtRef.current = 0;
+      stabilizerRef.current.reset();
+      setDetected(null);
     }
 
     rafRef.current = window.requestAnimationFrame(analyzePitchFrame);
+  }, []);
+
+  const resumeSuspendedTunerContext = useCallback(async () => {
+    const ctx = tunerCtxRef.current;
+    if (!ctx) return;
+    if ((ctx.state as string) !== 'running') {
+      try {
+        await ctx.resume();
+        if (mountedRef.current) {
+          setAudioSuspended((ctx.state as string) !== 'running');
+        }
+      } catch {
+        // Ignore; next gesture will retry
+      }
+    } else if (mountedRef.current) {
+      setAudioSuspended(false);
+    }
   }, []);
 
   const startTuner = useCallback(async () => {
@@ -517,70 +671,129 @@ export const TunerAndCheatSheet: React.FC<TunerAndCheatSheetProps> = ({
       return;
     }
 
+    const AudioCtx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext?: typeof AudioContext })
+        .webkitAudioContext;
+    if (!AudioCtx) {
+      if (mountedRef.current) setMicBlocked(true);
+      return;
+    }
+
     startingRef.current = true;
     setMicBlocked(false);
-    // CRITICAL for iOS Safari:
+    // CRITICAL for iOS Safari & Android Chrome:
     // 1) Switch audioSession to 'play-and-record' synchronously before getUserMedia.
-    // 2) Call getUserMedia synchronously BEFORE any `await` so iOS preserves the
-    //    user-gesture token and displays the native microphone permission prompt.
+    // 2) Create & resume the isolated AudioContext synchronously BEFORE awaiting getUserMedia
+    //    so the user gesture token keeps the AudioContext unlocked.
     setIosMicSessionActive(true);
+
+    const ctx = new AudioCtx();
+    ctx.resume().catch(() => {});
 
     try {
       let stream: MediaStream;
       try {
         stream = await navigator.mediaDevices.getUserMedia({
           audio: {
-            echoCancellation: { ideal: false },
-            noiseSuppression: { ideal: false },
-            autoGainControl: { ideal: false },
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
+            channelCount: 1,
           },
         });
       } catch {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: false,
+              noiseSuppression: false,
+            },
+          });
+        } catch {
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        }
       }
 
       if (!mountedRef.current) {
         stream.getTracks().forEach((t) => t.stop());
+        ctx.close().catch(() => {});
         recoverPlaybackAfterMic();
         return;
       }
 
-      const AudioCtx =
-        window.AudioContext ||
-        (window as unknown as { webkitAudioContext?: typeof AudioContext })
-          .webkitAudioContext;
-      if (!AudioCtx) {
-        stream.getTracks().forEach((t) => t.stop());
-        recoverPlaybackAfterMic();
-        if (mountedRef.current) setMicBlocked(true);
-        return;
-      }
-
-      // Isolate Tuner capture in its own AudioContext so stopping the mic never breaks
-      // the shared playback AudioContext used by the metronome and demos.
-      const ctx = new AudioCtx();
       if ((ctx.state as string) !== 'running') {
         await ctx.resume().catch(() => {});
       }
       tunerCtxRef.current = ctx;
 
       const source = ctx.createMediaStreamSource(stream);
+      const isBass = instrumentRef.current === 'bass';
+
+      const highpass = ctx.createBiquadFilter();
+      highpass.type = 'highpass';
+      highpass.Q.value = 0.707;
+      highpass.frequency.value = isBass ? 28 : 55;
+
+      const lowpass = ctx.createBiquadFilter();
+      lowpass.type = 'lowpass';
+      lowpass.Q.value = 0.707;
+      lowpass.frequency.value = isBass ? 420 : 1200;
+
       const analyser = ctx.createAnalyser();
-      analyser.fftSize = 4096;
-      source.connect(analyser);
+      analyser.fftSize = 8192;
+      analyser.smoothingTimeConstant = 0;
+
+      source.connect(highpass);
+      highpass.connect(lowpass);
+      lowpass.connect(analyser);
 
       streamRef.current = stream;
       sourceRef.current = source;
+      highpassRef.current = highpass;
+      lowpassRef.current = lowpass;
       analyserRef.current = analyser;
+      pcmBufferRef.current = new Float32Array(analyser.fftSize);
+      stabilizerRef.current.reset();
+      lastValidPitchAtRef.current = 0;
+
+      setAudioSuspended((ctx.state as string) !== 'running');
       setIsListening(true);
       rafRef.current = window.requestAnimationFrame(analyzePitchFrame);
     } catch {
+      ctx.close().catch(() => {});
       recoverPlaybackAfterMic();
       if (mountedRef.current) setMicBlocked(true);
     } finally {
       startingRef.current = false;
     }
   }, [analyzePitchFrame]);
+
+  useEffect(() => {
+    if (!isListening || typeof document === 'undefined') return;
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void resumeSuspendedTunerContext();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [isListening, resumeSuspendedTunerContext]);
+
+  useEffect(() => {
+    if (!audioSuspended || typeof window === 'undefined') return;
+    const handleTap = () => {
+      void resumeSuspendedTunerContext();
+    };
+    window.addEventListener('pointerdown', handleTap, { passive: true });
+    window.addEventListener('touchstart', handleTap, { passive: true });
+    return () => {
+      window.removeEventListener('pointerdown', handleTap);
+      window.removeEventListener('touchstart', handleTap);
+    };
+  }, [audioSuspended, resumeSuspendedTunerContext]);
 
   // Immediately activate tuner on mount
   useEffect(() => {
@@ -635,19 +848,15 @@ export const TunerAndCheatSheet: React.FC<TunerAndCheatSheetProps> = ({
   };
 
   const stringLabelsHighToLow = useMemo(() => {
+    if (instrument === 'bass') {
+      return BASS_STRING_LABELS;
+    }
     const rev = [...activeTuning.strings6To1].reverse();
-    return [
-      rev[0].shortName,
-      rev[1].shortName,
-      rev[2].shortName,
-      rev[3].shortName,
-      rev[4].shortName,
-      rev[5].shortName,
-    ] as const;
-  }, [activeTuning]);
+    return rev.map((s) => s.shortName);
+  }, [activeTuning, instrument]);
 
   const customStringFreqs = useMemo(() => {
-    const map = {} as Record<1 | 2 | 3 | 4 | 5 | 6, number>;
+    const map: Partial<Record<1 | 2 | 3 | 4 | 5 | 6, number>> = {};
     activeTuning.strings6To1.forEach((s) => {
       map[s.stringNum] = s.freq;
     });
@@ -658,6 +867,28 @@ export const TunerAndCheatSheet: React.FC<TunerAndCheatSheetProps> = ({
     () => buildScaleForTuning(activeTuning, selectedScaleId),
     [activeTuning, selectedScaleId]
   );
+
+  const selectedBassArp = useMemo(
+    () =>
+      BASS_ARPEGGIO_CHEATS.find((a) => a.id === selectedBassArpId) ??
+      BASS_ARPEGGIO_CHEATS[0],
+    [selectedBassArpId]
+  );
+
+  const closestTargetStringNum = useMemo(() => {
+    if (!detected) return null;
+    const detectedMidiFloat = 69 + 12 * Math.log2(detected.freq / 440);
+    let bestStr: number | null = null;
+    let bestDiff = Infinity;
+    for (const s of activeTuning.strings6To1) {
+      const diff = Math.abs(detectedMidiFloat - s.midi);
+      if (diff <= 1.5 && diff < bestDiff) {
+        bestDiff = diff;
+        bestStr = s.stringNum;
+      }
+    }
+    return bestStr;
+  }, [detected, activeTuning]);
 
   // 31-segment minimal strobe bar (-50..+50 cents)
   const LED_COUNT = 31;
@@ -708,37 +939,49 @@ export const TunerAndCheatSheet: React.FC<TunerAndCheatSheetProps> = ({
 
           {toolMode === 'tuner' ? (
             <div className="flex items-center gap-2.5">
-              <button
-                type="button"
-                onClick={() => setShowTuningPicker((v) => !v)}
-                aria-expanded={showTuningPicker}
-                className="inline-flex items-center gap-1 rounded-full border border-white/25 bg-black px-3 py-1 text-xs font-black tracking-wider text-white hover:border-white/60 transition tabular-nums"
-              >
-                {activeTuning.label}
-                <ChevronDown
-                  className={`h-3.5 w-3.5 text-white/60 transition-transform ${
-                    showTuningPicker ? 'rotate-180' : ''
-                  }`}
-                />
-              </button>
+              {instrument === 'bass' ? (
+                <span className="inline-flex items-center gap-1 rounded-full border border-[#39FF14]/45 bg-black px-3 py-1 text-xs font-black tracking-wider text-[#39FF14] tabular-nums">
+                  EADG · 4 Corde
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowTuningPicker((v) => !v)}
+                  aria-expanded={showTuningPicker}
+                  className="inline-flex items-center gap-1 rounded-full border border-white/25 bg-black px-3 py-1 text-xs font-black tracking-wider text-white hover:border-white/60 transition tabular-nums"
+                >
+                  {activeTuning.label}
+                  <ChevronDown
+                    className={`h-3.5 w-3.5 text-white/60 transition-transform ${
+                      showTuningPicker ? 'rotate-180' : ''
+                    }`}
+                  />
+                </button>
+              )}
 
               <button
                 type="button"
                 onClick={() => {
-                  if (!isListening) startTuner();
+                  if (audioSuspended) {
+                    void resumeSuspendedTunerContext();
+                  } else if (!isListening) {
+                    void startTuner();
+                  }
                 }}
                 className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-white/50 hover:text-white transition"
               >
                 <span
                   className={`h-2 w-2 rounded-full ${
-                    isListening
+                    audioSuspended
+                      ? 'bg-amber-400 animate-pulse-fast'
+                      : isListening
                       ? inTune
                         ? 'bg-[#39FF14]'
                         : 'bg-[#39FF14] animate-pulse-fast'
                       : 'bg-white/25'
                   }`}
                 />
-                {isListening ? 'LIVE' : 'MIC'}
+                {audioSuspended ? 'TOCCA' : isListening ? 'LIVE' : 'MIC'}
               </button>
             </div>
           ) : (
@@ -764,8 +1007,8 @@ export const TunerAndCheatSheet: React.FC<TunerAndCheatSheetProps> = ({
 
         {toolMode === 'tuner' ? (
           <>
-            {/* Collapsible Tuning Picker (Hidden until active tuning pill is clicked) */}
-            {showTuningPicker && (
+            {/* Collapsible Tuning Picker (Guitar alternate tunings) */}
+            {instrument !== 'bass' && showTuningPicker && (
               <div className="flex flex-wrap gap-1.5">
                 {TUNING_PRESETS.map((preset) => {
                   const active = preset.id === tuningId;
@@ -789,6 +1032,46 @@ export const TunerAndCheatSheet: React.FC<TunerAndCheatSheetProps> = ({
                 })}
               </div>
             )}
+
+            {/* Clickable Reference String Pills (Guitar & Bass, auto-highlights closest string) */}
+            <div className="flex flex-wrap items-center justify-center gap-1.5">
+              {activeTuning.strings6To1.map((s) => {
+                const isTarget = closestTargetStringNum === s.stringNum;
+                return (
+                  <button
+                    key={`${activeTuning.id}-${s.stringNum}-${s.noteLabel}`}
+                    type="button"
+                    onClick={() => {
+                      unlockSharedAudioContext().catch(() => {});
+                      if (instrument === 'bass') {
+                        playBassFrequency(s.freq, {
+                          durationSec: 1.4,
+                          volume: 0.58,
+                        });
+                      } else {
+                        playGuitarFrequency(s.freq, {
+                          durationSec: 1.5,
+                          volume: 0.45,
+                        });
+                      }
+                    }}
+                    className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-black transition tabular-nums ${
+                      isTarget
+                        ? 'border-[#39FF14] bg-[#39FF14]/15 text-[#39FF14] shadow-[0_0_12px_rgba(57,255,20,0.3)]'
+                        : 'border-white/15 bg-black text-white/75 hover:border-[#39FF14]/60 hover:text-[#39FF14]'
+                    }`}
+                  >
+                    <Volume2 className="h-3 w-3 text-[#39FF14]" />
+                    <span>{s.noteLabel}</span>
+                    {instrument === 'bass' && (
+                      <span className="text-[10px] font-semibold text-white/40">
+                        {Math.round(s.freq)} Hz
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
 
             {/* 31-Segment Horizontal Strobe Meter */}
             <div className="flex w-full min-w-0 overflow-hidden gap-[1.5px] sm:gap-1 items-center h-9 px-1">
@@ -853,7 +1136,16 @@ export const TunerAndCheatSheet: React.FC<TunerAndCheatSheetProps> = ({
               </div>
 
               <div className="min-h-[24px] flex items-center justify-center gap-2 text-xs font-bold tabular-nums">
-                {detected ? (
+                {audioSuspended ? (
+                  <button
+                    type="button"
+                    onClick={() => void resumeSuspendedTunerContext()}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-[#39FF14]/60 bg-[#39FF14]/10 px-3.5 py-1.5 text-[11px] font-black text-[#39FF14] hover:bg-[#39FF14]/20 transition"
+                  >
+                    <Mic className="h-3.5 w-3.5" />
+                    Tocca per attivare microfono
+                  </button>
+                ) : detected ? (
                   <>
                     <span
                       className={`rounded-full border px-3 py-0.5 text-[11px] font-black tracking-wider ${
@@ -883,6 +1175,18 @@ export const TunerAndCheatSheet: React.FC<TunerAndCheatSheetProps> = ({
                   <span className="text-white/30">440 Hz</span>
                 )}
               </div>
+
+              {isListening && !audioSuspended && (
+                <div
+                  className="w-28 h-1 rounded-full bg-white/10 overflow-hidden"
+                  aria-hidden="true"
+                >
+                  <div
+                    className="h-full rounded-full bg-[#39FF14]/70 transition-[width] duration-75"
+                    style={{ width: `${Math.round(inputLevel * 100)}%` }}
+                  />
+                </div>
+              )}
             </div>
           </>
         ) : (
@@ -1082,7 +1386,7 @@ export const TunerAndCheatSheet: React.FC<TunerAndCheatSheetProps> = ({
         )}
       </section>
 
-      {/* MINIMAL SCALE & ACCORDI */}
+      {/* MINIMAL SCALE & ACCORDI (CHITARRA) / ARPEGGI & TRIADI (BASSO) */}
       <section className="w-full min-w-0 max-w-full overflow-hidden rounded-3xl chrome-card p-4 space-y-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex rounded-full chrome-pill p-0.5">
@@ -1097,17 +1401,31 @@ export const TunerAndCheatSheet: React.FC<TunerAndCheatSheetProps> = ({
             >
               Scale
             </button>
-            <button
-              type="button"
-              onClick={() => setCheatMode('chords')}
-              className={`rounded-full px-3.5 py-1 text-xs font-bold transition ${
-                cheatMode === 'chords'
-                  ? 'bg-white text-black'
-                  : 'text-white/55 hover:text-white'
-              }`}
-            >
-              Accordi
-            </button>
+            {instrument === 'bass' ? (
+              <button
+                type="button"
+                onClick={() => setCheatMode('arpeggios')}
+                className={`rounded-full px-3.5 py-1 text-xs font-bold transition ${
+                  cheatMode === 'arpeggios'
+                    ? 'bg-white text-black'
+                    : 'text-white/55 hover:text-white'
+                }`}
+              >
+                Arpeggi &amp; Triadi
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setCheatMode('chords')}
+                className={`rounded-full px-3.5 py-1 text-xs font-bold transition ${
+                  cheatMode === 'chords'
+                    ? 'bg-white text-black'
+                    : 'text-white/55 hover:text-white'
+                }`}
+              >
+                Accordi
+              </button>
+            )}
           </div>
         </div>
 
@@ -1134,6 +1452,7 @@ export const TunerAndCheatSheet: React.FC<TunerAndCheatSheetProps> = ({
             </div>
 
             <FretboardViewer
+              instrument={instrument}
               notes={currentScaleData.notes}
               demoSequence={currentScaleData.demoSequence}
               stringLabels={stringLabelsHighToLow}
@@ -1144,7 +1463,48 @@ export const TunerAndCheatSheet: React.FC<TunerAndCheatSheetProps> = ({
           </div>
         )}
 
-        {cheatMode === 'chords' && (
+        {instrument === 'bass' && cheatMode === 'arpeggios' && (
+          <div className="w-full min-w-0 max-w-full space-y-3">
+            <div className="flex flex-wrap gap-1.5">
+              {BASS_ARPEGGIO_CHEATS.map((arp) => {
+                const active = arp.id === selectedBassArp.id;
+                return (
+                  <button
+                    key={arp.id}
+                    type="button"
+                    onClick={() => setSelectedBassArpId(arp.id)}
+                    className={`rounded-full border px-3 py-1 text-[11px] font-bold transition ${
+                      active
+                        ? 'border-white bg-white text-black'
+                        : 'border-white/15 bg-black text-white/65 hover:border-white/40 hover:text-white'
+                    }`}
+                  >
+                    {arp.name}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center justify-between gap-2 px-0.5 text-xs">
+              <span className="font-black text-white">{selectedBassArp.name}</span>
+              <span className="rounded-full border border-[#39FF14]/45 bg-[#39FF14]/12 px-2.5 py-0.5 text-[11px] font-black text-[#39FF14] tabular-nums">
+                {selectedBassArp.subtitle}
+              </span>
+            </div>
+
+            <FretboardViewer
+              instrument="bass"
+              notes={selectedBassArp.notes}
+              demoSequence={selectedBassArp.demoSequence}
+              stringLabels={BASS_STRING_LABELS}
+              customStringFreqs={customStringFreqs}
+              bpm={80}
+              variant="compact"
+            />
+          </div>
+        )}
+
+        {instrument !== 'bass' && cheatMode === 'chords' && (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 w-full min-w-0">
             {activeTuning.chords.map((chord) => {
               const posFrets = chord.frets.filter((f) => f > 0);

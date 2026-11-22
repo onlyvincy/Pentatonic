@@ -884,6 +884,208 @@ export const TechniqueHandAnimator: React.FC<TechniqueHandAnimatorProps> = ({
             </text>
           </g>
         )}
+
+        {techniqueId === 'bass-fingerstyle' && (
+          <g>
+            {/* 4 Thick Bass Strings (G, D, A, E) */}
+            {[36, 58, 80, 102].map((y, idx) => (
+              <line
+                key={y}
+                x1="24"
+                y1={y}
+                x2="336"
+                y2={y}
+                stroke={idx >= 2 ? 'rgba(57,255,20,0.55)' : 'rgba(255,255,255,0.28)'}
+                strokeWidth={1.6 + idx * 0.55}
+              />
+            ))}
+            {/* Pickup Rest Anchor */}
+            <rect
+              x="210"
+              y="108"
+              width="72"
+              height="18"
+              rx="6"
+              fill="#15171C"
+              stroke="rgba(255,255,255,0.4)"
+              strokeWidth="1.4"
+            />
+            <text x="246" y="120" textAnchor="middle" fontSize="8" fontWeight="800" fill="rgba(255,255,255,0.75)">
+              THUMB ANCHOR
+            </text>
+            {/* Index (i) & Middle (m) Alternating Pluck Fingers */}
+            <g>
+              <animateTransform
+                attributeName="transform"
+                type="translate"
+                values="0,0; 0,-14; 0,0; 0,0"
+                keyTimes="0; 0.25; 0.5; 1"
+                dur="1.3s"
+                repeatCount="indefinite"
+              />
+              <rect x="176" y="24" width="16" height="58" rx="8" fill="url(#palm-grad)" stroke="#39FF14" strokeWidth="2" />
+              <text x="184" y="42" textAnchor="middle" fontSize="9.5" fontWeight="900" fill="#39FF14">i</text>
+            </g>
+            <g>
+              <animateTransform
+                attributeName="transform"
+                type="translate"
+                values="0,0; 0,0; 0,-14; 0,0"
+                keyTimes="0; 0.5; 0.75; 1"
+                dur="1.3s"
+                repeatCount="indefinite"
+              />
+              <rect x="200" y="24" width="16" height="58" rx="8" fill="rgba(255,255,255,0.1)" stroke="#FFFFFF" strokeWidth="1.8" />
+              <text x="208" y="42" textAnchor="middle" fontSize="9.5" fontWeight="900" fill="#FFFFFF">m</text>
+            </g>
+            <text x="180" y="140" textAnchor="middle" fontSize="9" fontWeight="900" fill="#39FF14">
+              ALTERNANZA i–m COSTANTE · RAKING ECONOMICO ↓
+            </text>
+          </g>
+        )}
+
+        {techniqueId === 'bass-slap-pop' && (
+          <g>
+            {[36, 58, 80, 102].map((y, idx) => (
+              <line
+                key={y}
+                x1="24"
+                y1={y}
+                x2="336"
+                y2={y}
+                stroke={idx === 0 || idx === 3 ? 'rgba(57,255,20,0.55)' : 'rgba(255,255,255,0.24)'}
+                strokeWidth={1.6 + idx * 0.55}
+              />
+            ))}
+            {/* Thumb Bounce Impact on Low E String */}
+            <g>
+              <animateTransform
+                attributeName="transform"
+                type="translate"
+                values="0,-16; 0,2; 0,-16"
+                keyTimes="0; 0.35; 1"
+                dur="1.2s"
+                repeatCount="indefinite"
+              />
+              <rect x="116" y="72" width="46" height="22" rx="11" fill="url(#palm-grad)" stroke="#39FF14" strokeWidth="2" />
+              <text x="139" y="86" textAnchor="middle" fontSize="8.5" fontWeight="900" fill="#39FF14">SLAP</text>
+            </g>
+            {/* Index Finger Pop Pull on G String */}
+            <g>
+              <animateTransform
+                attributeName="transform"
+                type="translate"
+                values="0,6; 0,-14; 0,6"
+                keyTimes="0; 0.65; 1"
+                dur="1.2s"
+                repeatCount="indefinite"
+              />
+              <circle cx="232" cy="40" r="13" fill="rgba(255,255,255,0.12)" stroke="#FFFFFF" strokeWidth="2" />
+              <text x="232" y="43" textAnchor="middle" fontSize="8.5" fontWeight="900" fill="#FFFFFF">POP</text>
+            </g>
+            <text x="180" y="138" textAnchor="middle" fontSize="9" fontWeight="900" fill="#39FF14">
+              ROTAZIONE DI POLSO: RIMBALZO POLLICE + STRAPPO INDICE
+            </text>
+          </g>
+        )}
+
+        {techniqueId === 'bass-ghost-pocket' && (
+          <g>
+            {[36, 58, 80, 102].map((y, idx) => (
+              <line
+                key={y}
+                x1="24"
+                y1={y}
+                x2="336"
+                y2={y}
+                stroke="rgba(57,255,20,0.45)"
+                strokeWidth={1.6 + idx * 0.55}
+              />
+            ))}
+            {/* Multi-finger left-hand soft damp across strings */}
+            <rect x="118" y="24" width="44" height="90" rx="14" fill="rgba(251,191,36,0.14)" stroke="#FBBF24" strokeWidth="1.8" strokeDasharray="4 3" />
+            {[36, 58, 80, 102].map((y) => (
+              <text key={y} x="140" y={y + 4} textAnchor="middle" fontSize="12" fontWeight="900" fill="#FBBF24">×</text>
+            ))}
+            {/* Pulse Grid */}
+            {[0, 1, 2, 3].map((i) => (
+              <rect
+                key={i}
+                x={208 + i * 28}
+                y="50"
+                width="18"
+                height={i === 0 ? 44 : 24}
+                rx="5"
+                fill={i === 0 ? '#39FF14' : 'rgba(255,255,255,0.28)'}
+              />
+            ))}
+            <text x="180" y="138" textAnchor="middle" fontSize="9" fontWeight="900" fill="#FBBF24">
+              2–3 DITA MORBIDE SULLE CORDE · ZERO ARMONICI SUI TASTI 5/7/12
+            </text>
+          </g>
+        )}
+
+        {techniqueId === 'bass-muting-simandl' && (
+          <g>
+            {[74, 146, 218, 290].map((x) => (
+              <line key={x} x1={x} y1="22" x2={x} y2="114" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" />
+            ))}
+            {[36, 58, 80, 102].map((y, idx) => (
+              <line
+                key={y}
+                x1="24"
+                y1={y}
+                x2="336"
+                y2={y}
+                stroke={idx <= 1 ? 'rgba(57,255,20,0.5)' : 'rgba(251,191,36,0.5)'}
+                strokeWidth={1.6 + idx * 0.55}
+                strokeDasharray={idx >= 2 ? '5 3' : undefined}
+              />
+            ))}
+            {/* Simandl 1 - 2 - 3+4 */}
+            <circle cx="110" cy="58" r="10" fill="#39FF14" stroke="#FFFFFF" strokeWidth="1.5" />
+            <text x="110" y="61" textAnchor="middle" fontSize="9" fontWeight="900" fill="#000">1</text>
+            <circle cx="182" cy="58" r="10" fill="#FFFFFF" stroke="#39FF14" strokeWidth="1.5" />
+            <text x="182" y="61" textAnchor="middle" fontSize="9" fontWeight="900" fill="#000">2</text>
+            <rect x="236" y="47" width="38" height="22" rx="11" fill="url(#palm-grad)" stroke="#39FF14" strokeWidth="2" />
+            <text x="255" y="61" textAnchor="middle" fontSize="8.5" fontWeight="900" fill="#39FF14">3+4</text>
+            <text x="180" y="138" textAnchor="middle" fontSize="9" fontWeight="900" fill="#39FF14">
+              SIMANDL 1–2–4 SUI TASTI BASSI · FLOATING THUMB SULLE CORDE GRAVI
+            </text>
+          </g>
+        )}
+
+        {techniqueId === 'bass-legato-slide' && (
+          <g>
+            {[36, 58, 80, 102].map((y, idx) => (
+              <line
+                key={y}
+                x1="24"
+                y1={y}
+                x2="336"
+                y2={y}
+                stroke={idx === 1 ? 'rgba(57,255,20,0.75)' : 'rgba(255,255,255,0.22)'}
+                strokeWidth={1.6 + idx * 0.55}
+              />
+            ))}
+            <line x1="92" y1="58" x2="264" y2="58" stroke="#39FF14" strokeWidth="3.2" strokeDasharray="6 4" />
+            <circle cx="92" cy="58" r="9" fill="#000" stroke="#FFFFFF" strokeWidth="2" />
+            <g>
+              <animateTransform
+                attributeName="transform"
+                type="translate"
+                values="0,0; 172,0; 172,0; 0,0"
+                keyTimes="0; 0.5; 0.8; 1"
+                dur="2.0s"
+                repeatCount="indefinite"
+              />
+              <circle cx="92" cy="58" r="11" fill="#39FF14" stroke="#FFFFFF" strokeWidth="2" />
+            </g>
+            <text x="180" y="138" textAnchor="middle" fontSize="9" fontWeight="900" fill="#39FF14">
+              PRESSIONE COSTANTE · SGUARDO SUL TASTO DI ARRIVO
+            </text>
+          </g>
+        )}
       </svg>
     </div>
   );
@@ -1052,7 +1254,9 @@ export const ExerciseFamilyBriefingModal: React.FC<
             </div>
             <div className="rounded-xl border border-white/12 bg-black/75 p-2.5 space-y-1">
               <div className="text-[10px] font-black uppercase tracking-wider text-white">
-                Mano Destra (Ponte / Plettro)
+                {activeTechnique.id.startsWith('bass-')
+                  ? 'Mano Destra (Dita / Pickup / Slap)'
+                  : 'Mano Destra (Ponte / Plettro)'}
               </div>
               <p className="text-xs text-white/75 leading-relaxed">
                 {activeTechnique.handFocus.rightHand}

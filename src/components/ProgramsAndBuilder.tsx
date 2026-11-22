@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { BookOpen, Play, Plus, RotateCcw, X } from 'lucide-react';
 import {
   Exercise,
   ExerciseCategory,
   FretNote,
   GapClickMode,
+  InstrumentType,
   ScientificPlanPrescription,
   Subdivision,
   WorkoutSessionLog,
@@ -24,6 +25,12 @@ import {
   buildArpeggioWorkoutData,
   pickRecommendedProgression,
 } from '../utils/arpeggioEngine';
+import {
+  BASS_ARPEGGIO_EXERCISE_ID,
+  BASS_ARPEGGIO_PROGRESSIONS,
+  buildBassArpeggioWorkoutData,
+  pickRecommendedBassProgression,
+} from '../utils/bassArpeggioEngine';
 import { FretboardViewer } from './FretboardViewer';
 import { PathIllustration } from './PathIllustrations';
 import { ExerciseFamilyBriefingModal } from './ExerciseFamilyBriefingModal';
@@ -33,6 +40,7 @@ import {
 } from '../utils/spacedRepetitionCoach';
 
 interface ProgramsAndBuilderProps {
+  instrument?: InstrumentType;
   exercises: Exercise[];
   sessionLogs: WorkoutSessionLog[];
   prescription: ScientificPlanPrescription;
@@ -53,7 +61,28 @@ const CATEGORY_LABELS: Record<ExerciseCategory, string> = {
   rhythm: 'Groove & Timing',
 };
 
+const BASS_CATEGORY_LABELS: Record<ExerciseCategory, string> = {
+  picking: 'Velocità (Fingerstyle)',
+  fretboard: 'Precisione (Simandl & Muting)',
+  legato: 'Slap & Articolazione',
+  pentatonic: 'Visione & Basslines',
+  rhythm: 'Groove & Timing',
+};
+
+function getDefaultNotesForInstrument(instrument: InstrumentType): FretNote[] {
+  return instrument === 'bass'
+    ? [
+        { string: 4, fret: 5, label: 'R', isRoot: true, finger: '1' },
+        { string: 4, fret: 8, label: 'b3', finger: '4' },
+      ]
+    : [
+        { string: 6, fret: 5, label: 'R', isRoot: true, finger: '1' },
+        { string: 6, fret: 8, label: 'b3', finger: '4' },
+      ];
+}
+
 export const ProgramsAndBuilder: React.FC<ProgramsAndBuilderProps> = ({
+  instrument = 'guitar',
   exercises,
   sessionLogs,
   prescription,
@@ -73,20 +102,31 @@ export const ProgramsAndBuilder: React.FC<ProgramsAndBuilderProps> = ({
     {}
   );
   const [selectedArpeggioProgId, setSelectedArpeggioProgId] = useState<string>(
-    () => pickRecommendedProgression(sessionLogs.length).id
+    () =>
+      instrument === 'bass'
+        ? pickRecommendedBassProgression(sessionLogs.length).id
+        : pickRecommendedProgression(sessionLogs.length).id
   );
 
   const [exTitle, setExTitle] = useState('');
-  const [exCategory, setExCategory] = useState<ExerciseCategory>('pentatonic');
+  const [exCategory, setExCategory] = useState<ExerciseCategory>(
+    instrument === 'bass' ? 'rhythm' : 'pentatonic'
+  );
   const [exBpm, setExBpm] = useState(() =>
     getStartingBpmForLevel(prescription.answers.level)
   );
   const [exSub, setExSub] = useState<Subdivision>('1/8');
   const [exGap, setExGap] = useState<GapClickMode>('off');
-  const [exNotes, setExNotes] = useState<FretNote[]>([
-    { string: 6, fret: 5, label: 'R', isRoot: true, finger: '1' },
-    { string: 6, fret: 8, label: 'b3', finger: '4' },
-  ]);
+  const [exNotes, setExNotes] = useState<FretNote[]>(() =>
+    getDefaultNotesForInstrument(instrument)
+  );
+
+  useEffect(() => {
+    setActiveExId(null);
+    setShowBriefingForExId(null);
+    setExNotes(getDefaultNotesForInstrument(instrument));
+    setExCategory(instrument === 'bass' ? 'rhythm' : 'pentatonic');
+  }, [instrument]);
 
   const weekly = useMemo(
     () => computeWeeklyDoseProgress(prescription, exercises, sessionLogs),
@@ -145,9 +185,13 @@ export const ProgramsAndBuilder: React.FC<ProgramsAndBuilderProps> = ({
           }))
         : [];
 
+    const categoryLabelsMap =
+      instrument === 'bass' ? BASS_CATEGORY_LABELS : CATEGORY_LABELS;
+
     const newEx: Exercise = {
       id: `ex-custom-${Date.now()}`,
-      pillarName: CATEGORY_LABELS[exCategory],
+      instrument,
+      pillarName: categoryLabelsMap[exCategory],
       title: exTitle.trim(),
       category: exCategory,
       description: 'Esercizio personalizzato 4/4.',
@@ -169,6 +213,7 @@ export const ProgramsAndBuilder: React.FC<ProgramsAndBuilderProps> = ({
     };
     onCreateExercise(newEx);
     setExTitle('');
+    setExNotes(getDefaultNotesForInstrument(instrument));
     setShowExerciseModal(false);
   };
 
@@ -191,7 +236,7 @@ export const ProgramsAndBuilder: React.FC<ProgramsAndBuilderProps> = ({
     : overallMinReached
     ? 'bg-white'
     : 'bg-[#39FF14]';
-  const activePathId = resolvePathId(prescription.answers);
+  const activePathId = resolvePathId(prescription.answers, instrument);
 
   return (
     <div className="space-y-8 pb-4">
@@ -370,10 +415,16 @@ export const ProgramsAndBuilder: React.FC<ProgramsAndBuilderProps> = ({
           ? 'bg-white'
           : 'bg-[#39FF14]';
 
-        const isArpeggioEx = ex.id === ARPEGGIO_EXERCISE_ID;
-        const arpData = isArpeggioEx
+        const isGuitarArpeggioEx = ex.id === ARPEGGIO_EXERCISE_ID;
+        const isBassArpeggioEx = ex.id === BASS_ARPEGGIO_EXERCISE_ID;
+        const arpData = isGuitarArpeggioEx
           ? buildArpeggioWorkoutData(activeVarId, selectedArpeggioProgId)
+          : isBassArpeggioEx
+          ? buildBassArpeggioWorkoutData(activeVarId, selectedArpeggioProgId)
           : null;
+        const arpProgressions = isBassArpeggioEx
+          ? BASS_ARPEGGIO_PROGRESSIONS
+          : ARPEGGIO_PROGRESSIONS;
         const exSpeedBurst = speedBurstByEx[ex.id] ?? Boolean(ex.speedBurst);
 
         return (
@@ -498,7 +549,7 @@ export const ProgramsAndBuilder: React.FC<ProgramsAndBuilderProps> = ({
                     </span>
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5">
-                    {ARPEGGIO_PROGRESSIONS.map((prog) => {
+                    {arpProgressions.map((prog) => {
                       const active = prog.id === selectedArpeggioProgId;
                       return (
                         <button
@@ -521,6 +572,7 @@ export const ProgramsAndBuilder: React.FC<ProgramsAndBuilderProps> = ({
 
               {/* Fretboard Preview */}
               <FretboardViewer
+                instrument={instrument}
                 notes={
                   arpData?.fretboardNotes ??
                   selectedVariant?.fretboardNotes ??
@@ -611,7 +663,9 @@ export const ProgramsAndBuilder: React.FC<ProgramsAndBuilderProps> = ({
                 onChange={(e) => setExCategory(e.target.value as ExerciseCategory)}
                 className="w-full rounded-xl bg-black border border-white/15 px-3 py-2 text-sm text-white outline-none focus:border-white/40"
               >
-                {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
+                {Object.entries(
+                  instrument === 'bass' ? BASS_CATEGORY_LABELS : CATEGORY_LABELS
+                ).map(([k, v]) => (
                   <option key={k} value={k}>
                     {v}
                   </option>
@@ -651,6 +705,7 @@ export const ProgramsAndBuilder: React.FC<ProgramsAndBuilderProps> = ({
             </div>
 
             <FretboardViewer
+              instrument={instrument}
               notes={exNotes}
               interactive
               onToggleNote={handleToggleFretNote}

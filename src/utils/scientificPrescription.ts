@@ -1,8 +1,11 @@
 import {
+  BassPathId,
   DiagnosticQuizAnswers,
   Exercise,
   ExerciseWeeklyDose,
   FondamentaId,
+  GuitarPathId,
+  InstrumentType,
   PainPointId,
   PathId,
   PlayerLevelId,
@@ -13,6 +16,7 @@ import {
   SessionDurationPreset,
   WorkoutSessionLog,
   WorkoutTemplate,
+  getExerciseInstrument,
 } from '../types/practice';
 import {
   ExerciseMasteryScore,
@@ -29,14 +33,14 @@ export interface QuizOption<T extends string | number> {
   badge?: string;
 }
 
-export interface PathOption {
-  value: PathId;
+export interface PathOption<TPath extends PathId = PathId> {
+  value: TPath;
   title: string;
   subtitle: string;
   focusBadges: string[];
 }
 
-export const PATH_OPTIONS: PathOption[] = [
+export const PATH_OPTIONS: PathOption<GuitarPathId>[] = [
   {
     value: 'solista',
     title: 'Percorso Solista',
@@ -51,7 +55,44 @@ export const PATH_OPTIONS: PathOption[] = [
   },
 ];
 
-export function resolvePathId(answers: DiagnosticQuizAnswers): PathId {
+export const BASS_PATH_OPTIONS: PathOption<BassPathId>[] = [
+  {
+    value: 'groove_pocket',
+    title: 'Groove & Pocket',
+    subtitle: 'Timing chirurgico con la cassa, ghost notes 1/16, ottave e basslines solide.',
+    focusBadges: ['Pocket & Gap Click', 'Ghost Notes 1/16', 'Basslines & Triadi'],
+  },
+  {
+    value: 'modern_bass',
+    title: 'Tecnica & Modern Bass',
+    subtitle: 'Fingerstyle veloce, raking, slap & pop, legato e visione sul manico 4 corde.',
+    focusBadges: ['Fingerstyle & Raking', 'Slap & Pop', 'Manico 4 Corde'],
+  },
+];
+
+export function resolveInstrumentFromAnswers(
+  answers: DiagnosticQuizAnswers
+): InstrumentType {
+  if (answers.instrument === 'bass' || answers.instrument === 'guitar') {
+    return answers.instrument;
+  }
+  if (answers.pathId === 'groove_pocket' || answers.pathId === 'modern_bass') {
+    return 'bass';
+  }
+  return 'guitar';
+}
+
+export function resolvePathId(
+  answers: DiagnosticQuizAnswers,
+  instrumentOverride?: InstrumentType
+): PathId {
+  const instrument = instrumentOverride ?? resolveInstrumentFromAnswers(answers);
+  if (instrument === 'bass') {
+    if (answers.pathId === 'groove_pocket' || answers.pathId === 'modern_bass') {
+      return answers.pathId;
+    }
+    return 'groove_pocket';
+  }
   if (answers.pathId === 'solista' || answers.pathId === 'rhythm') {
     return answers.pathId;
   }
@@ -119,6 +160,42 @@ export const LEVEL_OPTIONS: QuizOption<PlayerLevelId>[] = [
     value: 'advanced',
     title: 'Avanzato',
     subtitle: 'Controllo totale ad alta velocità, barrè mobili ed espressività.',
+  },
+];
+
+export const BASS_LEVEL_OPTIONS: QuizOption<PlayerLevelId>[] = [
+  {
+    value: 'foundation',
+    title: 'Parto dalle basi',
+    subtitle: 'Fingerstyle alternato, prime pentatoniche 4 corde e groove a tempo.',
+  },
+  {
+    value: 'intermediate',
+    title: 'Intermedio',
+    subtitle: 'Ghost notes 1/16, ottave, slap & pop base e arpeggi sui giri.',
+  },
+  {
+    value: 'advanced',
+    title: 'Avanzato',
+    subtitle: 'Pocket ad alta velocità, raking, double thumb e controllo totale del manico.',
+  },
+];
+
+export const BOTH_LEVEL_OPTIONS: QuizOption<PlayerLevelId>[] = [
+  {
+    value: 'foundation',
+    title: 'Parto dalle basi',
+    subtitle: 'Fondamentali solidi, prime scale, timing pulito e velocità graduale.',
+  },
+  {
+    value: 'intermediate',
+    title: 'Intermedio',
+    subtitle: 'Groove, fraseggio, tecnica delle mani e progressioni su tutto il manico.',
+  },
+  {
+    value: 'advanced',
+    title: 'Avanzato',
+    subtitle: 'Controllo totale ad alta velocità, precisione ritmica e articolazione avanzata.',
   },
 ];
 
@@ -215,14 +292,42 @@ const DOSE_COPY_BY_EXERCISE: Record<
     coachMethod: 'Timing & Groove 16th',
     scientificRationale: 'Orologio interno su battuta muta, sincopi in levare e ghost notes funk.',
   },
+  'ex-bass-fingerstyle': {
+    coachMethod: 'Fingerstyle & Raking',
+    scientificRationale: 'Alterna indice–medio (i–m), string crossing e raking discendente con burst 1/8 → 1/16.',
+  },
+  'ex-bass-pocket-groove': {
+    coachMethod: 'Pocket & Ghost Notes',
+    scientificRationale: 'Lock cassa–basso su battuta muta (Gap Click), ghost notes 1/16 e sincopi funk.',
+  },
+  'ex-bass-slap-pop': {
+    coachMethod: 'Slap & Pop Funk',
+    scientificRationale: 'Rimbalzo thumb slap, pop su D/G, dead notes percussive e legature hammer-on.',
+  },
+  'ex-bass-arpeggios': {
+    coachMethod: 'Basslines & Gradi 1-3-5-7-8',
+    scientificRationale: 'Pattern di bassline per gradi (1–3–5–7–8) e ottave applicabili su qualsiasi giro armonico.',
+  },
+  'ex-bass-spider-muting': {
+    coachMethod: 'Simandl & String Muting',
+    scientificRationale: 'Rinforza dita (Simandl 1–2–4 e 1–2–3–4), stretch laterale e muting silenzioso sulle 4 corde.',
+  },
+  'ex-bass-neck-legato': {
+    coachMethod: 'Visione 4 Corde & Legato',
+    scientificRationale: 'Collega tutto il manico del basso con pentatoniche, slide diagonali e hammer-on/pull-off.',
+  },
 };
 
 export function generateScientificPrescription(
   answers: DiagnosticQuizAnswers,
   exercises: Exercise[]
 ): ScientificPlanPrescription {
-  const pathId = resolvePathId(answers);
-  const exIdsAvailable = new Set(exercises.map((e) => e.id));
+  const instrument = resolveInstrumentFromAnswers(answers);
+  const pathId = resolvePathId(answers, instrument);
+  const scopedExercises = exercises.filter(
+    (e) => getExerciseInstrument(e) === instrument
+  );
+  const exIdsAvailable = new Set(scopedExercises.map((e) => e.id));
 
   // Level & frequency volume scaling
   const levelBonus =
@@ -262,7 +367,95 @@ export function generateScientificPrescription(
     });
   };
 
-  if (pathId === 'solista') {
+  if (instrument === 'bass') {
+    if (pathId === 'groove_pocket') {
+      const bassPocketPrimary = [
+        'ex-bass-pocket-groove',
+        'ex-bass-arpeggios',
+        'ex-bass-fingerstyle',
+      ];
+      bassPocketPrimary.forEach((id, idx) => {
+        addIfAvailable(
+          id,
+          'primario',
+          `Focus ${idx + 1}`,
+          Math.min(8, 5 + levelBonus + freqBonus),
+          Math.min(12, 8 + levelBonus + freqBonus * 2),
+          3,
+          90
+        );
+      });
+
+      const bassPocketSupport = [
+        'ex-bass-spider-muting',
+        'ex-bass-neck-legato',
+      ];
+      bassPocketSupport.forEach((id) => {
+        addIfAvailable(
+          id,
+          'secondario',
+          'Supporto',
+          4 + Math.min(1, freqBonus),
+          6 + levelBonus + freqBonus,
+          2,
+          90
+        );
+      });
+
+      addIfAvailable(
+        'ex-bass-slap-pop',
+        'fondamentale',
+        'Fondamenta',
+        2 + Math.min(1, freqBonus),
+        4 + Math.min(2, freqBonus),
+        2,
+        75
+      );
+    } else {
+      const bassModernPrimary = [
+        'ex-bass-fingerstyle',
+        'ex-bass-slap-pop',
+        'ex-bass-neck-legato',
+      ];
+      bassModernPrimary.forEach((id, idx) => {
+        addIfAvailable(
+          id,
+          'primario',
+          `Focus ${idx + 1}`,
+          Math.min(8, 5 + levelBonus + freqBonus),
+          Math.min(12, 8 + levelBonus + freqBonus * 2),
+          3,
+          90
+        );
+      });
+
+      const bassModernSupport = [
+        'ex-bass-spider-muting',
+        'ex-bass-arpeggios',
+      ];
+      bassModernSupport.forEach((id) => {
+        addIfAvailable(
+          id,
+          'secondario',
+          'Supporto',
+          4 + Math.min(1, freqBonus),
+          6 + levelBonus + freqBonus,
+          2,
+          90
+        );
+      });
+
+      addIfAvailable(
+        'ex-bass-pocket-groove',
+        'fondamentale',
+        'Fondamenta',
+        3 + Math.min(1, freqBonus),
+        5 + Math.min(2, freqBonus),
+        2,
+        75
+      );
+    }
+  } else if (pathId === 'solista') {
     const solistaPrimary = [
       'ex-speed-bursts',
       'ex-pent-licks',
@@ -368,8 +561,8 @@ export function generateScientificPrescription(
     });
   }
 
-  // Include any remaining custom or future exercises as baseline volume
-  for (const ex of exercises) {
+  // Include any remaining custom or future exercises for this instrument as baseline volume
+  for (const ex of scopedExercises) {
     addIfAvailable(
       ex.id,
       'fondamentale',
@@ -401,17 +594,28 @@ export function generateScientificPrescription(
   });
 
   const profileTitle =
-    pathId === 'rhythm' ? 'Percorso Rhythm' : 'Percorso Solista';
+    instrument === 'bass'
+      ? pathId === 'groove_pocket'
+        ? 'Groove & Pocket'
+        : 'Tecnica & Modern Bass'
+      : pathId === 'rhythm'
+      ? 'Percorso Rhythm'
+      : 'Percorso Solista';
   const diagnosisSummary =
-    pathId === 'rhythm'
+    instrument === 'bass'
+      ? pathId === 'groove_pocket'
+        ? 'Focus su timing chirurgico, ghost notes 1/16, ottave e basslines sui giri armonici.'
+        : 'Focus su fingerstyle veloce, raking, slap & pop, legato e visione sul manico 4 corde.'
+      : pathId === 'rhythm'
       ? 'Focus su palm muting, power chords veloci, accordi barrè mobili e timing.'
       : 'Focus su alternate picking, legato, bending e libertà su tutto il manico.';
 
   return {
-    id: `plan-${Date.now()}`,
+    id: `plan-${instrument}-${Date.now()}`,
     createdAt: new Date().toISOString(),
     answers: {
       ...answers,
+      instrument,
       pathId,
     },
     profileTitle,
@@ -445,12 +649,31 @@ export function createDefaultScientificPrescription(
 
   return generateScientificPrescription(
     {
+      instrument: 'guitar',
       pathId,
       primaryPainPoint:
         (activeProgramId && painByProgram[activeProgramId]) || 'speed_wall',
       secondaryBottleneck:
         (activeProgramId && secondaryByProgram[activeProgramId]) ||
         'finger_tension',
+      level: 'intermediate',
+      weeklyDays: 5,
+      sessionPreset: preset,
+    },
+    exercises
+  );
+}
+
+export function createDefaultBassPrescription(
+  exercises: Exercise[],
+  preset: SessionDurationPreset = 15
+): ScientificPlanPrescription {
+  return generateScientificPrescription(
+    {
+      instrument: 'bass',
+      pathId: 'groove_pocket',
+      primaryPainPoint: 'timing_drift',
+      secondaryBottleneck: 'rhythm_stiffness',
       level: 'intermediate',
       weeklyDays: 5,
       sessionPreset: preset,
@@ -521,6 +744,42 @@ export const FONDAMENTA_CATALOG: Record<
   },
 };
 
+export const BASS_FONDAMENTA_CATALOG: Record<
+  FondamentaId,
+  { id: FondamentaId; title: string; subtitle: string; order: number }
+> = {
+  velocita: {
+    id: 'velocita',
+    title: 'Velocità',
+    subtitle: 'Fingerstyle alternato (i–m), string crossing e raking',
+    order: 1,
+  },
+  precisione: {
+    id: 'precisione',
+    title: 'Precisione',
+    subtitle: 'Simandl 1–2–4, stretch e string muting a due mani',
+    order: 2,
+  },
+  espressivita: {
+    id: 'espressivita',
+    title: 'Slap & Articolazione',
+    subtitle: 'Thumb slap, pop, dead notes e fraseggio articolato',
+    order: 3,
+  },
+  visione: {
+    id: 'visione',
+    title: 'Visione & Basslines',
+    subtitle: 'Arpeggi per gradi, triadi, ottave e manico 4 corde',
+    order: 4,
+  },
+  groove: {
+    id: 'groove',
+    title: 'Groove & Timing',
+    subtitle: 'Pocket cassa–basso, gap click e ghost notes 1/16',
+    order: 5,
+  },
+};
+
 export interface FondamentaWeeklyGroup {
   fondamentaId: FondamentaId;
   title: string;
@@ -542,18 +801,24 @@ export function getFondamentaForExercise(ex: Exercise): FondamentaId {
   switch (ex.id) {
     case 'ex-speed-bursts':
     case 'ex-pent-licks':
+    case 'ex-bass-fingerstyle':
       return 'velocita';
     case 'ex-picking-spider':
     case 'ex-arpeggio-progressions':
+    case 'ex-bass-spider-muting':
       return 'precisione';
     case 'ex-legato-trill':
     case 'ex-lead-bending':
+    case 'ex-bass-slap-pop':
       return 'espressivita';
     case 'ex-harmony-scale':
     case 'ex-pent-diagonal':
+    case 'ex-bass-arpeggios':
+    case 'ex-bass-neck-legato':
       return 'visione';
     case 'ex-rhythm-palmmute':
     case 'ex-rhythm-gap':
+    case 'ex-bass-pocket-groove':
       return 'groove';
     default:
       if (ex.category === 'picking') return 'velocita';
@@ -667,11 +932,24 @@ export function computeFondamentaWeeklyGroups(
   sessionLogs: WorkoutSessionLog[]
 ): FondamentaWeeklyGroup[] {
   const weekly = computeWeeklyDoseProgress(prescription, exercises, sessionLogs);
-  const pathId = resolvePathId(prescription.answers);
+  const instrument = resolveInstrumentFromAnswers(prescription.answers);
+  const pathId = resolvePathId(prescription.answers, instrument);
+  const catalog =
+    instrument === 'bass' ? BASS_FONDAMENTA_CATALOG : FONDAMENTA_CATALOG;
   const primaryFondamenta: FondamentaId =
-    pathId === 'rhythm' ? 'groove' : 'velocita';
+    instrument === 'bass'
+      ? pathId === 'groove_pocket'
+        ? 'groove'
+        : 'velocita'
+      : pathId === 'rhythm'
+      ? 'groove'
+      : 'velocita';
   const pathOrder: FondamentaId[] =
-    pathId === 'rhythm'
+    instrument === 'bass'
+      ? pathId === 'groove_pocket'
+        ? ['groove', 'visione', 'velocita', 'precisione', 'espressivita']
+        : ['velocita', 'espressivita', 'visione', 'precisione', 'groove']
+      : pathId === 'rhythm'
       ? ['groove', 'precisione', 'visione', 'velocita', 'espressivita']
       : ['velocita', 'espressivita', 'precisione', 'visione', 'groove'];
 
@@ -688,7 +966,7 @@ export function computeFondamentaWeeklyGroups(
   const groups: FondamentaWeeklyGroup[] = [];
   for (const [fid, items] of bucket.entries()) {
     if (items.length === 0) continue;
-    const meta = FONDAMENTA_CATALOG[fid];
+    const meta = catalog[fid];
     const completedSets = items.reduce((acc, i) => acc + i.completedSets, 0);
     const weeklyMinSets = items.reduce((acc, i) => acc + i.weeklyMinSets, 0);
     const weeklyOptimalSets = items.reduce((acc, i) => acc + i.weeklyOptimalSets, 0);
@@ -837,11 +1115,14 @@ export function buildSessionPlanFromPrescription(
     0
   );
 
+  const instrument = resolveInstrumentFromAnswers(prescription.answers);
+
   const syntheticWorkout: WorkoutTemplate = {
     id: `wk-rx-${preset}-${prescription.id}`,
+    instrument,
     title: prescription.profileTitle,
     subtitle: `${preset} min • Algoritmo Weekly Minimum`,
-    programId: 'scientific-rx',
+    programId: instrument === 'bass' ? 'prog-bass-daily-all' : 'scientific-rx',
     dayNumber: 1,
     estimatedMinutes: Math.max(3, Math.round(totalSec / 60)),
     items: items.map((i) => ({
@@ -854,6 +1135,7 @@ export function buildSessionPlanFromPrescription(
 
   return {
     workout: syntheticWorkout,
+    instrument,
     preset,
     modeLabel: `${preset} min • Piano Scientifico`,
     modeDescription: prescription.diagnosisSummary,

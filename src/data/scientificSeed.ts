@@ -8,8 +8,16 @@ import {
 } from '../types/practice';
 import { getRecordingBlob, saveRecordingBlob } from '../services/storage';
 import { STANDARDIZED_WORKOUT_ID } from '../utils/overloadEngine';
-import { createDefaultScientificPrescription } from '../utils/scientificPrescription';
+import {
+  createDefaultBassPrescription,
+  createDefaultScientificPrescription,
+} from '../utils/scientificPrescription';
 import { buildSeedArpeggioExercise } from '../utils/arpeggioEngine';
+import {
+  SEED_BASS_EXERCISES,
+  SEED_BASS_PROGRAMS,
+  SEED_BASS_WORKOUTS,
+} from './bassSeed';
 
 const daysAgoIso = (daysAgo: number, hour = 19): string => {
   const d = new Date();
@@ -4657,12 +4665,29 @@ export const SEED_FEED_RECORDINGS: FeedRecording[] = [
   },
 ];
 
+export { SEED_BASS_EXERCISES, SEED_BASS_WORKOUTS, SEED_BASS_PROGRAMS };
+
+export const ALL_SEED_EXERCISES: Exercise[] = [
+  ...SEED_EXERCISES,
+  ...SEED_BASS_EXERCISES,
+];
+
+export const ALL_SEED_WORKOUTS: WorkoutTemplate[] = [
+  ...SEED_WORKOUTS,
+  ...SEED_BASS_WORKOUTS,
+];
+
+export const ALL_SEED_PROGRAMS: ProgramPercorso[] = [
+  ...SEED_PROGRAMS,
+  ...SEED_BASS_PROGRAMS,
+];
+
 export function createInitialAppState(): AppState {
   return createCleanProfileAppState();
 }
 
 export function createCleanProfileAppState(): AppState {
-  const cleanExercises: Exercise[] = SEED_EXERCISES.map((ex) => ({
+  const cleanExercises: Exercise[] = ALL_SEED_EXERCISES.map((ex) => ({
     ...ex,
     currentTargetBpm: ex.baselineBpm,
     bestCleanBpm: ex.baselineBpm,
@@ -4673,8 +4698,8 @@ export function createCleanProfileAppState(): AppState {
 
   return {
     exercises: cleanExercises,
-    workouts: SEED_WORKOUTS,
-    programs: SEED_PROGRAMS,
+    workouts: ALL_SEED_WORKOUTS,
+    programs: ALL_SEED_PROGRAMS,
     sessionLogs: [],
     feedRecordings: [],
     settings: {
@@ -4686,11 +4711,14 @@ export function createCleanProfileAppState(): AppState {
       selectedPreset: 15,
       cloudSyncEnabled: false,
       hasCompletedOnboarding: false,
+      instrumentMode: 'guitar',
+      activeInstrument: 'guitar',
       scientificPlan: createDefaultScientificPrescription(
         cleanExercises,
         'prog-daily-all',
         15
       ),
+      bassScientificPlan: createDefaultBassPrescription(cleanExercises, 15),
     },
   };
 }

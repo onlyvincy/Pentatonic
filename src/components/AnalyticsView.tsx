@@ -1,9 +1,10 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   Cloud,
   Download,
   RotateCcw,
+  SlidersHorizontal,
   Trash2,
   Upload,
   X,
@@ -12,6 +13,7 @@ import {
   AppState,
   Exercise,
   FeedRecording,
+  InstrumentType,
   UserSettings,
   WorkoutSessionLog,
 } from '../types/practice';
@@ -23,6 +25,7 @@ import { computeNerdTelemetry } from '../utils/nerdStats';
 import { FeedAndBenchmarks } from './FeedAndBenchmarks';
 
 interface AnalyticsViewProps {
+  instrument?: InstrumentType;
   appState: AppState;
   exercises: Exercise[];
   sessionLogs: WorkoutSessionLog[];
@@ -34,10 +37,12 @@ interface AnalyticsViewProps {
   onImportState: (imported: AppState) => void;
   onResetDemoData: () => void;
   onOpenCloudModal?: () => void;
+  onOpenDiagnosticQuiz?: () => void;
   cloudUserEmail?: string | null;
 }
 
 export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
+  instrument = 'guitar',
   appState,
   exercises,
   sessionLogs,
@@ -48,11 +53,16 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   onImportState,
   onResetDemoData,
   onOpenCloudModal,
+  onOpenDiagnosticQuiz,
   cloudUserEmail,
 }) => {
   const [selectedExId, setSelectedExId] = useState<string>('all');
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    setSelectedExId('all');
+  }, [instrument]);
 
   const [resetModalStep, setResetModalStep] = useState<0 | 1 | 2 | 3>(0);
   const [confirmCheckDataLoss, setConfirmCheckDataLoss] = useState(false);
@@ -85,9 +95,10 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
         exercises,
         sessionLogs,
         settings.weeklyGoalDays,
-        selectedExId
+        selectedExId,
+        instrument
       ),
-    [exercises, sessionLogs, settings.weeklyGoalDays, selectedExId]
+    [exercises, sessionLogs, settings.weeklyGoalDays, selectedExId, instrument]
   );
 
   const handleDownloadBackup = () => {
@@ -389,6 +400,16 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             onChange={handleImportFile}
             className="hidden"
           />
+          {onOpenDiagnosticQuiz && (
+            <button
+              type="button"
+              onClick={onOpenDiagnosticQuiz}
+              className="flex items-center gap-1.5 rounded-full chrome-pill px-3 py-1.5 text-[11px] font-bold text-white hover:border-[#39FF14]/60 hover:text-[#39FF14] transition"
+            >
+              <SlidersHorizontal className="h-3 w-3 text-[#39FF14]" />
+              Strumento &amp; Percorso
+            </button>
+          )}
           {onOpenCloudModal && (
             <button
               type="button"

@@ -1,12 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { DemoStep, FretNote, MetronomeSoundId } from '../types/practice';
+import { DemoStep, FretNote, InstrumentType, MetronomeSoundId } from '../types/practice';
 import { Play, Square } from 'lucide-react';
 import {
+  BASS_STRING_LABELS,
   STRING_SHORT_MAP,
   getSharedAudioContext,
+  playBassFrequency,
+  playBassPluck,
   playGuitarFrequency,
   playGuitarPluck,
-  playGuitarStep,
+  playInstrumentStep,
   playSoftMetronomeTick,
 } from '../utils/guitarSynth';
 
@@ -16,6 +19,7 @@ interface FretboardViewerProps {
   notes: FretNote[];
   demoSequence?: DemoStep[];
   coachingCues?: string[];
+  instrument?: InstrumentType;
   interactive?: boolean;
   forceStopDemo?: boolean;
   /** 'stage' = full-screen focused animated demo; 'compact' = clean minimal view */
@@ -30,10 +34,10 @@ interface FretboardViewerProps {
   subdivisionLabel?: string;
   /** Metronome click preset used during slow demo */
   metronomeSound?: MetronomeSoundId;
-  /** Custom string labels (e.g. ['e','C','G','C','A','F'] for FACGCE tuning) */
-  stringLabels?: readonly [string, string, string, string, string, string];
+  /** Custom string labels (e.g. ['e','C','G','C','A','F'] for FACGCE tuning or ['G','D','A','E'] for bass) */
+  stringLabels?: readonly string[];
   /** Custom open-string frequencies in Hz for alternate tunings */
-  customStringFreqs?: Record<1 | 2 | 3 | 4 | 5 | 6, number>;
+  customStringFreqs?: Partial<Record<1 | 2 | 3 | 4 | 5 | 6, number>>;
   /** Mute synthetic guitar audio (e.g., while mic recording & metronome run in live play) */
   muteAudio?: boolean;
   /** Target BPM used to synchronize slow-intro & live-loop pacing */
@@ -150,13 +154,14 @@ function resolveSpeedBurstTick(
 export const FretboardViewer: React.FC<FretboardViewerProps> = ({
   notes,
   demoSequence,
+  instrument = 'guitar',
   interactive = false,
   forceStopDemo = false,
   variant = 'compact',
   demoMode = 'manual',
   externalStepTick,
   metronomeSound = 'woodblock',
-  stringLabels = DEFAULT_STRING_NAMES,
+  stringLabels,
   customStringFreqs,
   muteAudio = false,
   bpm = 90,
@@ -167,6 +172,14 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
   replayKey = 0,
   onToggleNote,
 }) => {
+  const effectiveStringLabels = useMemo(
+    () =>
+      stringLabels ??
+      (instrument === 'bass' ? BASS_STRING_LABELS : DEFAULT_STRING_NAMES),
+    [stringLabels, instrument]
+  );
+  const stringCount = effectiveStringLabels.length;
+  const spanCount = Math.max(1, stringCount - 1);
   const [userLabelMode, setUserLabelMode] = useState<LabelMode | null>(null);
   const [isPlayingDemo, setIsPlayingDemo] = useState(false);
   const [activeStepIndex, setActiveStepIndex] = useState<number | null>(null);
@@ -230,14 +243,22 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
 
   const playNoteForTuning = useCallback(
     (stringNum: 1 | 2 | 3 | 4 | 5 | 6, fret: number) => {
-      if (customStringFreqs) {
-        const freq = customStringFreqs[stringNum] * Math.pow(2, fret / 12);
-        playGuitarFrequency(freq, { durationSec: 1.25, volume: 0.54 });
+      const customBase = customStringFreqs?.[stringNum];
+      if (customBase) {
+        const freq = customBase * Math.pow(2, fret / 12);
+        if (instrument === 'bass') {
+          playBassFrequency(freq, { durationSec: 1.25, volume: 0.56 });
+        } else {
+          playGuitarFrequency(freq, { durationSec: 1.25, volume: 0.54 });
+        }
+      } else if (instrument === 'bass') {
+        const bassStr = Math.max(1, Math.min(4, stringNum)) as 1 | 2 | 3 | 4;
+        playBassPluck(bassStr, fret, { durationSec: 1.25, volume: 0.56 });
       } else {
         playGuitarPluck(stringNum, fret, { durationSec: 1.25, volume: 0.54 });
       }
     },
-    [customStringFreqs]
+    [customStringFreqs, instrument]
   );
 
   const triggerStepAudio = useCallback(
@@ -249,18 +270,34 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
       }
       if (customStringFreqs && !step.sustain && !step.muted && step.notes.length > 0) {
         step.notes.forEach((n, idx) => {
-          const freq = customStringFreqs[n.string] * Math.pow(2, n.fret / 12);
-          playGuitarFrequency(freq, {
-            durationSec: 1.25,
-            volume: step.notes.length > 1 ? 0.32 : 0.54,
-            delaySec: idx * 0.016,
-          });
+          const customBase = customStringFreqs[n.string];
+          if (!customBase) return;
+          const freq = customBase * Math.pow(2, n.fret / 12);
+          if (instrument === 'bass') {
+            playBassFrequency(freq, {
+              durationSec: 1.15,
+              volume: step.notes.length > 1 ? 0.36 : 0.56,
+              delaySec: idx * 0.012,
+            });
+          } else {
+            playGuitarFrequency(freq, {
+              durationSec: 1.25,
+              volume: step.notes.length > 1 ? 0.32 : 0.54,
+              delaySec: idx * 0.016,
+            });
+          }
         });
       } else {
-        playGuitarStep(step.notes, step.muted, step.sustain, step.technique);
+        playInstrumentStep(
+          instrument,
+          step.notes,
+          step.muted,
+          step.sustain,
+          step.technique
+        );
       }
     },
-    [effectiveSteps, muteAudio, metronomeSound, customStringFreqs]
+    [effectiveSteps, muteAudio, metronomeSound, customStringFreqs, instrument]
   );
 
   const startDemo = useCallback(
@@ -499,7 +536,13 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
     if (effectiveActiveStepIndex === null || muteAudio) return;
     const step = effectiveSteps[effectiveActiveStepIndex];
     if (step) {
-      playGuitarStep(step.notes, step.muted, step.sustain, step.technique);
+      playInstrumentStep(
+        instrument,
+        step.notes,
+        step.muted,
+        step.sustain,
+        step.technique
+      );
     }
   }, [
     usesExternalClock,
@@ -507,6 +550,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
     effectiveSteps,
     muteAudio,
     clearTimers,
+    instrument,
   ]);
 
   // Internal auto-start only when not driven by external metronome clock
@@ -619,6 +663,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
   }, [activeContextChordNotes]);
 
   const activeBarre = useMemo(() => {
+    if (instrument === 'bass') return null;
     if (hasChordContext && activeContextChordNotes) {
       const barre = getBarreInfo(activeContextChordNotes);
       return barre
@@ -635,6 +680,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
     }
     return null;
   }, [
+    instrument,
     hasChordContext,
     activeContextChordNotes,
     effectiveActiveStepIndex,
@@ -790,7 +836,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
     const isGhost = tech.includes('ghost');
 
     const strings = Array.from(
-      new Set(refNotes.map((n) => n.string))
+      new Set(refNotes.map((n) => n.string).filter((s) => s <= stringCount))
     ).sort((a, b) => a - b) as (1 | 2 | 3 | 4 | 5 | 6)[];
 
     const fretted = refNotes.filter((n) => n.fret > 0);
@@ -813,6 +859,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
     activeStep,
     effectiveSteps,
     notes,
+    stringCount,
   ]);
 
   const previewChordKeys = useMemo(() => {
@@ -879,13 +926,19 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
     ? 68
     : 56;
   const stringGap = interactive
-    ? 22
+    ? instrument === 'bass'
+      ? 28
+      : 22
     : variant === 'stage'
-    ? 30
+    ? instrument === 'bass'
+      ? 38
+      : 30
+    : instrument === 'bass'
+    ? 32
     : 25;
 
   const width = leftPad + fretCount * fretWidth + rightPad;
-  const height = topPad + 5 * stringGap + bottomPad;
+  const height = topPad + spanCount * stringGap + bottomPad;
 
   const noteMap = useMemo(() => {
     const map = new Map<string, FretNote>();
@@ -898,6 +951,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
   const svgFilterId = variant === 'stage' ? 'fret-glow-stage' : 'fret-glow-compact';
   const effectivePlayingVisual =
     usesExternalClock ? effectiveActiveStepIndex !== null : isPlayingDemo;
+  const doubleInlayOffsets = stringCount === 4 ? [0.5, 2.5] : [1.5, 3.5];
 
   const fretboardSvg = (
     <div className={interactive ? 'w-full max-w-full overflow-x-auto' : 'w-full max-w-full overflow-hidden'}>
@@ -908,7 +962,11 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
           interactive ? 'min-w-[480px] max-h-[210px]' : ''
         }`}
         role="img"
-        aria-label="Tastiera chitarra auto-zoom"
+        aria-label={
+          instrument === 'bass'
+            ? 'Tastiera basso 4 corde auto-zoom'
+            : 'Tastiera chitarra auto-zoom'
+        }
       >
         <defs>
           <filter id={svgFilterId} x="-60%" y="-60%" width="220%" height="220%">
@@ -925,7 +983,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
           x={leftPad}
           y={topPad - 10}
           width={fretCount * fretWidth}
-          height={5 * stringGap + 20}
+          height={spanCount * stringGap + 20}
           rx={10}
           fill="#000000"
           stroke="rgba(255,255,255,0.14)"
@@ -939,7 +997,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
               x={leftPad}
               y={topPad - 10}
               width={fretWidth}
-              height={5 * stringGap + 20}
+              height={spanCount * stringGap + 20}
               rx={10}
               fill="rgba(255,255,255,0.03)"
             />
@@ -947,7 +1005,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
               x={leftPad + fretWidth - 1.75}
               y={topPad - 10}
               width={3.5}
-              height={5 * stringGap + 20}
+              height={spanCount * stringGap + 20}
               rx={1.5}
               fill="#FFFFFF"
             />
@@ -958,7 +1016,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
             x={leftPad - 2}
             y={topPad - 10}
             width={3.5}
-            height={5 * stringGap + 20}
+            height={spanCount * stringGap + 20}
             rx={1.5}
             fill="#FFFFFF"
           />
@@ -979,7 +1037,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                   x1={xRight}
                   y1={topPad - 10}
                   x2={xRight}
-                  y2={topPad + 5 * stringGap + 10}
+                  y2={topPad + spanCount * stringGap + 10}
                   stroke="rgba(255,255,255,0.12)"
                   strokeWidth={1}
                 />
@@ -987,7 +1045,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
               {hasInlay && !isDouble && (
                 <circle
                   cx={xCenter}
-                  cy={topPad + 2.5 * stringGap}
+                  cy={topPad + (spanCount / 2) * stringGap}
                   r={3.5}
                   fill="rgba(255,255,255,0.12)"
                 />
@@ -996,13 +1054,13 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                 <>
                   <circle
                     cx={xCenter}
-                    cy={topPad + 1.5 * stringGap}
+                    cy={topPad + doubleInlayOffsets[0] * stringGap}
                     r={3.2}
                     fill="rgba(255,255,255,0.12)"
                   />
                   <circle
                     cx={xCenter}
-                    cy={topPad + 3.5 * stringGap}
+                    cy={topPad + doubleInlayOffsets[1] * stringGap}
                     r={3.2}
                     fill="rgba(255,255,255,0.12)"
                   />
@@ -1058,10 +1116,11 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
           })()}
 
         {/* Strings & Zoomed Interactive Notes */}
-        {stringLabels.map((name, idx) => {
+        {effectiveStringLabels.map((name, idx) => {
           const stringNum = (idx + 1) as 1 | 2 | 3 | 4 | 5 | 6;
           const y = topPad + idx * stringGap;
-          const thickness = 0.85 + idx * 0.28;
+          const thickness =
+            instrument === 'bass' ? 1.65 + idx * 0.55 : 0.85 + idx * 0.28;
           const isMutedDampedString =
             !interactive &&
             mutedTarget !== null &&
@@ -1455,6 +1514,8 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
           const pmStrings =
             effectiveActiveNotes.length > 0
               ? effectiveActiveNotes.map((n) => n.string)
+              : instrument === 'bass'
+              ? [4, 3]
               : [6, 5];
           const minPmStr = Math.min(...pmStrings);
           const maxPmStr = Math.max(...pmStrings);
@@ -1931,7 +1992,11 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
             hasChordContext &&
             (degreeLabel === '1' ||
               degreeLabel === '3' ||
+              degreeLabel === 'b3' ||
               degreeLabel === '5' ||
+              degreeLabel === 'b5' ||
+              degreeLabel === '7' ||
+              degreeLabel === 'b7' ||
               degreeLabel === '8');
           const isArticulatedSlot =
             art === 'hammer' ||
@@ -2106,7 +2171,10 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                   : activeStep.muted || activeStep.notes.length === 0
                   ? '×'
                   : activeStep.notes
-                      .map((n) => `${STRING_SHORT_MAP[n.string]}${n.fret}`)
+                      .map(
+                        (n) =>
+                          `${effectiveStringLabels[n.string - 1] ?? STRING_SHORT_MAP[n.string]}${n.fret}`
+                      )
                       .join(' ')}
               </span>
             )

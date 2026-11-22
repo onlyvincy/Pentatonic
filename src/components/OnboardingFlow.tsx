@@ -7,6 +7,7 @@ import {
   Dumbbell,
   Flame,
   Gauge,
+  Layers,
   Music2,
   SlidersHorizontal,
   Sparkles,
@@ -16,14 +17,20 @@ import {
   Zap,
 } from 'lucide-react';
 import {
+  BassPathId,
   DiagnosticQuizAnswers,
   Exercise,
-  PathId,
+  GuitarPathId,
+  InstrumentMode,
+  InstrumentType,
   PlayerLevelId,
   ScientificPlanPrescription,
   SessionDurationPreset,
 } from '../types/practice';
 import {
+  BASS_LEVEL_OPTIONS,
+  BASS_PATH_OPTIONS,
+  BOTH_LEVEL_OPTIONS,
   LEVEL_OPTIONS,
   PATH_OPTIONS,
   SESSION_BUDGET_OPTIONS,
@@ -32,35 +39,77 @@ import {
 } from '../utils/scientificPrescription';
 import { OnboardingHeroGuitarBg, PathIllustration } from './PathIllustrations';
 
+export interface OnboardingCompletionResult {
+  instrumentMode: InstrumentMode;
+  activeInstrument: InstrumentType;
+  guitarPrescription?: ScientificPlanPrescription;
+  bassPrescription?: ScientificPlanPrescription;
+  launchWorkoutNow: boolean;
+}
+
 interface OnboardingFlowProps {
   exercises: Exercise[];
   showIntroSlides?: boolean;
-  onFinishQuiz: (
-    prescription: ScientificPlanPrescription,
-    launchWorkoutNow: boolean
-  ) => void;
+  initialInstrumentMode?: InstrumentMode;
+  initialActiveInstrument?: InstrumentType;
+  onFinishQuiz: (result: OnboardingCompletionResult) => void;
   onCancel?: () => void;
   onOpenCloudLogin?: () => void;
 }
 
 interface DraftQuizAnswers {
-  pathId: PathId | null;
+  guitarPathId: GuitarPathId | null;
+  bassPathId: BassPathId | null;
   level: PlayerLevelId | null;
   weeklyDays: 3 | 5 | 7;
   sessionPreset: SessionDurationPreset;
+  startInstrument: InstrumentType;
 }
 
 const DEFAULT_DRAFT: DraftQuizAnswers = {
-  pathId: null,
+  guitarPathId: null,
+  bassPathId: null,
   level: null,
   weeklyDays: 5,
   sessionPreset: 15,
+  startInstrument: 'guitar',
 };
 
-/** Friendly Duolingo-style pick mascot ("Plek") for the onboarding coach bubbles */
-const PlekMascot: React.FC<{ mood?: 'wave' | 'coach' | 'rocket' }> = ({
-  mood = 'wave',
-}) => (
+const INSTRUMENT_OPTIONS: {
+  value: InstrumentMode;
+  title: string;
+  badge: string;
+  subtitle: string;
+  tags: string[];
+}[] = [
+  {
+    value: 'guitar',
+    title: 'Chitarra',
+    badge: '6 corde · EADGBE',
+    subtitle: 'Tecnica solista, alternate picking, legato, bending, riff e accordi mobili.',
+    tags: ['Alternate Picking', 'Legato & Bending', 'Riff & Accordi'],
+  },
+  {
+    value: 'bass',
+    title: 'Basso',
+    badge: '4 corde · EADG',
+    subtitle: 'Groove, pocket, fingerstyle, slap & pop e basslines mirate (zero accordi da chitarra).',
+    tags: ['Pocket & Ghost Notes', 'Fingerstyle & Raking', 'Slap & Pop'],
+  },
+  {
+    value: 'both',
+    title: 'Entrambi',
+    badge: 'Chitarra + Basso',
+    subtitle: 'Switcher rapido in alto con schede, tastiera, accordatore e progressi separati.',
+    tags: ['2 Piani Separati', 'Switcher Rapido', 'Progressi Indipendenti'],
+  },
+];
+
+/** Friendly Duolingo-style pick/groove mascot ("Plek") for the onboarding coach bubbles */
+const PlekMascot: React.FC<{
+  mood?: 'wave' | 'coach' | 'rocket';
+  isBass?: boolean;
+}> = ({ mood = 'wave', isBass = false }) => (
   <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[#39FF14]/40 bg-[#39FF14]/12 shadow-[0_0_20px_rgba(57,255,20,0.18)]">
     <svg
       viewBox="0 0 48 48"
@@ -69,24 +118,24 @@ const PlekMascot: React.FC<{ mood?: 'wave' | 'coach' | 'rocket' }> = ({
       className="h-9 w-9"
       aria-hidden="true"
     >
-      {/* Guitar Pick Body */}
-      <path
-        d="M24 5C14 5 8 11.5 8 20.5C8 30.5 17.5 39.5 22.3 43.2C23.3 44 24.7 44 25.7 43.2C30.5 39.5 40 30.5 40 20.5C40 11.5 34 5 24 5Z"
-        fill="#39FF14"
-      />
-      {/* Subtle Top Highlight */}
+      {isBass ? (
+        <circle cx="24" cy="24" r="18" fill="#39FF14" />
+      ) : (
+        <path
+          d="M24 5C14 5 8 11.5 8 20.5C8 30.5 17.5 39.5 22.3 43.2C23.3 44 24.7 44 25.7 43.2C30.5 39.5 40 30.5 40 20.5C40 11.5 34 5 24 5Z"
+          fill="#39FF14"
+        />
+      )}
       <path
         d="M15 11.5C17.5 9.2 20.8 8.3 24 8.3C27.2 8.3 30.5 9.2 33 11.5"
         stroke="rgba(255,255,255,0.45)"
         strokeWidth="2"
         strokeLinecap="round"
       />
-      {/* Friendly Eyes */}
       <circle cx="18.5" cy="20.5" r="2.6" fill="#000000" />
       <circle cx="29.5" cy="20.5" r="2.6" fill="#000000" />
       <circle cx="19.3" cy="19.6" r="0.9" fill="#FFFFFF" />
       <circle cx="30.3" cy="19.6" r="0.9" fill="#FFFFFF" />
-      {/* Smile */}
       {mood === 'rocket' ? (
         <path
           d="M19 26.5C20.5 29.5 27.5 29.5 29 26.5"
@@ -124,14 +173,16 @@ const PlekMascot: React.FC<{ mood?: 'wave' | 'coach' | 'rocket' }> = ({
 interface IntroSlideCoachBubbleProps {
   mood: 'wave' | 'coach' | 'rocket';
   message: string;
+  isBass?: boolean;
 }
 
 const IntroSlideCoachBubble: React.FC<IntroSlideCoachBubbleProps> = ({
   mood,
   message,
+  isBass = false,
 }) => (
   <div className="flex items-start gap-3">
-    <PlekMascot mood={mood} />
+    <PlekMascot mood={mood} isBass={isBass} />
     <div className="relative flex-1 rounded-2xl rounded-tl-md border border-white/15 bg-[#0D0D0F] px-3.5 py-2.5 text-xs sm:text-sm font-medium leading-relaxed text-white/90">
       {message}
     </div>
@@ -145,21 +196,32 @@ const LAST_INTRO_SLIDE: IntroSlideIndex = 5;
 export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   exercises,
   showIntroSlides = false,
+  initialInstrumentMode,
+  initialActiveInstrument,
   onFinishQuiz,
   onCancel,
   onOpenCloudLogin,
 }) => {
-  const [phase, setPhase] = useState<'intro' | 'quiz'>(
-    showIntroSlides ? 'intro' : 'quiz'
+  const [phase, setPhase] = useState<'instrument' | 'intro' | 'quiz'>('instrument');
+  const [instrumentMode, setInstrumentMode] = useState<InstrumentMode | null>(
+    showIntroSlides ? null : initialInstrumentMode ?? 'guitar'
   );
   const [introSlide, setIntroSlide] = useState<IntroSlideIndex>(0);
-  const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [draft, setDraft] = useState<DraftQuizAnswers>(DEFAULT_DRAFT);
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const [draft, setDraft] = useState<DraftQuizAnswers>(() => ({
+    ...DEFAULT_DRAFT,
+    startInstrument:
+      initialActiveInstrument ??
+      (initialInstrumentMode === 'bass' ? 'bass' : 'guitar'),
+  }));
   const [animatingChoice, setAnimatingChoice] = useState<string | null>(null);
   const [isTransitioningOut, setIsTransitioningOut] = useState(false);
 
   const timersRef = useRef<number[]>([]);
   const touchStartXRef = useRef<number | null>(null);
+
+  const effectiveMode: InstrumentMode = instrumentMode ?? 'guitar';
+  const totalQuizSteps = effectiveMode === 'both' ? 4 : 3;
 
   const clearPendingTimers = useCallback(() => {
     timersRef.current.forEach((id) => window.clearTimeout(id));
@@ -170,9 +232,10 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     return () => clearPendingTimers();
   }, [clearPendingTimers]);
 
-  const resolvedAnswers: DiagnosticQuizAnswers = useMemo(() => {
-    const pathId = draft.pathId ?? 'solista';
+  const resolvedGuitarAnswers: DiagnosticQuizAnswers = useMemo(() => {
+    const pathId = draft.guitarPathId ?? 'solista';
     return {
+      instrument: 'guitar',
       pathId,
       primaryPainPoint: pathId === 'rhythm' ? 'timing_drift' : 'speed_wall',
       secondaryBottleneck:
@@ -183,9 +246,29 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     };
   }, [draft]);
 
-  const generatedPrescription = useMemo(
-    () => generateScientificPrescription(resolvedAnswers, exercises),
-    [resolvedAnswers, exercises]
+  const resolvedBassAnswers: DiagnosticQuizAnswers = useMemo(() => {
+    const pathId = draft.bassPathId ?? 'groove_pocket';
+    return {
+      instrument: 'bass',
+      pathId,
+      primaryPainPoint:
+        pathId === 'groove_pocket' ? 'timing_drift' : 'speed_wall',
+      secondaryBottleneck:
+        pathId === 'groove_pocket' ? 'rhythm_stiffness' : 'string_crossing',
+      level: draft.level ?? 'intermediate',
+      weeklyDays: draft.weeklyDays,
+      sessionPreset: draft.sessionPreset,
+    };
+  }, [draft]);
+
+  const generatedGuitarPrescription = useMemo(
+    () => generateScientificPrescription(resolvedGuitarAnswers, exercises),
+    [resolvedGuitarAnswers, exercises]
+  );
+
+  const generatedBassPrescription = useMemo(
+    () => generateScientificPrescription(resolvedBassAnswers, exercises),
+    [resolvedBassAnswers, exercises]
   );
 
   const runTransition = useCallback(
@@ -204,6 +287,13 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     },
     [clearPendingTimers]
   );
+
+  const transitionToInstrumentScreen = useCallback(() => {
+    if (isTransitioningOut) return;
+    runTransition(() => {
+      setPhase('instrument');
+    });
+  }, [isTransitioningOut, runTransition]);
 
   const transitionToIntroSlide = useCallback(
     (nextSlide: IntroSlideIndex) => {
@@ -225,7 +315,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   }, [isTransitioningOut, runTransition]);
 
   const transitionToStep = useCallback(
-    (nextStep: 1 | 2 | 3, chosenKey?: string) => {
+    (nextStep: 1 | 2 | 3 | 4, chosenKey?: string) => {
       clearPendingTimers();
       if (chosenKey) {
         setAnimatingChoice(chosenKey);
@@ -237,16 +327,65 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     [clearPendingTimers, runTransition]
   );
 
-  const handleSelectPath = (pathId: PathId) => {
+  const handleSelectInstrumentMode = (mode: InstrumentMode) => {
     if (isTransitioningOut || animatingChoice) return;
-    setDraft((prev) => ({ ...prev, pathId }));
-    transitionToStep(2, pathId);
+    setInstrumentMode(mode);
+    setDraft((prev) => ({
+      ...prev,
+      startInstrument: mode === 'bass' ? 'bass' : mode === 'guitar' ? 'guitar' : prev.startInstrument,
+    }));
+    setAnimatingChoice(mode);
+    runTransition(() => {
+      if (showIntroSlides) {
+        setPhase('intro');
+        setIntroSlide(0);
+      } else {
+        setPhase('quiz');
+        setStep(1);
+      }
+    }, 200);
+  };
+
+  const handleSelectGuitarPath = (guitarPathId: GuitarPathId) => {
+    if (isTransitioningOut || animatingChoice) return;
+    setDraft((prev) => ({ ...prev, guitarPathId }));
+    transitionToStep(effectiveMode === 'both' ? 2 : 2, guitarPathId);
+  };
+
+  const handleSelectBassPath = (bassPathId: BassPathId) => {
+    if (isTransitioningOut || animatingChoice) return;
+    setDraft((prev) => ({ ...prev, bassPathId }));
+    transitionToStep(effectiveMode === 'both' ? 3 : 2, bassPathId);
   };
 
   const handleSelectLevel = (level: PlayerLevelId) => {
     if (isTransitioningOut || animatingChoice) return;
     setDraft((prev) => ({ ...prev, level }));
-    transitionToStep(3, level);
+    transitionToStep(effectiveMode === 'both' ? 4 : 3, level);
+  };
+
+  const handleActivatePlan = () => {
+    const mode = effectiveMode;
+    const activeInstrument: InstrumentType =
+      mode === 'bass'
+        ? 'bass'
+        : mode === 'guitar'
+        ? 'guitar'
+        : draft.startInstrument;
+
+    onFinishQuiz({
+      instrumentMode: mode,
+      activeInstrument,
+      guitarPrescription:
+        mode === 'guitar' || mode === 'both'
+          ? generatedGuitarPrescription
+          : undefined,
+      bassPrescription:
+        mode === 'bass' || mode === 'both'
+          ? generatedBassPrescription
+          : undefined,
+      launchWorkoutNow: false,
+    });
   };
 
   const handleIntroTouchStart = (e: React.TouchEvent) => {
@@ -265,59 +404,143 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       } else {
         startQuizPhase();
       }
-    } else if (deltaX > 0 && introSlide > 0) {
-      transitionToIntroSlide((introSlide - 1) as IntroSlideIndex);
+    } else if (deltaX > 0) {
+      if (introSlide > 0) {
+        transitionToIntroSlide((introSlide - 1) as IntroSlideIndex);
+      } else {
+        transitionToInstrumentScreen();
+      }
     }
   };
 
-  const stepHeaders: Record<1 | 2 | 3, { title: string; subtitle: string }> = {
-    1: {
-      title: 'Scegli il tuo percorso',
-      subtitle: 'Allenerai tutti i fondamentali, con focus mirato sul tuo stile.',
+  const quizStepKind: 'guitar_path' | 'bass_path' | 'level' | 'schedule' =
+    effectiveMode === 'guitar'
+      ? step === 1
+        ? 'guitar_path'
+        : step === 2
+        ? 'level'
+        : 'schedule'
+      : effectiveMode === 'bass'
+      ? step === 1
+        ? 'bass_path'
+        : step === 2
+        ? 'level'
+        : 'schedule'
+      : step === 1
+      ? 'guitar_path'
+      : step === 2
+      ? 'bass_path'
+      : step === 3
+      ? 'level'
+      : 'schedule';
+
+  const stepHeaderCopy: Record<
+    'guitar_path' | 'bass_path' | 'level' | 'schedule',
+    { title: string; subtitle: string }
+  > = {
+    guitar_path: {
+      title:
+        effectiveMode === 'both'
+          ? 'Percorso Chitarra'
+          : 'Scegli il tuo percorso',
+      subtitle:
+        'Allenerai tutti i fondamentali chitarra, con focus mirato sul tuo stile.',
     },
-    2: {
+    bass_path: {
+      title:
+        effectiveMode === 'both'
+          ? 'Percorso Basso (4 corde)'
+          : 'Scegli il tuo percorso al basso',
+      subtitle:
+        'Zero accordi da chitarra: solo groove, tecnica sulle 4 corde e basslines.',
+    },
+    level: {
       title: 'A che livello sei?',
-      subtitle: 'Adatteremo accordi, velocità e difficoltà senza farti sforzare.',
+      subtitle:
+        effectiveMode === 'bass'
+          ? 'Adatteremo groove, velocità e tecnica sulle 4 corde senza farti sforzare.'
+          : effectiveMode === 'both'
+          ? 'Adatteremo tecnica, velocità e difficoltà per entrambi gli strumenti.'
+          : 'Adatteremo accordi, velocità e difficoltà senza farti sforzare.',
     },
-    3: {
+    schedule: {
       title: 'Il tuo ritmo settimanale',
-      subtitle: 'Nessuna pressione: scegli quanto tempo dedicare di solito.',
+      subtitle:
+        'Nessuna pressione: scegli quanto tempo dedicare di solito.',
     },
   };
 
-  const totalProgressSegments = showIntroSlides ? INTRO_SLIDE_COUNT + 3 : 3;
-  const activeProgressSegment =
-    phase === 'intro'
-      ? introSlide + 1
-      : (showIntroSlides ? INTRO_SLIDE_COUNT : 0) + step;
+  const levelOptionsForMode =
+    effectiveMode === 'bass'
+      ? BASS_LEVEL_OPTIONS
+      : effectiveMode === 'both'
+      ? BOTH_LEVEL_OPTIONS
+      : LEVEL_OPTIONS;
 
-  const canGoBack =
-    (phase === 'intro' && introSlide > 0) ||
-    (phase === 'quiz' && (step > 1 || showIntroSlides));
+  const totalProgressSegments =
+    1 + (showIntroSlides ? INTRO_SLIDE_COUNT : 0) + totalQuizSteps;
+  const activeProgressSegment =
+    phase === 'instrument'
+      ? 1
+      : phase === 'intro'
+      ? 1 + (introSlide + 1)
+      : 1 + (showIntroSlides ? INTRO_SLIDE_COUNT : 0) + step;
+
+  const canGoBack = phase !== 'instrument';
 
   const handleHeaderBack = () => {
     if (phase === 'intro') {
       if (introSlide > 0) {
         transitionToIntroSlide((introSlide - 1) as IntroSlideIndex);
+      } else {
+        transitionToInstrumentScreen();
       }
       return;
     }
-    if (step > 1) {
-      transitionToStep((step - 1) as 1 | 2 | 3);
-    } else if (showIntroSlides) {
-      transitionToIntroSlide(LAST_INTRO_SLIDE);
+    if (phase === 'quiz') {
+      if (step > 1) {
+        transitionToStep((step - 1) as 1 | 2 | 3 | 4);
+      } else if (showIntroSlides) {
+        transitionToIntroSlide(LAST_INTRO_SLIDE);
+      } else {
+        transitionToInstrumentScreen();
+      }
     }
   };
 
+  const isBassMode = effectiveMode === 'bass';
+  const isBothMode = effectiveMode === 'both';
+
+  const introPrereqList = isBassMode
+    ? [
+        'Teoria musicale di base',
+        'Note sul manico a 4 corde (E–A–D–G)',
+        'Triadi e scale fondamentali',
+      ]
+    : isBothMode
+    ? [
+        'Teoria musicale di base',
+        'Accordi base (chitarra) e note 4 corde (basso)',
+        'Scale e triadi fondamentali',
+      ]
+    : [
+        'Teoria musicale di base',
+        'Forme principali di accordi',
+        'Scale fondamentali',
+      ];
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col overflow-y-auto bg-[#030405] text-white">
-      {/* Dramatic Full-Bleed Chrome & Neon Guitar Background on Slide 1 */}
+      {/* Dramatic Full-Bleed Chrome & Neon Background on Intro Slide 1 */}
       {phase === 'intro' && introSlide === 0 && (
         <div
           aria-hidden="true"
           className="pointer-events-none fixed inset-0 z-0 flex items-center justify-center overflow-hidden"
         >
-          <OnboardingHeroGuitarBg className="h-[108vh] w-auto max-w-none opacity-85 scale-105 sm:scale-110 transition-opacity duration-300" />
+          <OnboardingHeroGuitarBg
+            instrument={isBassMode ? 'bass' : 'guitar'}
+            className="h-[108vh] w-auto max-w-none opacity-85 scale-105 sm:scale-110 transition-opacity duration-300"
+          />
           <div
             className="absolute inset-0"
             style={{
@@ -348,9 +571,11 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
               />
             )}
             <span className="text-[11px] font-bold uppercase tracking-widest text-white/55 tabular-nums">
-              {phase === 'intro'
+              {phase === 'instrument'
+                ? 'Strumento'
+                : phase === 'intro'
                 ? `${introSlide + 1} / ${INTRO_SLIDE_COUNT}`
-                : `Quiz ${step} / 3`}
+                : `Quiz ${step} / ${totalQuizSteps}`}
             </span>
           </div>
 
@@ -409,7 +634,91 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
         onTouchStart={phase === 'intro' ? handleIntroTouchStart : undefined}
         onTouchEnd={phase === 'intro' ? handleIntroTouchEnd : undefined}
       >
-        {phase === 'intro' ? (
+        {phase === 'instrument' ? (
+          <div
+            key="phase-instrument"
+            className={`space-y-5 transition-all duration-150 ${
+              isTransitioningOut
+                ? 'opacity-0 -translate-y-2 scale-[0.985]'
+                : 'animate-quiz-step'
+            }`}
+          >
+            <div className="space-y-1.5 px-0.5">
+              <div className="inline-flex items-center gap-1.5 rounded-full border border-[#39FF14]/40 bg-[#39FF14]/10 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-widest text-[#39FF14]">
+                <Layers className="h-3 w-3" />
+                The Shredding Lab
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-black tracking-tight chrome-text leading-tight">
+                Cosa suoni?
+              </h1>
+              <p className="text-xs sm:text-sm text-white/60">
+                Costruiremo esercizi, tastiera, suoni e accordatore su misura per il tuo strumento.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              {INSTRUMENT_OPTIONS.map((opt) => {
+                const isAnimating = animatingChoice === opt.value;
+                const isSelected =
+                  isAnimating || instrumentMode === opt.value;
+                const isDimmed = animatingChoice !== null && !isAnimating;
+
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => handleSelectInstrumentMode(opt.value)}
+                    className={`group flex w-full flex-col gap-2.5 rounded-3xl border p-4 text-left transition-all duration-150 active:scale-[0.98] ${
+                      isSelected
+                        ? 'border-[#39FF14] bg-[#0B0B0B] shadow-[0_0_28px_rgba(57,255,20,0.22)]'
+                        : 'border-white/15 bg-black hover:border-white/45'
+                    } ${isDimmed ? 'opacity-40' : ''}`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <h2 className="text-lg sm:text-xl font-black text-white">
+                          {opt.title}
+                        </h2>
+                        <span className="rounded-full border border-white/15 bg-white/5 px-2.5 py-0.5 text-[10px] font-black tracking-wide text-[#39FF14]">
+                          {opt.badge}
+                        </span>
+                      </div>
+
+                      <span
+                        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition ${
+                          isSelected
+                            ? 'border-[#39FF14] bg-[#39FF14] text-black'
+                            : 'border-white/15 text-white/50 group-hover:border-white/40 group-hover:text-white'
+                        }`}
+                      >
+                        {isSelected ? (
+                          <Check className="h-3.5 w-3.5 stroke-[3]" />
+                        ) : (
+                          <ArrowRight className="h-3.5 w-3.5" />
+                        )}
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-white/65 leading-relaxed">
+                      {opt.subtitle}
+                    </p>
+
+                    <div className="flex flex-wrap gap-1.5">
+                      {opt.tags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="rounded-full border border-white/12 bg-black px-2.5 py-0.5 text-[10px] font-bold text-white/75"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : phase === 'intro' ? (
           <div
             key={`intro-${introSlide}`}
             className={`space-y-5 transition-all duration-150 ${
@@ -422,7 +731,9 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
             {introSlide === 0 && (
               <div className="space-y-4 py-10 sm:py-14 text-center flex flex-col items-center">
                 <h1 className="text-4xl sm:text-5xl font-black tracking-tight chrome-text leading-[1.05] drop-shadow-[0_6px_28px_rgba(0,0,0,0.9)]">
-                  Impara a suonare come hai sempre sognato.
+                  {isBassMode
+                    ? 'Impara a suonare il basso come hai sempre sognato.'
+                    : 'Impara a suonare come hai sempre sognato.'}
                 </h1>
                 <p className="max-w-sm text-sm sm:text-base text-slate-200/85 leading-relaxed drop-shadow-[0_2px_12px_rgba(0,0,0,0.95)]">
                   Progredisci Scientificamente e raggiungi ciò che non avresti mai pensato possibile.
@@ -435,11 +746,14 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
               <div className="space-y-5 py-2">
                 <IntroSlideCoachBubble
                   mood="wave"
+                  isBass={isBassMode}
                   message="Il blocco non è nella testa. È nelle dita."
                 />
                 <div className="space-y-3 px-0.5">
                   <h1 className="text-3xl sm:text-4xl font-black tracking-tight chrome-text leading-[1.08]">
-                    Sai cosa suonare. Le mani non ti seguono.
+                    {isBassMode
+                      ? 'Senti il groove in testa. Le mani non ti seguono.'
+                      : 'Sai cosa suonare. Le mani non ti seguono.'}
                   </h1>
                   <p className="text-sm sm:text-base text-slate-300/75 leading-relaxed">
                     Capire un concetto richiede 5 minuti. Suonarlo{' '}
@@ -450,7 +764,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
               </div>
             )}
 
-            {/* SLIDE 3: TECNICA VS COMPOSIZIONE (MOZART VS STEVE VAI) */}
+            {/* SLIDE 3: TECNICA VS COMPOSIZIONE */}
             {introSlide === 2 && (
               <div className="space-y-5 py-2">
                 <div className="px-0.5">
@@ -474,14 +788,20 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                     <div className="flex items-center justify-between gap-2">
                       <span className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-[#39FF14]">
                         <Zap className="h-3.5 w-3.5" />
-                        Eddie Van Halen
+                        {isBassMode
+                          ? 'Jaco Pastorius & Flea'
+                          : isBothMode
+                          ? 'Van Halen & Flea'
+                          : 'Eddie Van Halen'}
                       </span>
                       <span className="rounded-full bg-[#39FF14]/20 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-[#39FF14]">
                         Qui
                       </span>
                     </div>
                     <p className="text-xs sm:text-sm text-white/95">
-                      Velocità, controllo e precisione chirurgica.
+                      {isBassMode
+                        ? 'Groove, velocità, precisione e articolazione chirurgica.'
+                        : 'Velocità, controllo e precisione chirurgica.'}
                     </p>
                   </div>
                 </div>
@@ -502,11 +822,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
                 </div>
 
                 <div className="space-y-2">
-                  {[
-                    'Teoria musicale di base',
-                    'Forme principali di accordi',
-                    'Scale fondamentali',
-                  ].map((label) => (
+                  {introPrereqList.map((label) => (
                     <div
                       key={label}
                       className="flex items-center gap-3 rounded-2xl chrome-card px-4 py-3"
@@ -533,6 +849,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
               <div className="space-y-5 py-2">
                 <IntroSlideCoachBubble
                   mood="coach"
+                  isBass={isBassMode}
                   message="Niente decisioni. Niente perdite di tempo."
                 />
                 <div className="space-y-3 px-0.5">
@@ -566,14 +883,21 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
               <div className="space-y-5 py-2">
                 <IntroSlideCoachBubble
                   mood="rocket"
+                  isBass={isBassMode}
                   message="Chiudi gli occhi un secondo."
                 />
                 <div className="space-y-3 px-0.5">
                   <h1 className="text-3xl sm:text-4xl font-black tracking-tight chrome-text leading-[1.08]">
-                    Prendi la chitarra e le dita volano.
+                    {isBassMode
+                      ? 'Prendi il basso e il groove scorre da solo.'
+                      : isBothMode
+                      ? 'Prendi chitarra o basso e le dita volano.'
+                      : 'Prendi la chitarra e le dita volano.'}
                   </h1>
                   <p className="text-sm sm:text-base text-slate-300/75 leading-relaxed">
-                    Attacchi quel riff o quell'assolo veloce e ogni nota esce{' '}
+                    {isBassMode
+                      ? 'Attacchi quella linea o quel fill veloce e ogni nota esce '
+                      : "Attacchi quel riff o quell'assolo veloce e ogni nota esce "}
                     <span className="text-white font-semibold">pulita, potente e senza sforzo</span>. Iniziamo.
                   </p>
                 </div>
@@ -623,7 +947,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
           </div>
         ) : (
           <div
-            key={`quiz-${step}`}
+            key={`quiz-${effectiveMode}-${step}`}
             className={`space-y-5 transition-all duration-150 ${
               isTransitioningOut
                 ? 'opacity-0 -translate-y-2 scale-[0.985]'
@@ -632,26 +956,27 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
           >
             <div className="space-y-1 px-0.5">
               <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white">
-                {stepHeaders[step].title}
+                {stepHeaderCopy[quizStepKind].title}
               </h1>
               <p className="text-xs sm:text-sm text-white/55">
-                {stepHeaders[step].subtitle}
+                {stepHeaderCopy[quizStepKind].subtitle}
               </p>
             </div>
 
-            {/* STEP 1: PERCORSO SOLISTA vs PERCORSO RHYTHM */}
-            {step === 1 && (
+            {/* PERCORSO CHITARRA */}
+            {quizStepKind === 'guitar_path' && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 {PATH_OPTIONS.map((opt) => {
                   const isAnimating = animatingChoice === opt.value;
-                  const isSelected = isAnimating || draft.pathId === opt.value;
+                  const isSelected =
+                    isAnimating || draft.guitarPathId === opt.value;
                   const isDimmed = animatingChoice !== null && !isAnimating;
 
                   return (
                     <button
                       key={opt.value}
                       type="button"
-                      onClick={() => handleSelectPath(opt.value)}
+                      onClick={() => handleSelectGuitarPath(opt.value)}
                       className={`group flex flex-col justify-between overflow-hidden rounded-3xl border p-4 text-left transition-all duration-150 active:scale-[0.98] ${
                         isSelected
                           ? 'border-[#39FF14] bg-[#0B0B0B] shadow-[0_0_28px_rgba(57,255,20,0.22)]'
@@ -706,10 +1031,78 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
               </div>
             )}
 
-            {/* STEP 2: LIVELLO */}
-            {step === 2 && (
+            {/* PERCORSO BASSO */}
+            {quizStepKind === 'bass_path' && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                {BASS_PATH_OPTIONS.map((opt) => {
+                  const isAnimating = animatingChoice === opt.value;
+                  const isSelected =
+                    isAnimating || draft.bassPathId === opt.value;
+                  const isDimmed = animatingChoice !== null && !isAnimating;
+
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => handleSelectBassPath(opt.value)}
+                      className={`group flex flex-col justify-between overflow-hidden rounded-3xl border p-4 text-left transition-all duration-150 active:scale-[0.98] ${
+                        isSelected
+                          ? 'border-[#39FF14] bg-[#0B0B0B] shadow-[0_0_28px_rgba(57,255,20,0.22)]'
+                          : 'border-white/15 bg-black hover:border-white/45'
+                      } ${isDimmed ? 'opacity-40' : ''}`}
+                    >
+                      <div className="mb-3 w-full overflow-hidden rounded-2xl border border-white/10 bg-black/80 px-2 py-2">
+                        <PathIllustration
+                          pathId={opt.value}
+                          className="mx-auto h-32 w-full"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <h2 className="text-lg font-black text-white">
+                            {opt.title}
+                          </h2>
+                          <span
+                            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition ${
+                              isSelected
+                                ? 'border-[#39FF14] bg-[#39FF14] text-black'
+                                : 'border-white/15 text-white/50 group-hover:border-white/40 group-hover:text-white'
+                            }`}
+                          >
+                            {isSelected ? (
+                              <Check className="h-3.5 w-3.5 stroke-[3]" />
+                            ) : (
+                              <ArrowRight className="h-3.5 w-3.5" />
+                            )}
+                          </span>
+                        </div>
+
+                        <p className="text-xs text-white/60 leading-relaxed">
+                          {opt.subtitle}
+                        </p>
+
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {opt.focusBadges.map((badge) => (
+                            <span
+                              key={badge}
+                              className="rounded-full border border-white/15 bg-black px-2.5 py-0.5 text-[10px] font-bold text-white/75"
+                            >
+                              {badge}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* LIVELLO */}
+            {quizStepKind === 'level' && (
               <div className="space-y-2.5">
-                {LEVEL_OPTIONS.map((opt) => {
+                {levelOptionsForMode.map((opt) => {
                   const isAnimating = animatingChoice === opt.value;
                   const isSelected = isAnimating || draft.level === opt.value;
                   const isDimmed = animatingChoice !== null && !isAnimating;
@@ -747,28 +1140,108 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
               </div>
             )}
 
-            {/* STEP 3: RITMO SETTIMANALE + ATTIVA PERCORSO */}
-            {step === 3 && (
+            {/* RITMO SETTIMANALE + ATTIVA PERCORSO */}
+            {quizStepKind === 'schedule' && (
               <div className="space-y-4">
-                <div className="flex items-center gap-3.5 rounded-2xl border border-white/15 bg-black p-3">
-                  <div className="h-14 w-20 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-black">
-                    <PathIllustration
-                      pathId={resolvedAnswers.pathId ?? 'solista'}
-                      className="h-full w-full"
-                    />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-sm font-black text-white">
-                      {generatedPrescription.profileTitle}
+                {effectiveMode === 'both' ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div className="flex items-center gap-3 rounded-2xl border border-white/15 bg-black p-3">
+                      <div className="h-12 w-16 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-black">
+                        <PathIllustration
+                          pathId={resolvedGuitarAnswers.pathId ?? 'solista'}
+                          className="h-full w-full"
+                        />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-[#39FF14]">
+                          Chitarra
+                        </div>
+                        <div className="text-xs font-black text-white truncate">
+                          {generatedGuitarPrescription.profileTitle}
+                        </div>
+                      </div>
                     </div>
-                    <div className="text-xs text-white/55">
-                      {
-                        LEVEL_OPTIONS.find((l) => l.value === resolvedAnswers.level)
-                          ?.title
-                      }
+                    <div className="flex items-center gap-3 rounded-2xl border border-white/15 bg-black p-3">
+                      <div className="h-12 w-16 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-black">
+                        <PathIllustration
+                          pathId={resolvedBassAnswers.pathId ?? 'groove_pocket'}
+                          className="h-full w-full"
+                        />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-[#39FF14]">
+                          Basso 4 Corde
+                        </div>
+                        <div className="text-xs font-black text-white truncate">
+                          {generatedBassPrescription.profileTitle}
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="flex items-center gap-3.5 rounded-2xl border border-white/15 bg-black p-3">
+                    <div className="h-14 w-20 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-black">
+                      <PathIllustration
+                        pathId={
+                          isBassMode
+                            ? resolvedBassAnswers.pathId ?? 'groove_pocket'
+                            : resolvedGuitarAnswers.pathId ?? 'solista'
+                        }
+                        className="h-full w-full"
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-black text-white">
+                        {isBassMode
+                          ? generatedBassPrescription.profileTitle
+                          : generatedGuitarPrescription.profileTitle}
+                      </div>
+                      <div className="text-xs text-white/55">
+                        {
+                          levelOptionsForMode.find(
+                            (l) =>
+                              l.value ===
+                              (isBassMode
+                                ? resolvedBassAnswers.level
+                                : resolvedGuitarAnswers.level)
+                          )?.title
+                        }
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {effectiveMode === 'both' && (
+                  <div className="space-y-2">
+                    <div className="text-xs font-bold uppercase tracking-wider text-white/60">
+                      Con quale strumento inizi oggi?
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {(['guitar', 'bass'] as const).map((inst) => {
+                        const selected = draft.startInstrument === inst;
+                        return (
+                          <button
+                            key={inst}
+                            type="button"
+                            onClick={() =>
+                              setDraft((prev) => ({
+                                ...prev,
+                                startInstrument: inst,
+                              }))
+                            }
+                            className={`rounded-xl border p-2.5 text-center text-xs font-black transition-all duration-150 ${
+                              selected
+                                ? 'border-[#39FF14] bg-[#39FF14]/15 text-[#39FF14]'
+                                : 'border-white/15 bg-black text-white/70 hover:border-white/40'
+                            }`}
+                          >
+                            {inst === 'guitar' ? 'Chitarra (6 corde)' : 'Basso (4 corde)'}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <div className="text-xs font-bold uppercase tracking-wider text-white/60">
@@ -846,11 +1319,13 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
 
                 <button
                   type="button"
-                  onClick={() => onFinishQuiz(generatedPrescription, false)}
+                  onClick={handleActivatePlan}
                   className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-[#39FF14] px-5 py-3 text-sm font-black text-black hover:bg-[#5EFF3D] active:scale-[0.98] transition"
                 >
                   <Sparkles className="h-4 w-4" />
-                  Attiva Percorso
+                  {effectiveMode === 'both'
+                    ? 'Attiva Entrambi i Percorsi'
+                    : 'Attiva Percorso'}
                 </button>
               </div>
             )}

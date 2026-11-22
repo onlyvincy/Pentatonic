@@ -29,9 +29,18 @@ export type SecondaryBottleneckId =
 
 export type PlayerLevelId = 'foundation' | 'intermediate' | 'advanced';
 
-export type PathId = 'solista' | 'rhythm';
+export type InstrumentType = 'guitar' | 'bass';
+
+export type InstrumentMode = 'guitar' | 'bass' | 'both';
+
+export type GuitarPathId = 'solista' | 'rhythm';
+
+export type BassPathId = 'groove_pocket' | 'modern_bass';
+
+export type PathId = GuitarPathId | BassPathId;
 
 export interface DiagnosticQuizAnswers {
+  instrument?: InstrumentType;
   pathId?: PathId;
   primaryPainPoint: PainPointId;
   secondaryBottleneck: SecondaryBottleneckId;
@@ -103,6 +112,7 @@ export interface ExerciseVariant {
 
 export interface Exercise {
   id: string;
+  instrument?: InstrumentType;
   title: string;
   pillarName?: string;
   coachInspiration?: string;
@@ -144,6 +154,7 @@ export interface WorkoutItem {
 
 export interface WorkoutTemplate {
   id: string;
+  instrument?: InstrumentType;
   title: string;
   subtitle: string;
   programId: string;
@@ -163,6 +174,7 @@ export interface ProgramCheckpoint {
 
 export interface ProgramPercorso {
   id: string;
+  instrument?: InstrumentType;
   title: string;
   coachInspiration?: string;
   category: ExerciseCategory;
@@ -194,6 +206,7 @@ export interface SetLog {
 
 export interface WorkoutSessionLog {
   id: string;
+  instrument?: InstrumentType;
   workoutId: string;
   workoutTitle: string;
   date: string;
@@ -205,6 +218,7 @@ export interface WorkoutSessionLog {
 
 export interface FeedRecording {
   id: string;
+  instrument?: InstrumentType;
   exerciseId: string;
   exerciseTitle: string;
   workoutTitle: string;
@@ -231,7 +245,10 @@ export interface UserSettings {
   cloudSyncEnabled: boolean;
   lastSyncedAt?: string;
   hasCompletedOnboarding?: boolean;
+  instrumentMode?: InstrumentMode;
+  activeInstrument?: InstrumentType;
   scientificPlan?: ScientificPlanPrescription;
+  bassScientificPlan?: ScientificPlanPrescription;
 }
 
 export interface AppState {
@@ -254,6 +271,7 @@ export interface ScaledWorkoutItem extends WorkoutItem {
 
 export interface ScaledWorkoutPlan {
   workout: WorkoutTemplate;
+  instrument?: InstrumentType;
   preset: SessionDurationPreset;
   modeLabel: string;
   modeDescription: string;
@@ -261,4 +279,10 @@ export interface ScaledWorkoutPlan {
   estimatedMinutes: number;
   playerLevel?: PlayerLevelId;
   items: ScaledWorkoutItem[];
+}
+
+export function getExerciseInstrument(
+  ex?: Pick<Exercise, 'instrument'> | null
+): InstrumentType {
+  return ex?.instrument === 'bass' ? 'bass' : 'guitar';
 }

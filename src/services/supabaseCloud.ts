@@ -339,6 +339,8 @@ function getLatestStateActivityMs(state: AppState): number {
   }
   const planMs = parseIsoMs(state.settings?.scientificPlan?.createdAt);
   if (planMs > latest) latest = planMs;
+  const bassPlanMs = parseIsoMs(state.settings?.bassScientificPlan?.createdAt);
+  if (bassPlanMs > latest) latest = bassPlanMs;
   const syncMs = parseIsoMs(state.settings?.lastSyncedAt);
   if (syncMs > latest) latest = syncMs;
   return latest;
@@ -525,6 +527,28 @@ export function mergeAppStates(local: AppState, remote: AppState): AppState {
       : remote.settings?.scientificPlan
   );
 
+  const localBassPlanMs = parseIsoMs(
+    local.settings?.bassScientificPlan?.createdAt
+  );
+  const remoteBassPlanMs = parseIsoMs(
+    remote.settings?.bassScientificPlan?.createdAt
+  );
+  const preferRemoteBassPlan =
+    (Boolean(remote.settings?.bassScientificPlan) &&
+      !local.settings?.bassScientificPlan) ||
+    (remoteBassPlanMs !== localBassPlanMs
+      ? remoteBassPlanMs > localBassPlanMs
+      : preferRemoteGlobally);
+
+  const mergedBassPlan = mergeScientificPlans(
+    preferRemoteBassPlan
+      ? remote.settings?.bassScientificPlan
+      : local.settings?.bassScientificPlan,
+    preferRemoteBassPlan
+      ? local.settings?.bassScientificPlan
+      : remote.settings?.bassScientificPlan
+  );
+
   return {
     exercises: mergedExercises,
     workouts: mergedWorkouts,
@@ -539,7 +563,16 @@ export function mergeAppStates(local: AppState, remote: AppState): AppState {
         local.settings?.hasCompletedOnboarding ||
           remote.settings?.hasCompletedOnboarding
       ),
+      instrumentMode:
+        primarySettings?.instrumentMode ??
+        local.settings?.instrumentMode ??
+        remote.settings?.instrumentMode,
+      activeInstrument:
+        primarySettings?.activeInstrument ??
+        local.settings?.activeInstrument ??
+        remote.settings?.activeInstrument,
       scientificPlan: mergedPlan,
+      bassScientificPlan: mergedBassPlan,
     },
   };
 }

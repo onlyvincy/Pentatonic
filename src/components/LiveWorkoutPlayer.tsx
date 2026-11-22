@@ -25,6 +25,7 @@ import {
   SetLog,
   Subdivision,
   WorkoutSessionLog,
+  getExerciseInstrument,
 } from '../types/practice';
 import {
   calculateGoldilocksNextBpm,
@@ -50,6 +51,12 @@ import {
   buildArpeggioWorkoutData,
   pickRecommendedProgression,
 } from '../utils/arpeggioEngine';
+import {
+  BASS_ARPEGGIO_EXERCISE_ID,
+  BASS_ARPEGGIO_PROGRESSIONS,
+  buildBassArpeggioWorkoutData,
+  pickRecommendedBassProgression,
+} from '../utils/bassArpeggioEngine';
 import { FretboardViewer } from './FretboardViewer';
 import { ExerciseFamilyBriefingModal } from './ExerciseFamilyBriefingModal';
 import {
@@ -194,6 +201,8 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
 
   const currentItem = plan.items[exerciseIdx];
   const currentExercise: Exercise | undefined = currentItem?.exercise;
+  const activeInstrument =
+    plan.instrument ?? getExerciseInstrument(currentExercise);
 
   const [isSpeedBurst, setIsSpeedBurst] = useState<boolean>(() => {
     const firstEx = plan.items[0]?.exercise;
@@ -234,18 +243,40 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
   }, [currentExercise, selectedVariantId, plan.playerLevel]);
 
   const [selectedArpeggioProgressionId, setSelectedArpeggioProgressionId] =
-    useState<string>(
-      () => pickRecommendedProgression(priorSessionLogs.length).id
+    useState<string>(() =>
+      (plan.instrument ?? getExerciseInstrument(plan.items[0]?.exercise)) ===
+      'bass'
+        ? pickRecommendedBassProgression(priorSessionLogs.length).id
+        : pickRecommendedProgression(priorSessionLogs.length).id
     );
 
-  const isArpeggioExercise = currentExercise?.id === ARPEGGIO_EXERCISE_ID;
+  const isGuitarArpeggioExercise = currentExercise?.id === ARPEGGIO_EXERCISE_ID;
+  const isBassArpeggioExercise =
+    currentExercise?.id === BASS_ARPEGGIO_EXERCISE_ID;
+  const isArpeggioExercise = isGuitarArpeggioExercise || isBassArpeggioExercise;
+  const activeArpeggioProgressions = isBassArpeggioExercise
+    ? BASS_ARPEGGIO_PROGRESSIONS
+    : ARPEGGIO_PROGRESSIONS;
   const arpeggioData = useMemo(() => {
-    if (!isArpeggioExercise) return null;
-    return buildArpeggioWorkoutData(
-      activeVariant?.id,
-      selectedArpeggioProgressionId
-    );
-  }, [isArpeggioExercise, activeVariant?.id, selectedArpeggioProgressionId]);
+    if (isGuitarArpeggioExercise) {
+      return buildArpeggioWorkoutData(
+        activeVariant?.id,
+        selectedArpeggioProgressionId
+      );
+    }
+    if (isBassArpeggioExercise) {
+      return buildBassArpeggioWorkoutData(
+        activeVariant?.id,
+        selectedArpeggioProgressionId
+      );
+    }
+    return null;
+  }, [
+    isGuitarArpeggioExercise,
+    isBassArpeggioExercise,
+    activeVariant?.id,
+    selectedArpeggioProgressionId,
+  ]);
 
   const effectiveFretboardNotes =
     arpeggioData?.fretboardNotes ??
@@ -569,6 +600,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
 
       return {
         id: sessionIdRef.current,
+        instrument: activeInstrument,
         workoutId: plan.workout.id,
         workoutTitle: plan.workout.title,
         date: sessionDateRef.current,
@@ -578,7 +610,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
         averageCleanliness: avgClean,
       };
     },
-    [plan.preset, plan.workout.id, plan.workout.title]
+    [activeInstrument, plan.preset, plan.workout.id, plan.workout.title]
   );
 
   const computeSetOutcome = useCallback(
@@ -1171,7 +1203,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
 
             {isArpeggioExercise && (
               <div className="flex w-full max-w-2xl flex-wrap items-center justify-center gap-1.5">
-                {ARPEGGIO_PROGRESSIONS.map((prog) => {
+                {activeArpeggioProgressions.map((prog) => {
                   const active = prog.id === selectedArpeggioProgressionId;
                   return (
                     <button
@@ -1220,6 +1252,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
             </div>
 
             <FretboardViewer
+              instrument={activeInstrument}
               notes={effectiveFretboardNotes}
               demoSequence={effectiveDemoSequence}
               variant="stage"
@@ -1507,7 +1540,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
                       Formula Gradi: {arpeggioData.pattern.formulaText}
                     </div>
                     <div className="flex flex-wrap items-center justify-center gap-1">
-                      {ARPEGGIO_PROGRESSIONS.map((prog) => {
+                      {activeArpeggioProgressions.map((prog) => {
                         const active = prog.id === selectedArpeggioProgressionId;
                         return (
                           <button
@@ -1529,6 +1562,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
                 )}
 
                 <FretboardViewer
+                  instrument={activeInstrument}
                   notes={effectiveFretboardNotes}
                   demoSequence={effectiveDemoSequence}
                   variant="compact"

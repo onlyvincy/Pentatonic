@@ -6,7 +6,7 @@
  * 3) Arbitrary frequency plucking for alternative tunings (EADGBE, FACGCE, DAEAC#E, DADF#AD).
  * 4) 4 selectable studio metronome sounds (Woodblock, Pendolo, Rimshot & Hat, Studio Klopfgeist).
  */
-import { MetronomeSoundId } from '../types/practice';
+import { InstrumentType, MetronomeSoundId } from '../types/practice';
 
 const OPEN_STRING_HZ: Record<1 | 2 | 3 | 4 | 5 | 6, number> = {
   1: 329.6276, // high e (E4)
@@ -16,6 +16,40 @@ const OPEN_STRING_HZ: Record<1 | 2 | 3 | 4 | 5 | 6, number> = {
   5: 110.0, // A2
   6: 82.4069, // low E (E2)
 };
+
+export const BASS_OPEN_STRING_HZ: Record<1 | 2 | 3 | 4, number> = {
+  1: 97.9989, // G2 (1st string)
+  2: 73.4162, // D2 (2nd string)
+  3: 55.0, // A1 (3rd string)
+  4: 41.2034, // E1 (4th string)
+};
+
+export const BASS_STRING_LABELS = ['G', 'D', 'A', 'E'] as const;
+
+export const BASS_STRING_SHORT_MAP: Record<1 | 2 | 3 | 4, string> = {
+  1: 'G',
+  2: 'D',
+  3: 'A',
+  4: 'E',
+};
+
+export type BassArticulation =
+  | 'finger'
+  | 'slap'
+  | 'pop'
+  | 'palmMute'
+  | 'hammer'
+  | 'slide';
+
+interface BassSampleAnchor {
+  id: string;
+  url: string;
+  baseFreq: number;
+  buffer: AudioBuffer | null;
+}
+
+// Prepared anchor array for future studio electric-bass MP3 multisamples
+const BASS_SAMPLE_ANCHORS: BassSampleAnchor[] = [];
 
 export const STRING_LABEL_MAP: Record<1 | 2 | 3 | 4 | 5 | 6, string> = {
   1: 'e (1ª)',
@@ -722,6 +756,305 @@ export function playGuitarStep(
       volume: perNoteVol,
       delaySec: idx * 0.016,
       palmMute,
+    });
+  });
+}
+
+export function getBassFrequency(
+  stringNum: 1 | 2 | 3 | 4,
+  fret: number
+): number {
+  return BASS_OPEN_STRING_HZ[stringNum] * Math.pow(2, fret / 12);
+}
+
+function selectNearestBassSampleAnchor(
+  targetFreq: number
+): BassSampleAnchor | null {
+  let best: BassSampleAnchor | null = null;
+  let bestRatio = Infinity;
+  for (const anchor of BASS_SAMPLE_ANCHORS) {
+    if (!anchor.buffer) continue;
+    const ratio = Math.abs(Math.log2(targetFreq / anchor.baseFreq));
+    if (ratio < bestRatio) {
+      bestRatio = ratio;
+      best = anchor;
+    }
+  }
+  return best;
+}
+
+/**
+ * Plays a warm, phone-speaker-audible electric bass note using multi-oscillator
+ * fundamental + 2nd-harmonic support, resonant lowpass envelope, and articulation
+ * shaping (fingerstyle, thumb slap, index pop, palm mute, hammer/slide).
+ */
+export function playBassFrequency(
+  freq: number,
+  options?: {
+    durationSec?: number;
+    volume?: number;
+    delaySec?: number;
+    articulation?: BassArticulation;
+  }
+): void {
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+
+    const articulation: BassArticulation = options?.articulation ?? 'finger';
+    const isPalmMute = articulation === 'palmMute';
+    const isSlap = articulation === 'slap';
+    const isPop = articulation === 'pop';
+    const isLegato = articulation === 'hammer' || articulation === 'slide';
+
+    const rawDuration = isPalmMute
+      ? Math.min(options?.durationSec ?? 0.22, 0.22)
+      : options?.durationSec ?? (isSlap || isPop ? 0.95 : 1.25);
+    const durationSec = Math.max(0.14, rawDuration);
+    const volume = options?.volume ?? 0.56;
+    const startTime = Math.max(
+      ctx.currentTime + 0.002,
+      ctx.currentTime + (options?.delaySec ?? 0)
+    );
+
+    const anchor = selectNearestBassSampleAnchor(freq);
+    if (anchor && anchor.buffer) {
+      const src = ctx.createBufferSource();
+      src.buffer = anchor.buffer;
+      src.playbackRate.setValueAtTime(freq / anchor.baseFreq, startTime);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(volume, startTime);
+      g.gain.exponentialRampToValueAtTime(0.001, startTime + durationSec);
+      src.connect(g);
+      g.connect(ctx.destination);
+      src.start(startTime);
+      src.stop(startTime + durationSec + 0.04);
+      return;
+    }
+
+    const attackSec = isLegato ? 0.01 : isSlap || isPop ? 0.002 : 0.004;
+
+    const subOsc = ctx.createOscillator();
+    subOsc.type = 'sine';
+    subOsc.frequency.setValueAtTime(freq, startTime);
+
+    const bodyOsc = ctx.createOscillator();
+    bodyOsc.type = 'triangle';
+    bodyOsc.frequency.setValueAtTime(freq, startTime);
+
+    const harmonicOsc = ctx.createOscillator();
+    harmonicOsc.type = 'sawtooth';
+    harmonicOsc.frequency.setValueAtTime(freq, startTime);
+
+    // 2nd harmonic warmth so E1 (41.2 Hz) & A1 (55 Hz) cut through small mobile speakers
+    const overtoneOsc = ctx.createOscillator();
+    overtoneOsc.type = 'sine';
+    overtoneOsc.frequency.setValueAtTime(freq * 2, startTime);
+
+    const subGain = ctx.createGain();
+    subGain.gain.setValueAtTime(0.54, startTime);
+
+    const bodyGain = ctx.createGain();
+    bodyGain.gain.setValueAtTime(0.32, startTime);
+
+    const harmGain = ctx.createGain();
+    harmGain.gain.setValueAtTime(
+      isSlap ? 0.34 : isPop ? 0.38 : isPalmMute ? 0.16 : 0.24,
+      startTime
+    );
+
+    const overtoneGain = ctx.createGain();
+    overtoneGain.gain.setValueAtTime(freq < 75 ? 0.24 : 0.12, startTime);
+
+    const lowpass = ctx.createBiquadFilter();
+    lowpass.type = 'lowpass';
+    lowpass.Q.setValueAtTime(isSlap || isPop ? 3.2 : 1.4, startTime);
+
+    const startCutoff = isPalmMute
+      ? 380
+      : isSlap || isPop
+      ? Math.min(4200, Math.max(950, freq * 18))
+      : isLegato
+      ? Math.min(1800, Math.max(480, freq * 7))
+      : Math.min(2400, Math.max(620, freq * 10));
+    const sustainCutoff = isPalmMute
+      ? 180
+      : isSlap || isPop
+      ? Math.max(420, freq * 4.5)
+      : Math.max(260, freq * 2.8);
+
+    lowpass.frequency.setValueAtTime(startCutoff, startTime);
+    lowpass.frequency.exponentialRampToValueAtTime(
+      sustainCutoff,
+      startTime + Math.min(0.24, durationSec * 0.45)
+    );
+
+    const bodyPeak = ctx.createBiquadFilter();
+    bodyPeak.type = 'peaking';
+    bodyPeak.frequency.setValueAtTime(125, startTime);
+    bodyPeak.Q.setValueAtTime(1.2, startTime);
+    bodyPeak.gain.setValueAtTime(isPalmMute ? 4.5 : 3.5, startTime);
+
+    const masterGain = ctx.createGain();
+    masterGain.gain.setValueAtTime(0.001, startTime);
+    masterGain.gain.linearRampToValueAtTime(volume, startTime + attackSec);
+    masterGain.gain.setValueAtTime(
+      volume * (isPalmMute ? 0.85 : 0.92),
+      startTime + Math.min(0.12, durationSec * 0.28)
+    );
+    masterGain.gain.exponentialRampToValueAtTime(0.001, startTime + durationSec);
+
+    subOsc.connect(subGain);
+    bodyOsc.connect(bodyGain);
+    harmonicOsc.connect(harmGain);
+    overtoneOsc.connect(overtoneGain);
+
+    subGain.connect(lowpass);
+    bodyGain.connect(lowpass);
+    harmGain.connect(lowpass);
+    overtoneGain.connect(lowpass);
+
+    lowpass.connect(bodyPeak);
+    bodyPeak.connect(masterGain);
+    masterGain.connect(ctx.destination);
+
+    const stopAt = startTime + durationSec + 0.04;
+    subOsc.start(startTime);
+    bodyOsc.start(startTime);
+    harmonicOsc.start(startTime);
+    overtoneOsc.start(startTime);
+    subOsc.stop(stopAt);
+    bodyOsc.stop(stopAt);
+    harmonicOsc.stop(stopAt);
+    overtoneOsc.stop(stopAt);
+
+    // Metallic fret-clank noise burst for Slap Thumb & Index Pop
+    if (isSlap || isPop) {
+      const click = ctx.createBufferSource();
+      click.buffer = getNoiseBuffer(ctx);
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.setValueAtTime(isPop ? 2900 : 1850, startTime);
+      bp.Q.setValueAtTime(2.0, startTime);
+
+      const cGain = ctx.createGain();
+      cGain.gain.setValueAtTime(volume * (isPop ? 0.55 : 0.48), startTime);
+      cGain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.024);
+
+      click.connect(bp);
+      bp.connect(cGain);
+      cGain.connect(ctx.destination);
+      click.start(startTime);
+      click.stop(startTime + 0.028);
+    }
+  } catch {
+    // Gracefully ignore audio errors in restricted environments
+  }
+}
+
+/**
+ * Plays a percussive muted electric-bass dead note / ghost note thump.
+ */
+export function playBassMutedThump(volume = 0.36, slapDead = false): void {
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime + 0.002;
+    const dur = 0.075;
+
+    const thump = ctx.createOscillator();
+    thump.type = 'sine';
+    thump.frequency.setValueAtTime(slapDead ? 170 : 135, now);
+    thump.frequency.exponentialRampToValueAtTime(slapDead ? 65 : 55, now + dur);
+
+    const tGain = ctx.createGain();
+    tGain.gain.setValueAtTime(volume * 0.85, now);
+    tGain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+
+    thump.connect(tGain);
+    tGain.connect(ctx.destination);
+    thump.start(now);
+    thump.stop(now + dur + 0.01);
+
+    const noise = ctx.createBufferSource();
+    noise.buffer = getNoiseBuffer(ctx);
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.setValueAtTime(slapDead ? 950 : 340, now);
+    bp.Q.setValueAtTime(1.6, now);
+
+    const nGain = ctx.createGain();
+    nGain.gain.setValueAtTime(volume * (slapDead ? 0.52 : 0.36), now);
+    nGain.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
+
+    noise.connect(bp);
+    bp.connect(nGain);
+    nGain.connect(ctx.destination);
+    noise.start(now);
+    noise.stop(now + 0.055);
+  } catch {
+    // Ignore in restricted environments
+  }
+}
+
+export function playBassPluck(
+  stringNum: 1 | 2 | 3 | 4,
+  fret: number,
+  options?: {
+    durationSec?: number;
+    volume?: number;
+    delaySec?: number;
+    articulation?: BassArticulation;
+  }
+): void {
+  const freq = getBassFrequency(stringNum, fret);
+  playBassFrequency(freq, options);
+}
+
+export function playInstrumentStep(
+  instrument: InstrumentType,
+  notes: { string: 1 | 2 | 3 | 4 | 5 | 6; fret: number }[],
+  muted = false,
+  sustain = false,
+  technique?: string
+): void {
+  if (instrument === 'guitar') {
+    playGuitarStep(notes, muted, sustain, technique);
+    return;
+  }
+
+  if (sustain) return;
+
+  const tech = (technique || '').toLowerCase();
+  if (muted || notes.length === 0) {
+    const isSlapDead = tech.includes('slap') || tech.includes('dead');
+    playBassMutedThump(0.38, isSlapDead);
+    return;
+  }
+
+  let articulation: BassArticulation = 'finger';
+  if (tech.includes('slap') || tech.includes('thumb')) {
+    articulation = 'slap';
+  } else if (tech.includes('pop') || tech.includes('strappo')) {
+    articulation = 'pop';
+  } else if (tech.includes('palm') || tech.includes('staccato') || tech.includes('p.m.')) {
+    articulation = 'palmMute';
+  } else if (tech.includes('hammer') || tech.includes('pull')) {
+    articulation = 'hammer';
+  } else if (tech.includes('slide')) {
+    articulation = 'slide';
+  }
+
+  const ordered = [...notes].sort((a, b) => b.string - a.string);
+  const perNoteVol = ordered.length > 1 ? 0.38 : 0.56;
+  ordered.forEach((n, idx) => {
+    const bassStr = Math.max(1, Math.min(4, n.string)) as 1 | 2 | 3 | 4;
+    playBassPluck(bassStr, n.fret, {
+      durationSec: articulation === 'palmMute' ? 0.22 : 1.15,
+      volume: perNoteVol,
+      delaySec: idx * 0.012,
+      articulation,
     });
   });
 }

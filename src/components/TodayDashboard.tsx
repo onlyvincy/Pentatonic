@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import {
   Exercise,
+  InstrumentType,
   ScientificPlanPrescription,
   SessionDurationPreset,
   WorkoutSessionLog,
@@ -24,6 +25,7 @@ import {
 } from './PathIllustrations';
 
 interface TodayDashboardProps {
+  instrument?: InstrumentType;
   exercises: Exercise[];
   sessionLogs: WorkoutSessionLog[];
   prescription: ScientificPlanPrescription;
@@ -51,6 +53,7 @@ const LAUNCHER_TIME_OPTIONS: {
 const HOLD_DURATION_MS = 850;
 
 export const TodayDashboard: React.FC<TodayDashboardProps> = ({
+  instrument = 'guitar',
   exercises,
   sessionLogs,
   prescription,
@@ -61,8 +64,15 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   onOpenDiagnosticQuiz,
 }) => {
   const nerd = useMemo(
-    () => computeNerdTelemetry(exercises, sessionLogs, weeklyGoalDays, 'all'),
-    [exercises, sessionLogs, weeklyGoalDays]
+    () =>
+      computeNerdTelemetry(
+        exercises,
+        sessionLogs,
+        weeklyGoalDays,
+        'all',
+        instrument
+      ),
+    [exercises, sessionLogs, weeklyGoalDays, instrument]
   );
 
   const weekly = useMemo(
@@ -270,7 +280,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
         <div className="relative z-10 flex items-start gap-3">
           {/* Chrome-Bezel Vector Coach Emblem */}
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl chrome-pill">
-            <CoachVectorEmblem className="h-6 w-6" />
+            <CoachVectorEmblem className="h-6 w-6" instrument={instrument} />
           </div>
 
           <div className="min-w-0 flex-1">
@@ -366,6 +376,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
               <IniziaButtonIllustration
                 isHolding={isHolding}
                 holdProgress={holdProgress}
+                instrument={instrument}
               />
             </div>
           </button>

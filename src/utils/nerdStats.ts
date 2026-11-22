@@ -1,10 +1,15 @@
 import {
   CleanlinessScore,
   Exercise,
+  InstrumentType,
   Subdivision,
   WorkoutSessionLog,
 } from '../types/practice';
-import { CANONICAL_PILLARS, CLEANLINESS_LABELS } from './overloadEngine';
+import {
+  BASS_CANONICAL_PILLARS,
+  CANONICAL_PILLARS,
+  CLEANLINESS_LABELS,
+} from './overloadEngine';
 
 export interface CleanBpmPoint {
   sessionId: string;
@@ -101,7 +106,8 @@ export function computeNerdTelemetry(
   exercises: Exercise[],
   sessionLogs: WorkoutSessionLog[],
   weeklyGoalDays: number,
-  filterExerciseId: string = 'all'
+  filterExerciseId: string = 'all',
+  instrument?: InstrumentType
 ): NerdTelemetry {
   const exMap = new Map(exercises.map((e) => [e.id, e]));
   const sorted = [...sessionLogs].sort(
@@ -346,9 +352,16 @@ export function computeNerdTelemetry(
   });
 
   // 5. Canonical Pillar Breakdown
+  const resolvedInstrument: InstrumentType =
+    instrument ??
+    (exercises.length > 0 && exercises.every((e) => e.instrument === 'bass')
+      ? 'bass'
+      : 'guitar');
+  const activePillars =
+    resolvedInstrument === 'bass' ? BASS_CANONICAL_PILLARS : CANONICAL_PILLARS;
   const seenEx = new Set<string>();
   const pillarStats: PillarComparison[] = [];
-  for (const p of CANONICAL_PILLARS) {
+  for (const p of activePillars) {
     if (seenEx.has(p.exerciseId)) continue;
     seenEx.add(p.exerciseId);
     const ex = exMap.get(p.exerciseId);
