@@ -340,11 +340,11 @@ export function buildBassArpeggioExerciseData(
           chordNotes,
           chordLabel: voicing.label,
           sustain: true,
-          technique: `${voicing.label} · Tenuta 1/4`,
+          technique: voicing.label,
         });
       } else {
         const degreeNote = voicing.degrees[slot];
-        const techSuffix = slot === '8' ? 'Ottava' : `Fingerstyle · Grado ${slot}`;
+        const techSuffix = slot === '8' ? '8ª' : slot;
         demoSequence.push({
           notes: [degreeNote],
           chordNotes,
@@ -399,7 +399,7 @@ export function buildSeedBassArpeggioExercise(): Exercise {
     pillarName: 'Visione & Basslines',
     coachInspiration: 'James Jamerson & Pino Palladino',
     category: 'pentatonic',
-    title: 'Arpeggi, Triadi, Ottave & Basslines',
+    title: 'Arpeggi & Ottave',
     forWho:
       'Per costruire basslines musicali che seguono qualsiasi giro armonico usando tonica, terza, quinta, settima e ottava.',
     expectedOutcome:

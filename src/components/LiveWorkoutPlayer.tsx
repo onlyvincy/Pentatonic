@@ -436,14 +436,6 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveStepCount]);
 
-  const handleToggleSpeedBurst = () => {
-    setIsSpeedBurst((prev) => {
-      const next = !prev;
-      metronome.setSpeedBurst(next);
-      return next;
-    });
-  };
-
   // Bulletproof screen anti-sleep lock + ensure pure 'playback' speaker session
   useWakeLock(true);
 
@@ -1030,16 +1022,12 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
           nextSetBpm = Math.max(40, Math.round(currentComfortBpm * 0.96));
           setVariantSetsInSession(newVariantSets);
           setVariantCleanNonBurstInSession(newVariantCleanNonBurst);
-          setBurstChallengeBanner(
-            '⚡ Burst disattivato · Blocchiamo prima gli ottavi puliti'
-          );
+          setBurstChallengeBanner(null);
         } else if (metronome.gapClickMode !== 'off' && score === 1) {
           metronome.setGapClickMode('off');
           setVariantSetsInSession(newVariantSets);
           setVariantCleanNonBurstInSession(newVariantCleanNonBurst);
-          setBurstChallengeBanner(
-            'Click continuo attivato per stabilizzare il tempo'
-          );
+          setBurstChallengeBanner('Click continuo');
         } else if (
           score === 1 &&
           (streakCtx.consecutiveFail1Count >= 1 || metronome.bpm <= 52)
@@ -1053,7 +1041,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
           if (easierVar && easierVar.id !== activeVariant?.id) {
             switchVariantInSession(
               easierVar,
-              `🛡️ Passo indietro intelligente: ${easierVar.shortLabel}`,
+              easierVar.shortLabel,
               Math.max(48, Math.min(metronome.bpm, 60))
             );
           } else {
@@ -1074,20 +1062,14 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
         nextVar.id !== activeVariant?.id &&
         nextVar.difficultyWeight > (activeVariant?.difficultyWeight ?? 0)
       ) {
-        switchVariantInSession(
-          nextVar,
-          `🚀 Salto Rapido: ${nextVar.shortLabel}`
-        );
+        switchVariantInSession(nextVar, nextVar.shortLabel);
       } else if (isSpeedBurst) {
         if (
           activeVariantMastered &&
           nextVar &&
           nextVar.id !== activeVariant?.id
         ) {
-          switchVariantInSession(
-            nextVar,
-            '🔥 Boss Fight superata! Passiamo alla variante successiva'
-          );
+          switchVariantInSession(nextVar, nextVar.shortLabel);
         } else {
           setVariantSetsInSession(newVariantSets);
           setVariantCleanNonBurstInSession(newVariantCleanNonBurst);
@@ -1121,9 +1103,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
           nextSetBpm = Math.max(40, Math.round(metronome.bpm * 0.92));
           setVariantSetsInSession(newVariantSets);
           setVariantCleanNonBurstInSession(newVariantCleanNonBurst);
-          setBurstChallengeBanner(
-            '⚡ SFIDA SPEED BURST (1/8 → 1/16) · BPM calibrati (-8%)'
-          );
+          setBurstChallengeBanner(null);
         } else if (
           activeVariantMastered &&
           newVariantSets >= 3 &&
@@ -1131,10 +1111,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
           nextVar.id !== activeVariant?.id &&
           nextVar.difficultyWeight > (activeVariant?.difficultyWeight ?? 0)
         ) {
-          switchVariantInSession(
-            nextVar,
-            `Nuova Variante: ${nextVar.shortLabel}`
-          );
+          switchVariantInSession(nextVar, nextVar.shortLabel);
         } else {
           setVariantSetsInSession(newVariantSets);
           setVariantCleanNonBurstInSession(newVariantCleanNonBurst);
@@ -1236,12 +1213,12 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
             <button
               type="button"
               onClick={handleOpenManualFamilyBriefing}
-              aria-label="Perché e tecnica dell'esercizio"
-              title="Perché e tecnica"
+              aria-label="Tecnica"
+              title="Tecnica"
               className="flex h-8 items-center gap-1 rounded-full border border-white/15 bg-black px-2.5 text-[11px] font-bold text-white/75 hover:border-[#39FF14]/50 hover:text-[#39FF14] transition"
             >
               <BookOpen className="h-3.5 w-3.5 text-[#39FF14]" />
-              <span className="hidden sm:inline">Perché &amp; Tecnica</span>
+              <span className="hidden sm:inline">Tecnica</span>
             </button>
             {(phase === 'precount' || phase === 'playing') && (
               <button
@@ -1300,44 +1277,6 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
         {/* 1. AUTOMATIC BPM-SYNCED FRETBOARD DEMO (BEFORE PRE-TIMER & SET TIMER) */}
         {phase === 'demo' && (
           <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col items-center justify-center gap-4 px-4 py-5">
-            <div className="text-center space-y-1.5">
-              <h3 className="text-lg sm:text-xl font-black text-white">
-                {currentExercise.title}
-              </h3>
-              <div className="flex flex-wrap items-center justify-center gap-1.5">
-                {arpeggioData ? (
-                  <>
-                    <span className="inline-flex rounded-full border border-[#39FF14]/50 bg-[#39FF14]/12 px-3 py-0.5 text-xs font-black text-[#39FF14] tabular-nums">
-                      Formula Gradi: {arpeggioData.pattern.formulaText}
-                    </span>
-                    <span className="inline-flex rounded-full border border-white/20 bg-black px-2.5 py-0.5 text-[11px] font-bold text-white/80">
-                      {arpeggioData.progression.name}
-                    </span>
-                  </>
-                ) : (
-                  activeVariant && (
-                    <span className="inline-flex rounded-full border border-[#39FF14]/45 bg-[#39FF14]/12 px-3 py-0.5 text-xs font-bold text-[#39FF14]">
-                      {activeVariant.name}
-                    </span>
-                  )
-                )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleToggleSpeedBurst();
-                    setDemoReplayKey((k) => k + 1);
-                  }}
-                  className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-black transition ${
-                    isSpeedBurst
-                      ? 'border-[#39FF14] bg-[#39FF14] text-black'
-                      : 'border-white/20 bg-black text-white/60 hover:border-white/45 hover:text-white'
-                  }`}
-                >
-                  ⚡ Burst 1/8→1/16
-                </button>
-              </div>
-            </div>
-
             {isArpeggioExercise && !arpeggioData?.isFixedChordStep && (
               <div className="flex w-full max-w-2xl flex-wrap items-center justify-center gap-1.5">
                 {activeArpeggioProgressions.map((prog) => {
@@ -1367,23 +1306,21 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
             <div className="flex items-center justify-center">
               {demoContext === 'recall' ? (
                 <span className="inline-flex items-center gap-2 rounded-full border border-[#39FF14]/45 bg-[#39FF14]/10 px-3.5 py-1 text-xs font-bold text-[#39FF14]">
-                  {isDemoBetweenPasses
-                    ? 'Riparte tra 2s · Premi "Ok, ho capito" quando sei pronto'
-                    : 'Ripasso · Segui lentamente la demo'}
+                  {isDemoBetweenPasses ? 'Riparte tra 2s...' : 'Ripasso'}
                 </span>
               ) : isDemoBetweenPasses ? (
                 <span className="inline-flex items-center gap-2 rounded-full border border-[#39FF14]/50 bg-[#39FF14]/12 px-3.5 py-1 text-xs font-bold text-[#39FF14] animate-pulse-fast">
-                  Tra 2s si ripete · Preparati a eseguirlo lentamente
+                  Tra 2s riprova
                 </span>
               ) : demoPass === 1 ? (
                 <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-black px-3.5 py-1 text-xs font-bold text-white/85">
                   <span className="text-[#39FF14] font-black tabular-nums">1/2</span>
-                  Guarda e capisci l&apos;esercizio
+                  Guarda
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-2 rounded-full border border-[#39FF14]/50 bg-[#39FF14]/12 px-3.5 py-1 text-xs font-bold text-[#39FF14]">
                   <span className="font-black tabular-nums">2/2</span>
-                  Ora eseguilo lentamente insieme alla demo
+                  Prova
                 </span>
               )}
             </div>
@@ -1498,7 +1435,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
                 className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-black px-4 py-2 text-xs font-bold text-white/80 hover:text-white hover:border-white/45 transition"
               >
                 <HelpCircle className="h-3.5 w-3.5 text-[#39FF14]" />
-                Non mi ricordo l&apos;esercizio
+                Rivedi demo
               </button>
               <button
                 type="button"
@@ -1655,48 +1592,30 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
                   <span className="text-lg font-black text-[#39FF14] tabular-nums">
                     {metronome.bpm} BPM
                   </span>
-                  <button
-                    type="button"
-                    onClick={handleToggleSpeedBurst}
-                    className={`rounded-full border px-2.5 py-0.5 text-[11px] font-black transition ${
-                      isSpeedBurst
-                        ? 'border-[#39FF14] bg-[#39FF14] text-black'
-                        : 'border-white/20 bg-black text-white/55 hover:border-white/45 hover:text-white'
-                    }`}
-                  >
-                    ⚡ Burst 1/8→1/16
-                  </button>
                 </div>
               </div>
 
               {/* Continuous Live Animated Fretboard Locked to Web Audio Metronome Clock */}
               <div className="w-full space-y-2">
-                {arpeggioData && (
-                  <div className="space-y-1.5 text-center">
-                    <div className="inline-flex rounded-full border border-[#39FF14]/45 bg-[#39FF14]/12 px-3 py-0.5 text-[11px] font-black text-[#39FF14] tabular-nums">
-                      Formula Gradi: {arpeggioData.pattern.formulaText}
-                    </div>
-                    {!arpeggioData.isFixedChordStep && (
-                      <div className="flex flex-wrap items-center justify-center gap-1">
-                        {activeArpeggioProgressions.map((prog) => {
-                          const active = prog.id === selectedArpeggioProgressionId;
-                          return (
-                            <button
-                              key={prog.id}
-                              type="button"
-                              onClick={() => setSelectedArpeggioProgressionId(prog.id)}
-                              className={`rounded-full border px-2 py-0.5 text-[10px] font-bold transition ${
-                                active
-                                  ? 'border-white bg-white text-black'
-                                  : 'border-white/15 bg-black text-white/55 hover:border-white/40 hover:text-white'
-                              }`}
-                            >
-                              {prog.shortLabel}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
+                {arpeggioData && !arpeggioData.isFixedChordStep && (
+                  <div className="flex flex-wrap items-center justify-center gap-1">
+                    {activeArpeggioProgressions.map((prog) => {
+                      const active = prog.id === selectedArpeggioProgressionId;
+                      return (
+                        <button
+                          key={prog.id}
+                          type="button"
+                          onClick={() => setSelectedArpeggioProgressionId(prog.id)}
+                          className={`rounded-full border px-2 py-0.5 text-[10px] font-bold transition ${
+                            active
+                              ? 'border-white bg-white text-black'
+                              : 'border-white/15 bg-black text-white/55 hover:border-white/40 hover:text-white'
+                          }`}
+                        >
+                          {prog.shortLabel}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
 
@@ -1726,7 +1645,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
                 className="flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-xl border border-white/15 bg-black px-4 py-2 text-xs font-bold text-white/80 hover:text-white hover:border-[#39FF14]/50 transition"
               >
                 <HelpCircle className="h-3.5 w-3.5 text-[#39FF14]" />
-                Non mi ricordo l&apos;esercizio
+                Rivedi demo
               </button>
 
               <div className="grid grid-cols-2 gap-2.5">
@@ -1807,7 +1726,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
               className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-black px-4 py-2 text-xs font-bold text-white/75 hover:text-white hover:border-[#39FF14]/50 transition"
             >
               <HelpCircle className="h-3.5 w-3.5 text-[#39FF14]" />
-              Non mi ricordo l&apos;esercizio
+              Rivedi demo
             </button>
           </div>
         )}

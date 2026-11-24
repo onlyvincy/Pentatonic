@@ -1,14 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import {
-  AlertTriangle,
-  Brain,
-  Check,
-  Hand,
-  Sparkles,
-  Target,
-  Volume2,
-  X,
-} from 'lucide-react';
+import { AlertTriangle, X } from 'lucide-react';
 import {
   ExerciseFamilyBriefing,
   FamilyBriefingSrsStatus,
@@ -1105,7 +1096,7 @@ export const ExerciseFamilyBriefingModal: React.FC<
 > = ({
   isOpen,
   briefing,
-  srsStatus,
+  srsStatus: _srsStatus,
   manualPreview = false,
   onConfirm,
   onClose,
@@ -1130,36 +1121,20 @@ export const ExerciseFamilyBriefingModal: React.FC<
       onClick={manualPreview && onClose ? onClose : undefined}
     >
       <div
-        className="w-full max-w-2xl max-h-[92vh] overflow-y-auto overscroll-contain rounded-3xl border border-white/20 bg-[#050608] p-4 sm:p-6 text-white shadow-2xl space-y-4"
+        className="w-full max-w-xl max-h-[92vh] overflow-y-auto overscroll-contain rounded-3xl border border-white/20 bg-[#050608] p-4 sm:p-5 text-white shadow-2xl space-y-3.5"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header with Spaced Repetition Badge */}
-        <div className="flex items-start justify-between gap-3 border-b border-white/12 pb-3.5">
-          <div className="space-y-1.5 min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#39FF14]/45 bg-[#39FF14]/12 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-[#39FF14]">
-                <Brain className="h-3 w-3" />
-                {manualPreview
-                  ? 'Scheda Tecnica & Benefici'
-                  : srsStatus.isFirstTime
-                  ? 'Prima volta • Nuova Famiglia'
-                  : `Ripasso Spaced Repetition • #${srsStatus.exposures + 1}`}
-              </span>
-              <span className="rounded-full border border-white/15 bg-black px-2.5 py-0.5 text-[10px] font-bold text-white/65">
-                Prossimo reminder: tra {srsStatus.nextIntervalDays}{' '}
-                {srsStatus.nextIntervalDays === 1 ? 'giorno' : 'giorni'}
-              </span>
-            </div>
-            <h2 className="text-lg sm:text-xl font-black text-white leading-tight">
-              {briefing.title}
-            </h2>
-          </div>
+        {/* Minimal Header */}
+        <div className="flex items-center justify-between gap-3 border-b border-white/12 pb-3">
+          <h2 className="text-lg font-black text-white leading-tight truncate">
+            {briefing.title}
+          </h2>
 
-          {manualPreview && onClose && (
+          {onClose && (
             <button
               type="button"
               onClick={onClose}
-              aria-label="Chiudi scheda"
+              aria-label="Chiudi"
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/15 bg-black text-white/70 hover:text-white transition"
             >
               <X className="h-4 w-4" />
@@ -1167,124 +1142,61 @@ export const ExerciseFamilyBriefingModal: React.FC<
           )}
         </div>
 
-        {/* 1. Why you do it */}
-        <section className="rounded-2xl border border-white/12 bg-black/70 p-3.5 sm:p-4 space-y-1.5">
-          <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-[#39FF14]">
-            <Target className="h-3.5 w-3.5" />
-            Perché lo fai &amp; A cosa serve
-          </div>
-          <p className="text-xs sm:text-sm text-white/85 leading-relaxed">
-            {briefing.whyYouDoIt}
-          </p>
-        </section>
+        {/* Single-line Goal */}
+        <p className="text-xs sm:text-sm text-white/80 leading-relaxed">
+          {briefing.whyYouDoIt}
+        </p>
 
-        {/* 2. Daily Sound Benefits */}
-        <section className="rounded-2xl border border-white/12 bg-black/70 p-3.5 sm:p-4 space-y-2.5">
-          <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-white">
-            <Volume2 className="h-3.5 w-3.5 text-[#39FF14]" />
-            Benefici nel tuo sound di ogni giorno
-          </div>
-          <ul className="space-y-1.5">
-            {briefing.dailySoundBenefits.map((benefit, idx) => (
-              <li
-                key={idx}
-                className="flex items-start gap-2 text-xs sm:text-sm text-white/80 leading-relaxed"
-              >
-                <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#39FF14]" />
-                <span>{benefit}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        {/* 3. Technique & Hand Animation */}
-        <section className="rounded-2xl border border-[#39FF14]/25 bg-[#080B08] p-3.5 sm:p-4 space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-[#39FF14]">
-              <Hand className="h-3.5 w-3.5" />
-              Tecnica &amp; Posizione delle Mani
+        {/* Technique Switcher + Animated Hands + SX/DX + Avoid */}
+        <section className="space-y-2.5">
+          {briefing.primaryTechniques.length > 1 && (
+            <div className="flex flex-wrap gap-1.5">
+              {briefing.primaryTechniques.map((techId) => {
+                const guide = TECHNIQUE_GUIDES[techId];
+                const active = techId === activeTechnique.id;
+                return (
+                  <button
+                    key={techId}
+                    type="button"
+                    onClick={() => setSelectedTechId(techId)}
+                    className={`rounded-full border px-2.5 py-1 text-[11px] font-bold transition ${
+                      active
+                        ? 'border-[#39FF14] bg-[#39FF14] text-black'
+                        : 'border-white/15 bg-black text-white/65 hover:border-white/40 hover:text-white'
+                    }`}
+                  >
+                    {guide.name}
+                  </button>
+                );
+              })}
             </div>
-            {briefing.primaryTechniques.length > 1 && (
-              <div className="flex flex-wrap gap-1.5">
-                {briefing.primaryTechniques.map((techId) => {
-                  const guide = TECHNIQUE_GUIDES[techId];
-                  const active = techId === activeTechnique.id;
-                  return (
-                    <button
-                      key={techId}
-                      type="button"
-                      onClick={() => setSelectedTechId(techId)}
-                      className={`rounded-full border px-2.5 py-1 text-[10px] font-bold transition ${
-                        active
-                          ? 'border-[#39FF14] bg-[#39FF14] text-black'
-                          : 'border-white/15 bg-black text-white/65 hover:border-white/40 hover:text-white'
-                      }`}
-                    >
-                      {guide.name}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-1">
-            <h3 className="text-sm sm:text-base font-black text-white">
-              {activeTechnique.name}
-            </h3>
-            <p className="text-[11px] font-semibold text-white/55">
-              {activeTechnique.subtitle}
-            </p>
-          </div>
+          )}
 
           <TechniqueHandAnimator techniqueId={activeTechnique.id} />
 
-          <p className="text-xs sm:text-sm text-white/85 leading-relaxed">
-            {activeTechnique.whatItIs}
-          </p>
-
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <div className="rounded-xl border border-white/12 bg-black/75 p-2.5 space-y-1">
+            <div className="rounded-xl border border-white/12 bg-black/75 p-2.5 space-y-0.5">
               <div className="text-[10px] font-black uppercase tracking-wider text-[#39FF14]">
-                Mano Sinistra (Tastiera)
+                SX
               </div>
-              <p className="text-xs text-white/75 leading-relaxed">
+              <p className="text-xs text-white/80 leading-snug">
                 {activeTechnique.handFocus.leftHand}
               </p>
             </div>
-            <div className="rounded-xl border border-white/12 bg-black/75 p-2.5 space-y-1">
+            <div className="rounded-xl border border-white/12 bg-black/75 p-2.5 space-y-0.5">
               <div className="text-[10px] font-black uppercase tracking-wider text-white">
-                {activeTechnique.id.startsWith('bass-')
-                  ? 'Mano Destra (Dita / Pickup / Slap)'
-                  : 'Mano Destra (Ponte / Plettro)'}
+                DX
               </div>
-              <p className="text-xs text-white/75 leading-relaxed">
+              <p className="text-xs text-white/80 leading-snug">
                 {activeTechnique.handFocus.rightHand}
               </p>
             </div>
           </div>
 
-          <div className="space-y-1.5 pt-0.5">
-            <div className="text-[10px] font-black uppercase tracking-wider text-white/55">
-              Come si ottiene passo dopo passo
-            </div>
-            {activeTechnique.howToSteps.map((stepText, idx) => (
-              <div
-                key={idx}
-                className="flex items-start gap-2 text-xs text-white/80 leading-relaxed"
-              >
-                <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#39FF14]/15 text-[10px] font-black text-[#39FF14] mt-0.5">
-                  {idx + 1}
-                </span>
-                <span>{stepText}</span>
-              </div>
-            ))}
-          </div>
-
-          <div className="flex items-start gap-2 rounded-xl border border-amber-400/25 bg-amber-500/10 p-2.5 text-xs text-amber-200/90">
-            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />
+          <div className="flex items-center gap-2 rounded-xl border border-amber-400/25 bg-amber-500/10 px-2.5 py-2 text-xs text-amber-200/90">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-400" />
             <span>
-              <strong>Errore da evitare:</strong> {activeTechnique.commonMistake}
+              <strong>Evita:</strong> {activeTechnique.commonMistake}
             </span>
           </div>
         </section>
@@ -1292,10 +1204,9 @@ export const ExerciseFamilyBriefingModal: React.FC<
         <button
           type="button"
           onClick={onConfirm}
-          className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl neon-cta px-5 py-3 text-sm sm:text-base font-black transition"
+          className="flex min-h-[46px] w-full items-center justify-center rounded-xl neon-cta px-5 py-2.5 text-sm font-black transition"
         >
-          <Sparkles className="h-4 w-4" />
-          {manualPreview ? "Torna all'esercizio" : 'Ho capito, inizia la Demo'}
+          {manualPreview ? 'Chiudi' : 'Inizia'}
         </button>
       </div>
     </div>

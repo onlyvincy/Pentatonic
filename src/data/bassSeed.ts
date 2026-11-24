@@ -10,7 +10,7 @@ export const SEED_BASS_EXERCISES: Exercise[] = [
     pillarName: 'Velocità',
     coachInspiration: 'Jaco Pastorius & Rocco Prestia',
     category: 'picking',
-    title: 'Fingerstyle Alternato, String Crossing & Raking',
+    title: 'Fingerstyle',
     forWho:
       'Per avere indice e medio della mano destra uguali per volume, sciolti sui cambi corda e fluidi nel raking discendente.',
     expectedOutcome:
@@ -241,7 +241,7 @@ export const SEED_BASS_EXERCISES: Exercise[] = [
     pillarName: 'Groove & Timing',
     coachInspiration: 'Pino Palladino & Bernard Edwards',
     category: 'rhythm',
-    title: 'Pocket Groove, Gap Click & Ghost Notes (1/16)',
+    title: 'Groove & Ghost Notes',
     forWho:
       'Per diventare la colla ritmica della band, centrare il groove con la cassa e far respirare le linee con le ghost notes.',
     expectedOutcome:
@@ -470,7 +470,7 @@ export const SEED_BASS_EXERCISES: Exercise[] = [
     pillarName: 'Slap & Articolazione',
     coachInspiration: 'Larry Graham & Flea',
     category: 'legato',
-    title: 'Slap & Pop (Thumb, Pluck & Dead Notes)',
+    title: 'Slap & Pop',
     forWho:
       'Per sviluppare un attacco percussivo esplosivo col pollice (Thumb) e strappo pulito (Pop) sulle corde acute.',
     expectedOutcome:
@@ -677,7 +677,7 @@ export const SEED_BASS_EXERCISES: Exercise[] = [
     pillarName: 'Precisione',
     coachInspiration: 'John Patitucci & Gary Willis',
     category: 'fretboard',
-    title: 'Indipendenza Mano Sinistra, Stretch 1-2-4 & String Muting',
+    title: 'Dita & Muting',
     forWho:
       'Per suonare i tasti larghi del basso senza tensione al polso, rinforzare il mignolo e spegnere ogni risonanza indesiderata.',
     expectedOutcome:
@@ -904,7 +904,7 @@ export const SEED_BASS_EXERCISES: Exercise[] = [
     pillarName: 'Visione & Basslines',
     coachInspiration: 'Marcus Miller & Joe Dart',
     category: 'pentatonic',
-    title: 'Visione Orizzontale 4 Corde, Pentatoniche & Legato',
+    title: 'Pentatonica & Legato',
     forWho:
       'Per uscire dai soliti 4 tasti sul basso collegando tutto il manico con slide fluidi, hammer-on e pull-off cantabili.',
     expectedOutcome:

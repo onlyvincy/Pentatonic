@@ -49,7 +49,7 @@ export const SEED_EXERCISES: Exercise[] = [
   {
     id: 'ex-rhythm-gap',
     pillarName: 'Groove & Timing',
-    title: 'Gap Click, Ghost Notes & Funk Groove',
+    title: 'Groove & Gap Click',
     category: 'rhythm',
     forWho: 'Per chi va fuori tempo nei vuoti o sente il polso destro rigido negli accompagnamenti.',
     expectedOutcome:
@@ -487,7 +487,7 @@ export const SEED_EXERCISES: Exercise[] = [
   {
     id: 'ex-legato-trill',
     pillarName: 'Espressività',
-    title: 'Legato Ritmico & Espressivo',
+    title: 'Legato',
     category: 'legato',
     forWho: 'Per chi vuole legati potenti e fraseggio dinamico, non meccanico.',
     expectedOutcome:
@@ -803,7 +803,7 @@ export const SEED_EXERCISES: Exercise[] = [
   {
     id: 'ex-pent-diagonal',
     pillarName: 'Visione',
-    title: 'Slide Diagonale Box 1–2',
+    title: 'Slide sul Manico',
     category: 'pentatonic',
     forWho: 'Per chi rimane bloccato sempre nei soliti 4 tasti.',
     expectedOutcome:
@@ -1109,7 +1109,7 @@ export const SEED_EXERCISES: Exercise[] = [
   {
     id: 'ex-picking-spider',
     pillarName: 'Precisione',
-    title: 'Spider, Stretch & String Muting',
+    title: 'Spider & Muting',
     category: 'fretboard',
     forWho: 'Per chi alza troppo le dita, fatica con gli allargamenti o sporca le corde vicine.',
     expectedOutcome:
@@ -1443,7 +1443,7 @@ export const SEED_EXERCISES: Exercise[] = [
   {
     id: 'ex-rhythm-palmmute',
     pillarName: 'Groove & Timing',
-    title: 'Palm Mute, Power Chords & Chug Patterns',
+    title: 'Palm Mute & Power Chords',
     category: 'rhythm',
     forWho: 'Per chi vuole mano destra granitica tra gallop metal, downpicking e chug stoppati.',
     expectedOutcome:
@@ -1984,7 +1984,7 @@ export const SEED_EXERCISES: Exercise[] = [
   {
     id: 'ex-lead-bending',
     pillarName: 'Espressività',
-    title: 'Bending, Target Notes & Double-Stops',
+    title: 'Bending & Vibrato',
     category: 'legato',
     forWho: 'Per chi vuole assoli cantabili, bend intonati al centesimo e fraseggio vocale sugli accordi.',
     expectedOutcome:
@@ -2410,7 +2410,7 @@ export const SEED_EXERCISES: Exercise[] = [
   {
     id: 'ex-harmony-scale',
     pillarName: 'Visione',
-    title: 'Armonizzazione Scala, Barrè & Numeri Romani',
+    title: 'Accordi & Barrè',
     category: 'rhythm',
     forWho: 'Per chi vuole conoscere tutti gli accordi della tonalità, suonare barrè mobili e cadenze in numeri romani.',
     expectedOutcome:
@@ -3903,7 +3903,7 @@ export const SEED_EXERCISES: Exercise[] = [
   {
     id: 'ex-pent-licks',
     pillarName: 'Velocità',
-    title: 'Pentatonica & Lick Solisti',
+    title: 'Pentatonica',
     category: 'pentatonic',
     forWho: 'Per chi conosce i box base ma vuole sequenze a 3, salti di corda e fraseggi solisti fulminei.',
     expectedOutcome:
@@ -4314,7 +4314,7 @@ export const SEED_EXERCISES: Exercise[] = [
   {
     id: 'ex-speed-bursts',
     pillarName: 'Velocità',
-    title: 'Alternate Picking & Speed Bursts (1/8 → 1/16)',
+    title: 'Pennata Alternata',
     category: 'picking',
     forWho: 'Per chi vuole sbloccare velocità chirurgica nel plettro (USX, DSX, Inside/Outside) senza tensione.',
     expectedOutcome:

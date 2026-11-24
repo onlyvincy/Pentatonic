@@ -43,7 +43,7 @@ export interface ArpeggioPatternDef {
 export const OPEN_ARPEGGIO_VOICINGS: Record<OpenArpeggioChordKey, MovableChordVoicing> = {
   Am_open: {
     key: 'Am_open',
-    label: 'Am (Aperto)',
+    label: 'Am',
     degrees: {
       '1': { string: 5, fret: 0, label: '1', isRoot: true, finger: 'O' },
       '5': { string: 4, fret: 2, label: '5', finger: '2' },
@@ -53,7 +53,7 @@ export const OPEN_ARPEGGIO_VOICINGS: Record<OpenArpeggioChordKey, MovableChordVo
   },
   C_open: {
     key: 'C_open',
-    label: 'C (Aperto)',
+    label: 'C',
     degrees: {
       '1': { string: 5, fret: 3, label: '1', isRoot: true, finger: '3' },
       '3': { string: 4, fret: 2, label: '3', finger: '2' },
@@ -63,7 +63,7 @@ export const OPEN_ARPEGGIO_VOICINGS: Record<OpenArpeggioChordKey, MovableChordVo
   },
   G_open: {
     key: 'G_open',
-    label: 'G (Aperto)',
+    label: 'G',
     degrees: {
       '1': { string: 6, fret: 3, label: '1', isRoot: true, finger: '2' },
       '3': { string: 5, fret: 2, label: '3', finger: '1' },
@@ -73,7 +73,7 @@ export const OPEN_ARPEGGIO_VOICINGS: Record<OpenArpeggioChordKey, MovableChordVo
   },
   Em_open: {
     key: 'Em_open',
-    label: 'Em (Aperto)',
+    label: 'Em',
     degrees: {
       '1': { string: 6, fret: 0, label: '1', isRoot: true, finger: 'O' },
       '5': { string: 5, fret: 2, label: '5', finger: '1' },
@@ -219,7 +219,7 @@ export const ARPEGGIO_PATTERNS: ArpeggioPatternDef[] = [
     formulaText: '1 · – · 5 · – · 8 · – · 3 · –',
     slots: ['1', 'hold', '5', 'hold', '8', 'hold', '3', 'hold'],
     fixedOpenChords: ['Am_open'],
-    fixedLabel: '1 Accordo Statico: Am Aperto',
+    fixedLabel: 'Am',
     difficultyWeight: 0.76,
     masteryBpm: 68,
   },
@@ -230,7 +230,7 @@ export const ARPEGGIO_PATTERNS: ArpeggioPatternDef[] = [
     formulaText: '1 – 5 – 8 – 3 – 8 – 5 – 8 – 5',
     slots: ['1', '5', '8', '3', '8', '5', '8', '5'],
     fixedOpenChords: ['Am_open'],
-    fixedLabel: '1 Accordo Statico: Am Aperto',
+    fixedLabel: 'Am',
     difficultyWeight: 0.82,
     masteryBpm: 72,
   },
@@ -241,7 +241,7 @@ export const ARPEGGIO_PATTERNS: ArpeggioPatternDef[] = [
     formulaText: '1 – 5 – 8 – 3 – 5 – 8 – [Cambio]',
     slots: ['1', '5', '8', '3', '5', '8', 'hold', 'hold'],
     fixedOpenChords: ['Am_open', 'C_open'],
-    fixedLabel: '2 Accordi Pivot: Am ↔ C',
+    fixedLabel: 'Am ↔ C',
     difficultyWeight: 0.88,
     masteryBpm: 74,
   },
@@ -252,7 +252,7 @@ export const ARPEGGIO_PATTERNS: ArpeggioPatternDef[] = [
     formulaText: '1 – 5 – 8 – 3 – 8 – 5 – [Cambio]',
     slots: ['1', '5', '8', '3', '8', '5', 'hold', 'hold'],
     fixedOpenChords: ['Am_open', 'C_open', 'G_open', 'Em_open'],
-    fixedLabel: 'Giro Aperto: Am – C – G – Em',
+    fixedLabel: 'Am – C – G – Em',
     difficultyWeight: 0.94,
     masteryBpm: 76,
   },
@@ -468,14 +468,14 @@ export function buildArpeggioExerciseData(
           chordNotes,
           chordLabel: voicing.label,
           sustain: true,
-          technique: `${voicing.label} · Tenuta`,
+          technique: voicing.label,
         });
       } else {
         demoSequence.push({
           notes: [voicing.degrees[slot]],
           chordNotes,
           chordLabel: voicing.label,
-          technique: `${voicing.label} · Grado ${slot}`,
+          technique: `${voicing.label} · ${slot}`,
         });
       }
     }
@@ -515,7 +515,7 @@ export function buildSeedArpeggioExercise(): Exercise {
   return {
     id: ARPEGGIO_EXERCISE_ID,
     pillarName: 'Precisione',
-    title: 'Arpeggi & Progressioni Songwriting',
+    title: 'Arpeggi',
     category: 'fretboard',
     forWho:
       'Per imparare prima arpeggi su 1 accordo fermo, poi cambi a 2 accordi e infine pattern mobili su qualsiasi giro.',

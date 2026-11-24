@@ -183,7 +183,6 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
   const [userLabelMode, setUserLabelMode] = useState<LabelMode | null>(null);
   const [isPlayingDemo, setIsPlayingDemo] = useState(false);
   const [activeStepIndex, setActiveStepIndex] = useState<number | null>(null);
-  const [internalBurstPhase, setInternalBurstPhase] = useState(false);
   const [internalBeatIdx, setInternalBeatIdx] = useState<number | null>(null);
   const [clickedNoteKey, setClickedNoteKey] = useState<string | null>(null);
 
@@ -237,7 +236,6 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
     clearTimers();
     setIsPlayingDemo(false);
     setActiveStepIndex(null);
-    setInternalBurstPhase(false);
     setInternalBeatIdx(null);
   }, [clearTimers]);
 
@@ -331,7 +329,6 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
         const startAnchor = getNowSec();
         let lastTick16 = 0;
 
-        setInternalBurstPhase(false);
         setActiveStepIndex(0);
         setInternalBeatIdx(0);
         if (mode === 'slow-intro' && !muteAudio) {
@@ -348,7 +345,6 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
             endTimeoutRef.current = window.setTimeout(() => {
               setIsPlayingDemo(false);
               setActiveStepIndex(null);
-              setInternalBurstPhase(false);
               setInternalBeatIdx(null);
               if (mode === 'slow-intro') {
                 onDemoCompleteRef.current?.();
@@ -371,14 +367,12 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
             }
 
             if (tickInCycle < phase1Ticks) {
-              setInternalBurstPhase(false);
               const stepIdx = Math.floor(tickInCycle / 2) % demoStepsCount;
               setActiveStepIndex(stepIdx);
               if (tickInCycle % 2 === 0) {
                 triggerStepAudio(stepIdx, false);
               }
             } else {
-              setInternalBurstPhase(true);
               const stepIdx = (tickInCycle - phase1Ticks) % demoStepsCount;
               setActiveStepIndex(stepIdx);
               triggerStepAudio(stepIdx, false);
@@ -524,10 +518,6 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
         : externalStepTick % effectiveSteps.length
       : null
     : activeStepIndex;
-
-  const isBurstPhase = usesExternalClock
-    ? Boolean(externalBurstResolved?.isBurstPhase)
-    : internalBurstPhase;
 
   // Trigger optional audio only when step changes under external clock
   useEffect(() => {
@@ -2118,48 +2108,26 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
       </div>
     ) : null;
 
-  const speedBurstBadge = speedBurst ? (
-    isBurstPhase ? (
-      <span className="rounded-full border border-[#39FF14] bg-[#39FF14] px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-black animate-pulse">
-        ⚡ 1/16 · BURST 2x
-      </span>
-    ) : (
-      <span className="rounded-full border border-white/25 bg-white/10 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-white">
-        1/8 · NORMALE 1x
-      </span>
-    )
-  ) : null;
-
-  const chordLookaheadBar = chordLookahead ? (
-    <div className="flex flex-wrap items-center justify-center gap-1.5 py-0.5 text-[10px]">
-      {chordLookahead.isSingleStaticChord ? (
-        <span className="rounded-full border border-[#39FF14]/45 bg-[#39FF14]/10 px-2.5 py-0.5 font-bold text-[#39FF14]">
-          Accordo Fisso: {chordLookahead.currentChordLabel} · Mano ferma
+  const chordLookaheadBar =
+    chordLookahead && !chordLookahead.isSingleStaticChord ? (
+      <div className="flex flex-wrap items-center justify-center gap-1.5 py-0.5 text-[10px]">
+        <span className="rounded-full border border-white/25 bg-black px-2.5 py-0.5 font-bold text-white tabular-nums">
+          {chordLookahead.currentChordLabel}
         </span>
-      ) : (
-        <>
-          <span className="rounded-full border border-white/25 bg-black px-2.5 py-0.5 font-bold text-white tabular-nums">
-            Ora: {chordLookahead.currentChordLabel}
-          </span>
-          {chordLookahead.nextChordLabel && (
-            <span
-              className={`rounded-full border px-2.5 py-0.5 tabular-nums transition-colors ${
-                chordLookahead.stepsUntilChange !== null &&
-                chordLookahead.stepsUntilChange <= 3
-                  ? 'border-[#39FF14] bg-[#39FF14]/15 font-black text-[#39FF14]'
-                  : 'border-white/15 bg-black font-bold text-white/60'
-              }`}
-            >
-              {chordLookahead.stepsUntilChange !== null &&
+        {chordLookahead.nextChordLabel && (
+          <span
+            className={`rounded-full border px-2.5 py-0.5 tabular-nums transition-colors ${
+              chordLookahead.stepsUntilChange !== null &&
               chordLookahead.stepsUntilChange <= 3
-                ? `⚡ Cambio tra ${chordLookahead.stepsUntilChange} → ${chordLookahead.nextChordLabel}`
-                : `Prossimo: ${chordLookahead.nextChordLabel}`}
-            </span>
-          )}
-        </>
-      )}
-    </div>
-  ) : null;
+                ? 'border-[#39FF14] bg-[#39FF14]/15 font-black text-[#39FF14]'
+                : 'border-white/15 bg-black font-bold text-white/60'
+            }`}
+          >
+            → {chordLookahead.nextChordLabel}
+          </span>
+        )}
+      </div>
+    ) : null;
 
   // FULL-SCREEN STAGE VARIANT
   if (variant === 'stage') {
@@ -2179,9 +2147,8 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
         {chordLookaheadBar}
         {fretboardSvg}
 
-        {(speedBurstBadge || activeTechniqueLabel || totalBars > 1) && (
+        {(activeTechniqueLabel || totalBars > 1) && (
           <div className="mx-auto flex min-h-[26px] max-w-md flex-wrap items-center justify-center gap-2">
-            {speedBurstBadge}
             {activeTechniqueLabel && (
               <span className="rounded-full border border-[#39FF14]/50 bg-[#39FF14]/12 px-3 py-0.5 text-[11px] font-black tracking-wide text-[#39FF14]">
                 {activeTechniqueLabel}
@@ -2255,8 +2222,6 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
               )}
             </button>
           )}
-
-          {speedBurstBadge}
 
           {activeTechniqueLabel && effectiveActiveStepIndex !== null ? (
             <span className="rounded-full border border-[#39FF14]/50 bg-[#39FF14]/12 px-2.5 py-0.5 text-[11px] font-black tracking-wide text-[#39FF14] tabular-nums">

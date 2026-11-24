@@ -143,12 +143,10 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
     setAuthLoading(true);
     try {
       await signInWithMagicLink(magicEmail);
-      setMagicSentMessage(
-        'Link di accesso inviato! Controlla la tua email su questo dispositivo.'
-      );
+      setMagicSentMessage('Link inviato. Controlla la tua email.');
     } catch (err) {
       setAuthError(
-        err instanceof Error ? err.message : 'Errore invio Magic Link.'
+        err instanceof Error ? err.message : 'Errore invio link.'
       );
     } finally {
       setAuthLoading(false);
@@ -162,7 +160,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
       await signOutCloud();
     } catch (err) {
       setAuthError(
-        err instanceof Error ? err.message : 'Errore durante la disconnessione.'
+        err instanceof Error ? err.message : 'Errore disconnessione.'
       );
     } finally {
       setAuthLoading(false);
@@ -173,14 +171,14 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
     e.preventDefault();
     setConfigFeedback(null);
     if (!urlInput.trim() || !keyInput.trim()) {
-      setConfigFeedback('Inserisci sia Project URL che Anon/Publishable Key.');
+      setConfigFeedback('Inserisci URL e Key.');
       return;
     }
     saveRuntimeSupabaseConfig(urlInput, keyInput);
     const updated = getSupabaseConfig();
     setConfigured(isSupabaseConfigured());
     setConfigSource(updated.source);
-    setConfigFeedback('Configurazione Cloud salvata su questo browser.');
+    setConfigFeedback('Configurazione salvata.');
     onAuthConfigured();
   };
 
@@ -191,7 +189,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
     setConfigSource(updated.source);
     setUrlInput(updated.url);
     setKeyInput(updated.anonKey);
-    setConfigFeedback('Configurazione locale rimossa.');
+    setConfigFeedback('Configurazione rimossa.');
     onAuthConfigured();
   };
 
@@ -201,7 +199,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
       setCopiedSql(true);
       window.setTimeout(() => setCopiedSql(false), 2200);
     } catch {
-      setConfigFeedback('Copia manuale dallo script SQL non riuscita.');
+      setConfigFeedback('Copia non riuscita.');
     }
   };
 
@@ -220,7 +218,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
       return (
         <span className="inline-flex items-center gap-1.5 rounded-full border border-[#39FF14]/40 bg-[#39FF14]/10 px-2.5 py-1 text-[11px] font-bold text-[#39FF14]">
           <RefreshCw className="h-3 w-3 animate-spin" />
-          Sincronizzazione in corso...
+          Sync...
         </span>
       );
     }
@@ -228,14 +226,14 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
       return (
         <span className="inline-flex items-center gap-1.5 rounded-full border border-red-400/40 bg-red-500/10 px-2.5 py-1 text-[11px] font-bold text-red-300">
           <AlertCircle className="h-3 w-3" />
-          Errore sync
+          Errore
         </span>
       );
     }
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full border border-[#39FF14]/45 bg-[#39FF14]/12 px-2.5 py-1 text-[11px] font-bold text-[#39FF14]">
         <Check className="h-3 w-3" />
-        Sincronizzato
+        Attivo
       </span>
     );
   })();
@@ -245,29 +243,24 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-md p-0 sm:p-4"
       role="dialog"
       aria-modal="true"
-      aria-label="Cloud Sync e Accesso Google"
+      aria-label="Cloud Sync"
     >
       <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl chrome-panel p-5 space-y-4">
         {/* Header */}
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <div className="flex h-9 w-9 items-center justify-center rounded-2xl border border-[#39FF14]/40 bg-[#39FF14]/10 text-[#39FF14]">
               <Cloud className="h-4.5 w-4.5" />
             </div>
-            <div>
-              <h2 className="text-base font-black chrome-text">
-                Cloud Sync Multi-Device
-              </h2>
-              <p className="text-xs text-slate-300/70">
-                Sincronizza BPM, sessioni e piano tra Mobile e Desktop.
-              </p>
-            </div>
+            <h2 className="text-base font-black chrome-text">
+              Cloud Sync
+            </h2>
           </div>
 
           <button
             type="button"
             onClick={onClose}
-            aria-label="Chiudi finestra Cloud"
+            aria-label="Chiudi"
             className="flex h-8 w-8 items-center justify-center rounded-full chrome-pill text-slate-300/70 hover:text-white transition"
           >
             <X className="h-4 w-4" />
@@ -293,7 +286,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
                 )}
                 <div className="min-w-0">
                   <div className="truncate text-sm font-black text-white">
-                    {user.fullName || 'Account Connesso'}
+                    {user.fullName || 'Account'}
                   </div>
                   <div className="truncate text-xs text-slate-300/70">
                     {user.email}
@@ -304,7 +297,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
             </div>
 
             <div className="flex items-center justify-between text-xs text-slate-300/70 border-t border-white/10 pt-2.5">
-              <span>Ultimo aggiornamento cloud</span>
+              <span>Ultimo sync</span>
               <span className="font-bold text-white tabular-nums">
                 {formatSyncTimestamp(lastSyncedAt)}
               </span>
@@ -328,7 +321,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
                     syncStatus === 'syncing' ? 'animate-spin' : ''
                   }`}
                 />
-                Sincronizza Ora
+                Sincronizza
               </button>
               <button
                 type="button"
@@ -337,7 +330,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
                 className="inline-flex items-center justify-center gap-1.5 rounded-xl chrome-pill px-3.5 py-2.5 text-xs font-bold text-slate-200 hover:border-white/40 transition"
               >
                 <LogOut className="h-3.5 w-3.5" />
-                Esci dall'account
+                Esci
               </button>
             </div>
           </div>
@@ -360,7 +353,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
               className="flex w-full items-center justify-center gap-1.5 text-xs font-semibold text-slate-300/75 hover:text-white transition"
             >
               <Mail className="h-3.5 w-3.5" />
-              Oppure accedi con Email Magic Link
+              Accedi con email
               {showMagicLink ? (
                 <ChevronUp className="h-3.5 w-3.5" />
               ) : (
@@ -384,7 +377,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
                     disabled={authLoading}
                     className="rounded-xl neon-cta px-3.5 py-2 text-xs font-black disabled:opacity-60 transition"
                   >
-                    Invia Link
+                    Invia
                   </button>
                 </div>
               </form>
@@ -403,10 +396,8 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
             )}
           </div>
         ) : (
-          <div className="rounded-2xl border border-amber-400/30 bg-amber-500/10 p-3.5 text-xs text-amber-100 leading-relaxed">
-            Collega il tuo progetto <strong>Supabase</strong> qui sotto (oppure
-            dal Marketplace <strong>Storage → Supabase</strong> su Vercel) per
-            attivare subito l'accesso con Google.
+          <div className="rounded-2xl border border-amber-400/30 bg-amber-500/10 p-3 text-xs text-amber-100">
+            Cloud non configurato.
           </div>
         )}
 
@@ -422,7 +413,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
           >
             <span className="flex items-center gap-2">
               <Settings2 className="h-3.5 w-3.5 text-[#39FF14]" />
-              Configurazione Cloud &amp; Guida Rapida Vercel/Supabase
+              Impostazioni Cloud
             </span>
             {showSetupGuide ? (
               <ChevronUp className="h-4 w-4 text-slate-400" />
@@ -432,65 +423,44 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
           </button>
 
           {showSetupGuide && (
-            <div className="border-t border-white/10 p-4 space-y-4 text-xs">
-              {/* Quick 3-step guide */}
-              <ol className="space-y-2 text-slate-300/85 leading-relaxed list-decimal list-inside">
-                <li>
-                  Su <strong>Vercel</strong> apri{' '}
-                  <span className="text-white font-semibold">
-                    Storage → Create Database → Supabase
-                  </span>{' '}
-                  (oppure incolla qui sotto URL e Anon Key del tuo progetto
-                  Supabase).
-                </li>
-                <li>
-                  Nel <strong>SQL Editor</strong> di Supabase incolla ed esegui
-                  lo script qui sotto per creare la tabella{' '}
-                  <code className="text-[#39FF14]">public.user_progress</code>.
-                </li>
-                <li>
-                  In Supabase vai su{' '}
-                  <span className="text-white font-semibold">
-                    Authentication → Providers → Google
-                  </span>{' '}
-                  e aggiungi come Redirect URL:{' '}
-                  <button
-                    type="button"
-                    onClick={() => void handleCopyRedirect()}
-                    className="inline-flex items-center gap-1 rounded-md border border-white/20 bg-white/5 px-1.5 py-0.5 text-[11px] font-mono text-[#39FF14] hover:border-[#39FF14]/60"
-                  >
-                    {originUrl}
-                    {copiedRedirect ? (
-                      <Check className="h-3 w-3" />
-                    ) : (
-                      <Copy className="h-3 w-3" />
-                    )}
-                  </button>
-                </li>
-              </ol>
+            <div className="border-t border-white/10 p-4 space-y-3 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/70 px-3 py-2">
+                <span className="text-[11px] font-semibold text-slate-300/80">
+                  Redirect URL
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void handleCopyRedirect()}
+                  className="inline-flex items-center gap-1 rounded-md border border-white/20 bg-white/5 px-2 py-0.5 text-[11px] font-mono text-[#39FF14] hover:border-[#39FF14]/60"
+                >
+                  {originUrl}
+                  {copiedRedirect ? (
+                    <Check className="h-3 w-3" />
+                  ) : (
+                    <Copy className="h-3 w-3" />
+                  )}
+                </button>
+              </div>
 
-              {/* Copy SQL Button */}
-              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/70 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/70 px-3 py-2">
                 <div className="flex items-center gap-2 text-slate-200">
-                  <Database className="h-4 w-4 text-[#39FF14] shrink-0" />
-                  <span className="font-semibold">
-                    Script Tabella + RLS (user_progress)
-                  </span>
+                  <Database className="h-3.5 w-3.5 text-[#39FF14] shrink-0" />
+                  <span className="text-[11px] font-semibold">SQL Tabella</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => void handleCopySql()}
-                  className="inline-flex items-center gap-1.5 rounded-full chrome-pill px-3 py-1.5 text-[11px] font-bold text-white hover:border-[#39FF14]/60 transition"
+                  className="inline-flex items-center gap-1.5 rounded-full chrome-pill px-3 py-1 text-[11px] font-bold text-white hover:border-[#39FF14]/60 transition"
                 >
                   {copiedSql ? (
                     <>
                       <Check className="h-3 w-3 text-[#39FF14]" />
-                      SQL Copiato!
+                      Copiato
                     </>
                   ) : (
                     <>
                       <Copy className="h-3 w-3 text-[#39FF14]" />
-                      Copia SQL Tabella
+                      Copia SQL
                     </>
                   )}
                 </button>
@@ -498,25 +468,9 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
 
               {/* Runtime Config Form */}
               <form onSubmit={handleSaveRuntimeConfig} className="space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-white">
-                    Connessione Rapida Supabase
-                  </span>
-                  {configSource === 'env' && (
-                    <span className="text-[10px] font-bold text-[#39FF14]">
-                      Attiva da env Vercel
-                    </span>
-                  )}
-                  {configSource === 'runtime' && (
-                    <span className="text-[10px] font-bold text-sky-300">
-                      Attiva da browser
-                    </span>
-                  )}
-                </div>
-
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   <label className="block text-[11px] text-slate-300/70">
-                    Supabase Project URL
+                    Project URL
                   </label>
                   <input
                     type="url"
@@ -527,9 +481,9 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
                   />
                 </div>
 
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   <label className="block text-[11px] text-slate-300/70">
-                    Supabase Anon / Publishable Key
+                    Anon Key
                   </label>
                   <input
                     type="text"
@@ -545,7 +499,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
                     type="submit"
                     className="rounded-xl neon-cta px-4 py-2 text-xs font-black transition"
                   >
-                    Salva &amp; Collega
+                    Salva
                   </button>
                   {configSource === 'runtime' && (
                     <button
@@ -553,7 +507,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
                       onClick={handleClearRuntimeConfig}
                       className="rounded-xl chrome-pill px-3 py-2 text-xs font-bold text-slate-300 hover:text-white transition"
                     >
-                      Rimuovi chiavi locali
+                      Rimuovi
                     </button>
                   )}
                 </div>
