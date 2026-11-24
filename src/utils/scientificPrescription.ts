@@ -330,6 +330,7 @@ export function generateScientificPrescription(
   const exIdsAvailable = new Set(scopedExercises.map((e) => e.id));
 
   // Level & frequency volume scaling
+  const isFoundation = answers.level === 'foundation';
   const levelBonus =
     answers.level === 'advanced' ? 2 : answers.level === 'intermediate' ? 1 : 0;
   const freqBonus =
@@ -343,7 +344,32 @@ export function generateScientificPrescription(
     optSets: number;
     setsPerSession: number;
     durationSec: number;
+    unlockAfterFondamentaSets?: number;
   }[] = [];
+
+  const sisterUnlockMap: Set<string> = new Set(
+    !isFoundation
+      ? []
+      : instrument === 'bass'
+      ? pathId === 'groove_pocket'
+        ? ['ex-bass-slap-pop']
+        : ['ex-bass-arpeggios']
+      : pathId === 'rhythm'
+      ? [
+          'ex-pent-licks',
+          'ex-picking-spider',
+          'ex-lead-bending',
+          'ex-pent-diagonal',
+          'ex-rhythm-palmmute',
+        ]
+      : [
+          'ex-speed-bursts',
+          'ex-arpeggio-progressions',
+          'ex-lead-bending',
+          'ex-harmony-scale',
+          'ex-rhythm-gap',
+        ]
+  );
 
   const addIfAvailable = (
     id: string,
@@ -356,14 +382,25 @@ export function generateScientificPrescription(
   ) => {
     if (!exIdsAvailable.has(id)) return;
     if (pickedIds.some((p) => p.id === id)) return;
+    const adjustedMin = isFoundation
+      ? role === 'primario'
+        ? 4
+        : 3
+      : minSets;
+    const adjustedOpt = isFoundation
+      ? role === 'primario'
+        ? 6
+        : 5
+      : optSets;
     pickedIds.push({
       id,
       role,
       roleLabel,
-      minSets,
-      optSets,
+      minSets: adjustedMin,
+      optSets: adjustedOpt,
       setsPerSession,
       durationSec,
+      unlockAfterFondamentaSets: sisterUnlockMap.has(id) ? 4 : undefined,
     });
   };
 
@@ -590,6 +627,9 @@ export function generateScientificPrescription(
       restSec: 15,
       coachMethod: copy.coachMethod,
       scientificRationale: copy.scientificRationale,
+      ...(item.unlockAfterFondamentaSets
+        ? { unlockAfterFondamentaSets: item.unlockAfterFondamentaSets }
+        : {}),
     };
   });
 
@@ -838,23 +878,50 @@ export function computeWeeklyDoseProgress(
   const sevenDaysAgoMs = Date.now() - 7 * 24 * 60 * 60 * 1000;
 
   const weeklySetsByExercise = new Map<string, number>();
+  const totalSetsByExercise = new Map<string, number>();
+  const totalSetsByFondamenta = new Map<FondamentaId, number>();
+
   for (const log of sessionLogs) {
     const logMs = new Date(log.date).getTime() || 0;
-    if (logMs < sevenDaysAgoMs) continue;
+    const isThisWeek = logMs >= sevenDaysAgoMs;
     for (const st of log.sets) {
-      weeklySetsByExercise.set(
+      totalSetsByExercise.set(
         st.exerciseId,
-        (weeklySetsByExercise.get(st.exerciseId) || 0) + 1
+        (totalSetsByExercise.get(st.exerciseId) || 0) + 1
       );
+      const ex = exMap.get(st.exerciseId);
+      if (ex) {
+        const fid = getFondamentaForExercise(ex);
+        totalSetsByFondamenta.set(
+          fid,
+          (totalSetsByFondamenta.get(fid) || 0) + 1
+        );
+      }
+      if (isThisWeek) {
+        weeklySetsByExercise.set(
+          st.exerciseId,
+          (weeklySetsByExercise.get(st.exerciseId) || 0) + 1
+        );
+      }
     }
   }
 
+  const isFoundation = prescription.answers.level === 'foundation';
   const seenIds = new Set<string>();
   const rawItems: Omit<ExerciseWeeklyProgressItem, 'priorityRank'>[] = [];
   for (const dose of prescription.doses) {
     const exercise = exMap.get(dose.exerciseId);
     if (!exercise || seenIds.has(exercise.id)) continue;
     seenIds.add(exercise.id);
+
+    if (isFoundation && dose.unlockAfterFondamentaSets) {
+      const fid = getFondamentaForExercise(exercise);
+      const fondTotal = totalSetsByFondamenta.get(fid) || 0;
+      const exTotal = totalSetsByExercise.get(exercise.id) || 0;
+      if (fondTotal < dose.unlockAfterFondamentaSets && exTotal === 0) {
+        continue;
+      }
+    }
 
     const completedSets = weeklySetsByExercise.get(exercise.id) || 0;
     const missingForMin = Math.max(0, dose.weeklyMinSets - completedSets);

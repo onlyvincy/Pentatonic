@@ -1,4 +1,10 @@
-import { DemoStep, Exercise, ExerciseVariant, FretNote } from '../types/practice';
+import {
+  DemoStep,
+  Exercise,
+  ExerciseVariant,
+  FretNote,
+  WorkoutSessionLog,
+} from '../types/practice';
 import {
   ARPEGGIO_PROGRESSIONS,
   ArpeggioChordKey,
@@ -25,6 +31,9 @@ export interface BassArpeggioPatternDef {
   difficultyWeight: number;
   minLevel?: 'foundation' | 'intermediate' | 'advanced';
   maxLevel?: 'foundation' | 'intermediate' | 'advanced';
+  masteryBpm?: number;
+  fixedChords?: ArpeggioChordKey[];
+  fixedLabel?: string;
 }
 
 export const BASS_ARPEGGIO_PROGRESSIONS: ArpeggioProgressionPreset[] =
@@ -126,73 +135,104 @@ export const BASS_VOICINGS_BY_DEGREE: Record<ArpeggioChordKey, BassChordVoicing>
 
 export const BASS_ARPEGGIO_PATTERNS: BassArpeggioPatternDef[] = [
   {
+    id: 'v-barp-step1-am-static',
+    shortLabel: 'Step 1 · 1 Accordo (Am)',
+    name: '1) Singolo Accordo Fermo: Tonica & Quinta su Am',
+    formulaText: '1 · – · 1 · – · 5 · – · 5 · –',
+    slots: ['1', 'hold', '1', 'hold', '5', 'hold', '5', 'hold'],
+    fixedChords: ['Am'],
+    fixedLabel: '1 Accordo Statico: i (Am)',
+    difficultyWeight: 0.78,
+    masteryBpm: 68,
+  },
+  {
+    id: 'v-barp-step2-am-c',
+    shortLabel: 'Step 2 · 2 Accordi (Am↔C)',
+    name: '2) Cambio Guidato 2 Accordi: Am ↔ C (Tonica & Quinta)',
+    formulaText: '1 · – · 5 · – · 1 · – · [Cambio]',
+    slots: ['1', 'hold', '5', 'hold', '1', 'hold', 'hold', 'hold'],
+    fixedChords: ['Am', 'C'],
+    fixedLabel: '2 Accordi Base: Am ↔ C',
+    difficultyWeight: 0.86,
+    masteryBpm: 72,
+  },
+  {
     id: 'v-barp-root-5',
-    shortLabel: 'Tonica & 5ª',
-    name: '1) Tonica & Quinta (1 – – 5 – – 1 –)',
+    shortLabel: 'Tonica & 5ª (Giro)',
+    name: '3) Tonica & Quinta sul Giro (1 – – 5 – – 1 –)',
     formulaText: '1 · – · 5 · – · 1 · – · 5 · –',
     slots: ['1', 'hold', '5', 'hold', '1', 'hold', '5', 'hold'],
-    difficultyWeight: 0.9,
+    difficultyWeight: 0.94,
+    masteryBpm: 75,
   },
   {
     id: 'v-barp-disco-oct',
     shortLabel: 'Ottave Groove',
-    name: '2) Ottave Groove (1 – 8 – 1 – 8 – 1 – 8 – 5 – 8)',
+    name: '4) Ottave Groove (1 – 8 – 1 – 8 – 1 – 8 – 5 – 8)',
     formulaText: '1 – 8 – 1 – 8 – 1 – 8 – 5 – 8',
     slots: ['1', '8', '1', '8', '1', '8', '5', '8'],
-    difficultyWeight: 0.96,
+    difficultyWeight: 1.0,
+    masteryBpm: 76,
   },
   {
     id: 'v-barp-triad-up',
     shortLabel: 'Triade 1-3-5-8',
-    name: '3) Triade Completa (1 – 3 – 5 – 8 – 5 – 3 – 5 – 3)',
+    name: '5) Triade Completa (1 – 3 – 5 – 8 – 5 – 3 – 5 – 3)',
     formulaText: '1 – 3 – 5 – 8 – 5 – 3 – 5 – 3',
     slots: ['1', '3', '5', '8', '5', '3', '5', '3'],
-    difficultyWeight: 1.0,
+    difficultyWeight: 1.06,
+    minLevel: 'intermediate',
+    masteryBpm: 78,
   },
   {
     id: 'v-barp-walking',
     shortLabel: 'Walking 4/4',
-    name: '4) Walking Bass 4/4 (1 · – · 3 · – · 5 · – · 8 · –)',
+    name: '6) Walking Bass 4/4 (1 · – · 3 · – · 5 · – · 8 · –)',
     formulaText: '1 · – · 3 · – · 5 · – · 8 · –',
     slots: ['1', 'hold', '3', 'hold', '5', 'hold', '8', 'hold'],
-    difficultyWeight: 1.02,
+    difficultyWeight: 1.09,
     minLevel: 'intermediate',
+    masteryBpm: 80,
   },
   {
     id: 'v-barp-1585',
     shortLabel: 'Groove 1-5-8-5',
-    name: '5) Groove Rock/Soul (1 – 5 – 8 – 5 – 1 – 5 – 3 – 5)',
+    name: '7) Groove Rock/Soul (1 – 5 – 8 – 5 – 1 – 5 – 3 – 5)',
     formulaText: '1 – 5 – 8 – 5 – 1 – 5 – 3 – 5',
     slots: ['1', '5', '8', '5', '1', '5', '3', '5'],
-    difficultyWeight: 1.04,
+    difficultyWeight: 1.12,
     minLevel: 'intermediate',
+    masteryBpm: 82,
   },
   {
     id: 'v-barp-seventh',
     shortLabel: 'Settima 1-3-5-7',
-    name: '6) Arpeggio di Settima (1 – 3 – 5 – 7 – 8 – 7 – 5 – 3)',
+    name: '8) Arpeggio di Settima (1 – 3 – 5 – 7 – 8 – 7 – 5 – 3)',
     formulaText: '1 – 3 – 5 – 7 – 8 – 7 – 5 – 3',
     slots: ['1', '3', '5', '7', '8', '7', '5', '3'],
-    difficultyWeight: 1.06,
+    difficultyWeight: 1.15,
     minLevel: 'intermediate',
+    masteryBpm: 82,
   },
   {
     id: 'v-barp-quick-2',
     shortLabel: 'Cambio Rapido 4/8',
-    name: '7) Cambio Rapido 2 accordi/battuta (1 – 5 – 3 – 5)',
+    name: '9) Cambio Rapido 2 accordi/battuta (1 – 5 – 3 – 5)',
     formulaText: '1 – 5 – 3 – 5',
     slots: ['1', '5', '3', '5'],
-    difficultyWeight: 1.08,
+    difficultyWeight: 1.2,
     minLevel: 'advanced',
+    masteryBpm: 86,
   },
   {
     id: 'v-barp-sync-oct',
     shortLabel: 'Sincope 1-8-5-3',
-    name: '8) Bassline Sincopata (1 – 8 – — – 5 – 3 – 5 – 8 – 5)',
+    name: '10) Bassline Sincopata (1 – 8 – — – 5 – 3 – 5 – 8 – 5)',
     formulaText: '1 – 8 – — – 5 – 3 – 5 – 8 – 5',
     slots: ['1', '8', 'hold', '5', '3', '5', '8', '5'],
-    difficultyWeight: 1.1,
+    difficultyWeight: 1.25,
     minLevel: 'advanced',
+    masteryBpm: 88,
   },
 ];
 
@@ -215,10 +255,33 @@ export function getBassArpeggioProgression(
 }
 
 export function pickRecommendedBassProgression(
-  sessionLogsCount: number
+  sessionLogsCount: number,
+  sessionLogs?: WorkoutSessionLog[]
 ): ArpeggioProgressionPreset {
+  if (sessionLogs && sessionLogs.length > 0) {
+    const fixedIds = new Set(
+      BASS_ARPEGGIO_PATTERNS.filter((p) => p.fixedChords).map((p) => p.id)
+    );
+    const movableCleanSets = sessionLogs
+      .flatMap((s) => s.sets)
+      .filter(
+        (st) =>
+          st.exerciseId === BASS_ARPEGGIO_EXERCISE_ID &&
+          st.cleanliness >= 4 &&
+          (!st.variantId || !fixedIds.has(st.variantId))
+      ).length;
+    if (movableCleanSets < 6) {
+      return BASS_ARPEGGIO_PROGRESSIONS[0];
+    }
+    const idx =
+      Math.floor(movableCleanSets / 6) % BASS_ARPEGGIO_PROGRESSIONS.length;
+    return BASS_ARPEGGIO_PROGRESSIONS[idx];
+  }
+  if (sessionLogsCount < 3) {
+    return BASS_ARPEGGIO_PROGRESSIONS[0];
+  }
   const idx =
-    ((sessionLogsCount % BASS_ARPEGGIO_PROGRESSIONS.length) +
+    ((Math.floor(sessionLogsCount / 3) % BASS_ARPEGGIO_PROGRESSIONS.length) +
       BASS_ARPEGGIO_PROGRESSIONS.length) %
     BASS_ARPEGGIO_PROGRESSIONS.length;
   return BASS_ARPEGGIO_PROGRESSIONS[idx];
@@ -230,16 +293,30 @@ export function buildBassArpeggioExerciseData(
 ): {
   pattern: BassArpeggioPatternDef;
   progression: ArpeggioProgressionPreset;
+  isFixedChordStep: boolean;
   fretboardNotes: FretNote[];
   demoSequence: DemoStep[];
 } {
   const pattern = getBassArpeggioPattern(variantId);
-  const progression = getBassArpeggioProgression(progressionId);
+  const isFixedChordStep = Boolean(
+    pattern.fixedChords && pattern.fixedChords.length > 0
+  );
+  const progression: ArpeggioProgressionPreset = isFixedChordStep
+    ? {
+        id: 'fixed-bass',
+        shortLabel: pattern.shortLabel,
+        name: pattern.fixedLabel ?? pattern.shortLabel,
+        chords: ['Am', 'F', 'C', 'G'],
+      }
+    : getBassArpeggioProgression(progressionId);
 
   const uniqueNotesMap = new Map<string, FretNote>();
   const demoSequence: DemoStep[] = [];
+  const activeChordKeys: ArpeggioChordKey[] = isFixedChordStep
+    ? pattern.fixedChords!
+    : progression.chords;
 
-  for (const chordKey of progression.chords) {
+  for (const chordKey of activeChordKeys) {
     const voicing = BASS_VOICINGS_BY_DEGREE[chordKey];
     const chordNotes: FretNote[] = [
       voicing.degrees['1'],
@@ -261,6 +338,7 @@ export function buildBassArpeggioExerciseData(
         demoSequence.push({
           notes: [],
           chordNotes,
+          chordLabel: voicing.label,
           sustain: true,
           technique: `${voicing.label} · Tenuta 1/4`,
         });
@@ -270,6 +348,7 @@ export function buildBassArpeggioExerciseData(
         demoSequence.push({
           notes: [degreeNote],
           chordNotes,
+          chordLabel: voicing.label,
           technique: `${voicing.label} · ${techSuffix}`,
         });
       }
@@ -279,6 +358,7 @@ export function buildBassArpeggioExerciseData(
   return {
     pattern,
     progression,
+    isFixedChordStep,
     fretboardNotes: Array.from(uniqueNotesMap.values()),
     demoSequence,
   };
@@ -299,6 +379,7 @@ export function createBassArpeggioVariants(): ExerciseVariant[] {
       difficultyWeight: pat.difficultyWeight,
       minLevel: pat.minLevel,
       maxLevel: pat.maxLevel,
+      masteryBpm: pat.masteryBpm,
       fretboardNotes: data.fretboardNotes,
       demoSequence: data.demoSequence,
     };

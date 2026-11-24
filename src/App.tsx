@@ -134,6 +134,23 @@ function applyLevelBaselineToUnpracticed(
 }
 
 export function hydrateAppState(saved: AppState): AppState {
+  const migratedSessionLogs = (saved.sessionLogs ?? []).map((log) => ({
+    ...log,
+    sets: log.sets.map((st) => ({
+      ...st,
+      exerciseId: LEGACY_EXERCISE_ID_MAP[st.exerciseId] ?? st.exerciseId,
+    })),
+  }));
+  const migratedRecordings = (saved.feedRecordings ?? []).map((rec) => ({
+    ...rec,
+    exerciseId: LEGACY_EXERCISE_ID_MAP[rec.exerciseId] ?? rec.exerciseId,
+  }));
+
+  const practicedIds = new Set<string>();
+  migratedSessionLogs.forEach((log) => {
+    log.sets.forEach((st) => practicedIds.add(st.exerciseId));
+  });
+
   const seedById = new Map(ALL_SEED_EXERCISES.map((ex) => [ex.id, ex]));
   const activeSavedExercises = (saved.exercises ?? []).filter(
     (ex) => seedById.has(ex.id) || ex.isCustom
@@ -142,6 +159,9 @@ export function hydrateAppState(saved: AppState): AppState {
   const hydratedSavedExercises = activeSavedExercises.map((ex) => {
     const seed = seedById.get(ex.id);
     if (!seed) return ex;
+    const hasPracticeHistory =
+      practicedIds.has(ex.id) ||
+      Boolean(ex.variantBpms && Object.keys(ex.variantBpms).length > 0);
     return {
       ...ex,
       instrument: seed.instrument ?? ex.instrument,
@@ -151,13 +171,16 @@ export function hydrateAppState(saved: AppState): AppState {
       scientificRationale: seed.scientificRationale,
       category: seed.category,
       subdivision: seed.subdivision,
+      baseSkillBpm: seed.baseSkillBpm,
       speedBurst: seed.speedBurst,
       fretboardNotes: seed.fretboardNotes,
       demoSequence: seed.demoSequence,
       variants: seed.variants,
-      activeVariantId: seed.variants?.some((v) => v.id === ex.activeVariantId)
-        ? ex.activeVariantId
-        : seed.activeVariantId,
+      activeVariantId:
+        hasPracticeHistory &&
+        seed.variants?.some((v) => v.id === ex.activeVariantId)
+          ? ex.activeVariantId
+          : seed.activeVariantId,
     };
   });
   const missingSeedExercises = ALL_SEED_EXERCISES.filter(
@@ -179,18 +202,6 @@ export function hydrateAppState(saved: AppState): AppState {
     ...(saved.programs ?? []),
     ...ALL_SEED_PROGRAMS.filter((p) => !savedProgramIds.has(p.id)),
   ];
-
-  const migratedSessionLogs = (saved.sessionLogs ?? []).map((log) => ({
-    ...log,
-    sets: log.sets.map((st) => ({
-      ...st,
-      exerciseId: LEGACY_EXERCISE_ID_MAP[st.exerciseId] ?? st.exerciseId,
-    })),
-  }));
-  const migratedRecordings = (saved.feedRecordings ?? []).map((rec) => ({
-    ...rec,
-    exerciseId: LEGACY_EXERCISE_ID_MAP[rec.exerciseId] ?? rec.exerciseId,
-  }));
 
   const guitarExercises = hydratedExercises.filter(
     (e) => getExerciseInstrument(e) === 'guitar'

@@ -662,6 +662,64 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
     return s;
   }, [activeContextChordNotes]);
 
+  const chordLookahead = useMemo(() => {
+    const hasLabels = effectiveSteps.some((s) => Boolean(s.chordLabel));
+    if (!hasLabels) return null;
+
+    const uniqueLabels = new Set(
+      effectiveSteps.map((s) => s.chordLabel).filter((l): l is string => Boolean(l))
+    );
+    const currentChordLabel =
+      activeStep?.chordLabel ?? effectiveSteps[0]?.chordLabel ?? null;
+    if (!currentChordLabel) return null;
+
+    const isSingleStaticChord = uniqueLabels.size === 1;
+    let nextChordLabel: string | null = null;
+    let stepsUntilChange: number | null = null;
+    let nextChordNotes: FretNote[] = [];
+
+    if (!isSingleStaticChord && effectiveActiveStepIndex !== null) {
+      for (let offset = 1; offset < effectiveSteps.length; offset++) {
+        const nextIdx = (effectiveActiveStepIndex + offset) % effectiveSteps.length;
+        const cand = effectiveSteps[nextIdx];
+        if (cand?.chordLabel && cand.chordLabel !== currentChordLabel) {
+          nextChordLabel = cand.chordLabel;
+          stepsUntilChange = offset;
+          nextChordNotes = cand.chordNotes ?? cand.notes ?? [];
+          break;
+        }
+      }
+    } else if (!isSingleStaticChord) {
+      const secondStep = effectiveSteps.find(
+        (s) => s.chordLabel && s.chordLabel !== currentChordLabel
+      );
+      if (secondStep?.chordLabel) {
+        nextChordLabel = secondStep.chordLabel;
+      }
+    }
+
+    return {
+      currentChordLabel,
+      isSingleStaticChord,
+      nextChordLabel,
+      stepsUntilChange,
+      nextChordNotes,
+    };
+  }, [effectiveSteps, activeStep, effectiveActiveStepIndex]);
+
+  const nextChordPreviewKeys = useMemo(() => {
+    if (
+      !chordLookahead ||
+      chordLookahead.stepsUntilChange === null ||
+      chordLookahead.stepsUntilChange > 2
+    ) {
+      return null;
+    }
+    const s = new Set<string>();
+    chordLookahead.nextChordNotes.forEach((n) => s.add(`${n.string}-${n.fret}`));
+    return s;
+  }, [chordLookahead]);
+
   const activeBarre = useMemo(() => {
     if (instrument === 'bass') return null;
     if (hasChordContext && activeContextChordNotes) {
@@ -1344,6 +1402,21 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
                     {interactive && (
                       <circle cx={cx} cy={y} r={14} fill="transparent" />
                     )}
+                    {!interactive &&
+                      nextChordPreviewKeys?.has(noteKey) &&
+                      !isHighlighted &&
+                      !activeContextChordKeys?.has(noteKey) && (
+                        <circle
+                          cx={cx}
+                          cy={y}
+                          r={baseRadius + 2.5}
+                          fill="rgba(57,255,20,0.12)"
+                          stroke="#39FF14"
+                          strokeWidth={1.6}
+                          strokeDasharray="3 2"
+                          pointerEvents="none"
+                        />
+                      )}
                     {note && (
                       <g
                         style={{
@@ -2057,6 +2130,37 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
     )
   ) : null;
 
+  const chordLookaheadBar = chordLookahead ? (
+    <div className="flex flex-wrap items-center justify-center gap-1.5 py-0.5 text-[10px]">
+      {chordLookahead.isSingleStaticChord ? (
+        <span className="rounded-full border border-[#39FF14]/45 bg-[#39FF14]/10 px-2.5 py-0.5 font-bold text-[#39FF14]">
+          Accordo Fisso: {chordLookahead.currentChordLabel} · Mano ferma
+        </span>
+      ) : (
+        <>
+          <span className="rounded-full border border-white/25 bg-black px-2.5 py-0.5 font-bold text-white tabular-nums">
+            Ora: {chordLookahead.currentChordLabel}
+          </span>
+          {chordLookahead.nextChordLabel && (
+            <span
+              className={`rounded-full border px-2.5 py-0.5 tabular-nums transition-colors ${
+                chordLookahead.stepsUntilChange !== null &&
+                chordLookahead.stepsUntilChange <= 3
+                  ? 'border-[#39FF14] bg-[#39FF14]/15 font-black text-[#39FF14]'
+                  : 'border-white/15 bg-black font-bold text-white/60'
+              }`}
+            >
+              {chordLookahead.stepsUntilChange !== null &&
+              chordLookahead.stepsUntilChange <= 3
+                ? `⚡ Cambio tra ${chordLookahead.stepsUntilChange} → ${chordLookahead.nextChordLabel}`
+                : `Prossimo: ${chordLookahead.nextChordLabel}`}
+            </span>
+          )}
+        </>
+      )}
+    </div>
+  ) : null;
+
   // FULL-SCREEN STAGE VARIANT
   if (variant === 'stage') {
     const progressPct =
@@ -2071,7 +2175,8 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
         : -1;
 
     return (
-      <div className="w-full min-w-0 max-w-full space-y-4">
+      <div className="w-full min-w-0 max-w-full space-y-3">
+        {chordLookaheadBar}
         {fretboardSvg}
 
         {(speedBurstBadge || activeTechniqueLabel || totalBars > 1) && (
@@ -2225,6 +2330,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
         </div>
       </div>
 
+      {chordLookaheadBar}
       {fretboardSvg}
       {rhythmGridBar}
     </div>

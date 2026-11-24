@@ -60,6 +60,7 @@ export interface ExerciseWeeklyDose {
   restSec: number;
   coachMethod: string;
   scientificRationale: string;
+  unlockAfterFondamentaSets?: number;
 }
 
 export interface ScientificPlanPrescription {
@@ -90,6 +91,8 @@ export interface DemoStep {
   notes: FretNote[];
   /** Optional active chord context notes (e.g. the 1, 3, 5, 8 degrees of the current chord during an arpeggio) */
   chordNotes?: FretNote[];
+  /** Human-readable active chord name for fretboard lookahead (e.g. 'Am', 'C', 'i (Am)') */
+  chordLabel?: string;
   /** True for percussive muted hit ("stoppata") */
   muted?: boolean;
   /** True when the note from the previous step sustains through this 1/8 slot without re-plucking (creates 1/4 holds & rhythmic variety) */
@@ -106,6 +109,12 @@ export interface ExerciseVariant {
   difficultyWeight: number;
   minLevel?: PlayerLevelId;
   maxLevel?: PlayerLevelId;
+  /** Clean BPM required to consolidate this variant in normal progression */
+  masteryBpm?: number;
+  /** Allows Step 1-2 rhythm variants to force continuous click ('off') even if parent exercise defaults to '1-in-4' */
+  overrideGapClick?: GapClickMode;
+  /** Allows Step 1-2 picking/fingerstyle variants to force steady 1/8ths (false) even if parent has speedBurst: true */
+  overrideSpeedBurst?: boolean;
   fretboardNotes: FretNote[];
   demoSequence: DemoStep[];
 }
@@ -126,6 +135,7 @@ export interface Exercise {
   currentTargetBpm: number;
   baselineBpm: number;
   bestCleanBpm: number;
+  baseSkillBpm?: number;
   defaultSets: number;
   defaultSetDurationSec: number;
   defaultRestSec: number;

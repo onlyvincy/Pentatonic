@@ -18,6 +18,7 @@ import {
 import {
   getLevelFilteredVariants,
   getStartingBpmForLevel,
+  shouldEnableSpeedBurstForSkill,
 } from '../utils/overloadEngine';
 import {
   ARPEGGIO_EXERCISE_ID,
@@ -389,7 +390,7 @@ export const ProgramsAndBuilder: React.FC<ProgramsAndBuilderProps> = ({
       {activeSelection && (() => {
         const { group, item } = activeSelection;
         const ex = item.exercise;
-        const variants = getLevelFilteredVariants(ex, prescription.answers.level);
+        const variants = getLevelFilteredVariants(ex, prescription.answers.level, sessionLogs);
         const requestedVarId = selectedVariantByEx[ex.id] || ex.activeVariantId;
         const activeVarId =
           variants.find((v) => v.id === requestedVarId)?.id ?? variants[0]?.id;
@@ -425,7 +426,14 @@ export const ProgramsAndBuilder: React.FC<ProgramsAndBuilderProps> = ({
         const arpProgressions = isBassArpeggioEx
           ? BASS_ARPEGGIO_PROGRESSIONS
           : ARPEGGIO_PROGRESSIONS;
-        const exSpeedBurst = speedBurstByEx[ex.id] ?? Boolean(ex.speedBurst);
+        const exSpeedBurst =
+          speedBurstByEx[ex.id] ??
+          shouldEnableSpeedBurstForSkill(
+            ex,
+            sessionLogs,
+            prescription.answers.level,
+            selectedVariant
+          );
 
         return (
           <div
@@ -548,25 +556,27 @@ export const ProgramsAndBuilder: React.FC<ProgramsAndBuilderProps> = ({
                       {arpData.progression.name}
                     </span>
                   </div>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    {arpProgressions.map((prog) => {
-                      const active = prog.id === selectedArpeggioProgId;
-                      return (
-                        <button
-                          key={prog.id}
-                          type="button"
-                          onClick={() => setSelectedArpeggioProgId(prog.id)}
-                          className={`rounded-full border px-2.5 py-1 text-[10px] font-bold transition ${
-                            active
-                              ? 'border-white bg-white text-black'
-                              : 'border-white/15 bg-black text-white/55 hover:border-white/40 hover:text-white'
-                          }`}
-                        >
-                          {prog.shortLabel}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  {!arpData.isFixedChordStep && (
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {arpProgressions.map((prog) => {
+                        const active = prog.id === selectedArpeggioProgId;
+                        return (
+                          <button
+                            key={prog.id}
+                            type="button"
+                            onClick={() => setSelectedArpeggioProgId(prog.id)}
+                            className={`rounded-full border px-2.5 py-1 text-[10px] font-bold transition ${
+                              active
+                                ? 'border-white bg-white text-black'
+                                : 'border-white/15 bg-black text-white/55 hover:border-white/40 hover:text-white'
+                            }`}
+                          >
+                            {prog.shortLabel}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
 

@@ -30,8 +30,11 @@ import {
 import {
   calculateGoldilocksNextBpm,
   calculateWarmupBpm,
+  computeExerciseStreakContext,
   computeWeightedExerciseBpm,
   getLevelFilteredVariants,
+  isVariantMastered,
+  pickEasierVariantInSession,
   pickNextRecommendedVariant,
   pickNextVariantInSession,
   shouldEnableSpeedBurstForSkill,
@@ -204,13 +207,25 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
   const activeInstrument =
     plan.instrument ?? getExerciseInstrument(currentExercise);
 
+  const initialFirstVariant = useMemo(() => {
+    const first = plan.items[0];
+    if (!first) return undefined;
+    return pickNextRecommendedVariant(
+      first.exercise,
+      priorSessionLogs,
+      first.preferredVariantId,
+      plan.playerLevel
+    );
+  }, [plan.items, priorSessionLogs, plan.playerLevel]);
+
   const [isSpeedBurst, setIsSpeedBurst] = useState<boolean>(() => {
     const firstEx = plan.items[0]?.exercise;
     if (!firstEx) return false;
     return shouldEnableSpeedBurstForSkill(
       firstEx,
       priorSessionLogs,
-      plan.playerLevel
+      plan.playerLevel,
+      initialFirstVariant
     );
   });
 
@@ -221,33 +236,59 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
   >({});
 
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(
-    () => {
-      const first = plan.items[0];
-      if (!first) return null;
-      return (
-        pickNextRecommendedVariant(
-          first.exercise,
-          priorSessionLogs,
-          first.preferredVariantId,
-          plan.playerLevel
-        )?.id ?? null
-      );
-    }
+    () => initialFirstVariant?.id ?? null
   );
+
+  const [loggedSets, setLoggedSets] = useState<SetLog[]>([]);
+
+  const combinedHistoryLogs = useMemo<WorkoutSessionLog[]>(() => {
+    if (loggedSets.length === 0) return priorSessionLogs;
+    return [
+      ...priorSessionLogs,
+      {
+        id: 'sess-in-progress',
+        instrument: activeInstrument,
+        workoutId: plan.workout.id,
+        workoutTitle: plan.workout.title,
+        date: sessionDateRef.current,
+        durationPreset: plan.preset,
+        totalMinutes: 1,
+        sets: loggedSets,
+        averageCleanliness: 4,
+      },
+    ];
+  }, [
+    priorSessionLogs,
+    loggedSets,
+    activeInstrument,
+    plan.workout.id,
+    plan.workout.title,
+    plan.preset,
+  ]);
 
   const activeVariant: ExerciseVariant | undefined = useMemo(() => {
     if (!currentExercise) return undefined;
-    const vars = getLevelFilteredVariants(currentExercise, plan.playerLevel);
+    const vars = getLevelFilteredVariants(
+      currentExercise,
+      plan.playerLevel,
+      combinedHistoryLogs
+    );
     if (vars.length === 0) return undefined;
     return vars.find((v) => v.id === selectedVariantId) ?? vars[0];
-  }, [currentExercise, selectedVariantId, plan.playerLevel]);
+  }, [currentExercise, selectedVariantId, plan.playerLevel, combinedHistoryLogs]);
 
   const [selectedArpeggioProgressionId, setSelectedArpeggioProgressionId] =
     useState<string>(() =>
       (plan.instrument ?? getExerciseInstrument(plan.items[0]?.exercise)) ===
       'bass'
-        ? pickRecommendedBassProgression(priorSessionLogs.length).id
-        : pickRecommendedProgression(priorSessionLogs.length).id
+        ? pickRecommendedBassProgression(
+            priorSessionLogs.length,
+            priorSessionLogs
+          ).id
+        : pickRecommendedProgression(
+            priorSessionLogs.length,
+            priorSessionLogs
+          ).id
     );
 
   const isGuitarArpeggioExercise = currentExercise?.id === ARPEGGIO_EXERCISE_ID;
@@ -346,13 +387,29 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     currentItem?.restSec ?? 15
   );
 
-  const [loggedSets, setLoggedSets] = useState<SetLog[]>([]);
   const [sessionSetEntries, setSessionSetEntries] = useState<SessionSetEntry[]>([]);
   const pendingSetIdRef = useRef<string | null>(null);
   const pendingDurationSecRef = useRef<number | null>(null);
   const provisionalSetRef = useRef<SetLog | null>(null);
   const provisionalOverridesRef = useRef<SessionBpmUpdateMap | null>(null);
   const hasTriggeredFinishForSetRef = useRef<boolean>(false);
+
+  const isWarmupSet = exerciseIdx === 0 && setNumber === 1;
+  const streakCtx = useMemo(() => {
+    if (!currentExercise) {
+      return {
+        streak5Count: 0,
+        streak4PlusCount: 0,
+        consecutiveFail1Count: 0,
+        hasHitCeilingInSession: false,
+      };
+    }
+    return computeExerciseStreakContext(
+      currentExercise.id,
+      priorSessionLogs,
+      loggedSets
+    );
+  }, [currentExercise, priorSessionLogs, loggedSets]);
 
   const effectiveStepCount = useMemo(() => {
     if (effectiveDemoSequence && effectiveDemoSequence.length > 0) {
@@ -364,7 +421,10 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
   const metronome = useMetronome({
     initialBpm: initialFirstBpm,
     initialSubdivision: currentExercise?.subdivision ?? '1/8',
-    initialGapClick: currentExercise?.gapClickMode ?? 'off',
+    initialGapClick:
+      initialFirstVariant?.overrideGapClick ??
+      currentExercise?.gapClickMode ??
+      'off',
     initialSound: initialMetronomeSound,
     visualOnly: initialVisualOnly,
     speedBurst: isSpeedBurst,
@@ -414,7 +474,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     if (!currentItem || !currentExercise) return;
     const pickedVar = pickNextRecommendedVariant(
       currentExercise,
-      priorSessionLogs,
+      combinedHistoryLogs,
       currentItem.preferredVariantId,
       plan.playerLevel
     );
@@ -424,14 +484,19 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
       pickedVar?.id,
       currentItem.targetBpm
     );
-    // Set 1 always starts in Warm-up (-15%) to loosen hands before entering Goldilocks Zone
-    metronome.setBpm(calculateWarmupBpm(comfortBpm));
+    // Warmup (-12%) applies ONLY to Exercise 1, Set 1; subsequent exercises start at full comfort BPM
+    metronome.setBpm(
+      exerciseIdx === 0 ? calculateWarmupBpm(comfortBpm) : comfortBpm
+    );
     metronome.setSubdivision(currentExercise.subdivision);
-    metronome.setGapClickMode(currentExercise.gapClickMode);
+    metronome.setGapClickMode(
+      pickedVar?.overrideGapClick ?? currentExercise.gapClickMode
+    );
     const nextBurst = shouldEnableSpeedBurstForSkill(
       currentExercise,
-      priorSessionLogs,
-      plan.playerLevel
+      combinedHistoryLogs,
+      plan.playerLevel,
+      pickedVar
     );
     setIsSpeedBurst(nextBurst);
     metronome.setSpeedBurst(nextBurst);
@@ -625,7 +690,14 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
         metronome.bpm,
         currentComfortBpm,
         score,
-        setNumber
+        setNumber,
+        {
+          streak5Count: streakCtx.streak5Count,
+          streak4PlusCount: streakCtx.streak4PlusCount,
+          isWarmupSet,
+          isSpeedBurstSet: isSpeedBurst,
+          hasHitCeilingInSession: streakCtx.hasHitCeilingInSession,
+        }
       );
       const nextBpmForScore = feedback.nextBpm;
 
@@ -652,7 +724,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
         ...(variantBpmMap[currentExercise.id] ?? {}),
       };
       const savedVariantBpm =
-        setNumber === 1 && score >= 3
+        (isWarmupSet || isSpeedBurst) && score >= 3
           ? Math.max(currentComfortBpm, nextBpmForScore)
           : nextBpmForScore;
       const updatedExVariantBpms = activeVariant
@@ -719,6 +791,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
       currentExercise,
       currentItem,
       isSpeedBurst,
+      isWarmupSet,
       loggedSets,
       metronome.bpm,
       plan.playerLevel,
@@ -728,6 +801,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
       priorSessionLogs,
       setNumber,
       setRemainingSec,
+      streakCtx,
       variantBpmMap,
     ]
   );
@@ -874,74 +948,114 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
       const newVariantCleanNonBurst =
         variantCleanNonBurstInSession + (!isSpeedBurst && score >= 3 ? 1 : 0);
 
+      const syntheticAfterSetHistory: WorkoutSessionLog[] = [
+        ...priorSessionLogs,
+        buildSessionLogSnapshot(nextLoggedSets),
+      ];
+      const updatedStreakCtx = computeExerciseStreakContext(
+        currentExercise.id,
+        priorSessionLogs,
+        nextLoggedSets
+      );
+
       const allVariants = getLevelFilteredVariants(
         currentExercise,
-        plan.playerLevel
+        plan.playerLevel,
+        syntheticAfterSetHistory
       );
       const defaultVarId = allVariants[0]?.id;
-      const histCleanNonBurst = priorSessionLogs
-        .flatMap((s) => s.sets)
-        .filter(
-          (st) =>
-            st.exerciseId === currentExercise.id &&
-            (st.variantId ?? defaultVarId) === activeVariant?.id &&
-            !st.speedBurst &&
-            st.cleanliness >= 3
-        ).length;
+      const setsForActiveVariant = [
+        ...priorSessionLogs.flatMap((s) => s.sets),
+        ...nextLoggedSets,
+      ].filter(
+        (st) =>
+          st.exerciseId === currentExercise.id &&
+          (st.variantId ?? defaultVarId) === activeVariant?.id
+      );
+      const activeVariantMastered = activeVariant
+        ? isVariantMastered(activeVariant, setsForActiveVariant)
+        : false;
 
-      const rotateToNextVariant = (bannerText: string) => {
-        const nextVar = pickNextVariantInSession(
+      const switchVariantInSession = (
+        targetVar: ExerciseVariant,
+        bannerText: string,
+        overrideBpm?: number
+      ) => {
+        setSelectedVariantId(targetVar.id);
+        setVariantSetsInSession(0);
+        setVariantCleanNonBurstInSession(0);
+        setVariantBurstFailedInSession(false);
+        pendingNewVariantDemoRef.current = true;
+        setPendingNewVariantDemo(true);
+        const nextBurst = shouldEnableSpeedBurstForSkill(
           currentExercise,
-          activeVariant?.id,
-          priorSessionLogs,
-          nextLoggedSets,
-          plan.playerLevel
+          syntheticAfterSetHistory,
+          plan.playerLevel,
+          targetVar
         );
-        setIsSpeedBurst(false);
-        metronome.setSpeedBurst(false);
-        if (nextVar && nextVar.id !== activeVariant?.id) {
-          setSelectedVariantId(nextVar.id);
-          setVariantSetsInSession(0);
-          setVariantCleanNonBurstInSession(0);
-          setVariantBurstFailedInSession(false);
-          pendingNewVariantDemoRef.current = true;
-          setPendingNewVariantDemo(true);
-          nextSetBpm = resolveVariantBpm(
-            currentExercise,
-            nextVar.id,
-            currentItem.targetBpm
-          );
-          setBurstChallengeBanner(bannerText);
-        } else {
-          setVariantSetsInSession(0);
-          setVariantCleanNonBurstInSession(0);
-          setVariantBurstFailedInSession(false);
-          setBurstChallengeBanner(null);
-        }
+        setIsSpeedBurst(nextBurst);
+        metronome.setSpeedBurst(nextBurst);
+        metronome.setGapClickMode(
+          targetVar.overrideGapClick ?? currentExercise.gapClickMode
+        );
+        nextSetBpm =
+          overrideBpm ??
+          computeWeightedExerciseBpm(
+            {
+              ...currentExercise,
+              variantBpms: updatedExVariantBpms,
+              activeVariantId: targetVar.id,
+            },
+            syntheticAfterSetHistory,
+            targetVar.id,
+            plan.playerLevel
+          ).nextSessionBpm;
+        setBurstChallengeBanner(bannerText);
       };
 
-      if (currentExercise.id === 'ex-speed-bursts') {
-        if (newVariantSets >= 3) {
-          const nextVar = pickNextVariantInSession(
+      const nextVar = pickNextVariantInSession(
+        currentExercise,
+        activeVariant?.id,
+        priorSessionLogs,
+        nextLoggedSets,
+        plan.playerLevel
+      );
+
+      // Case A: Struggle / Auto-Regression (score <= 2)
+      if (score <= 2) {
+        if (isSpeedBurst) {
+          setIsSpeedBurst(false);
+          metronome.setSpeedBurst(false);
+          setVariantBurstFailedInSession(true);
+          nextSetBpm = Math.max(40, Math.round(currentComfortBpm * 0.96));
+          setVariantSetsInSession(newVariantSets);
+          setVariantCleanNonBurstInSession(newVariantCleanNonBurst);
+          setBurstChallengeBanner(
+            '⚡ Burst disattivato · Blocchiamo prima gli ottavi puliti'
+          );
+        } else if (metronome.gapClickMode !== 'off' && score === 1) {
+          metronome.setGapClickMode('off');
+          setVariantSetsInSession(newVariantSets);
+          setVariantCleanNonBurstInSession(newVariantCleanNonBurst);
+          setBurstChallengeBanner(
+            'Click continuo attivato per stabilizzare il tempo'
+          );
+        } else if (
+          score === 1 &&
+          (streakCtx.consecutiveFail1Count >= 1 || metronome.bpm <= 52)
+        ) {
+          const easierVar = pickEasierVariantInSession(
             currentExercise,
             activeVariant?.id,
-            priorSessionLogs,
-            nextLoggedSets,
-            plan.playerLevel
+            plan.playerLevel,
+            syntheticAfterSetHistory
           );
-          if (nextVar && nextVar.id !== activeVariant?.id) {
-            setSelectedVariantId(nextVar.id);
-            setVariantSetsInSession(0);
-            setVariantCleanNonBurstInSession(0);
-            setVariantBurstFailedInSession(false);
-            pendingNewVariantDemoRef.current = true;
-            setPendingNewVariantDemo(true);
-            nextSetBpm = resolveVariantBpm(
-              currentExercise,
-              nextVar.id,
-              currentItem.targetBpm
+          if (easierVar && easierVar.id !== activeVariant?.id) {
+            switchVariantInSession(
+              easierVar,
+              `🛡️ Passo indietro intelligente: ${easierVar.shortLabel}`,
+              Math.max(48, Math.min(metronome.bpm, 60))
             );
-            setBurstChallengeBanner(`Nuova Variante: ${nextVar.shortLabel}`);
           } else {
             setVariantSetsInSession(newVariantSets);
             setVariantCleanNonBurstInSession(newVariantCleanNonBurst);
@@ -952,31 +1066,56 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
           setVariantCleanNonBurstInSession(newVariantCleanNonBurst);
           setBurstChallengeBanner(null);
         }
+      } else if (
+        // Case B: Fast-Track Promotion when user aces (5/5) and masters current step
+        score === 5 &&
+        activeVariantMastered &&
+        nextVar &&
+        nextVar.id !== activeVariant?.id &&
+        nextVar.difficultyWeight > (activeVariant?.difficultyWeight ?? 0)
+      ) {
+        switchVariantInSession(
+          nextVar,
+          `🚀 Salto Rapido: ${nextVar.shortLabel}`
+        );
       } else if (isSpeedBurst) {
-        if (score >= 3) {
-          rotateToNextVariant(
+        if (
+          activeVariantMastered &&
+          nextVar &&
+          nextVar.id !== activeVariant?.id
+        ) {
+          switchVariantInSession(
+            nextVar,
             '🔥 Boss Fight superata! Passiamo alla variante successiva'
           );
         } else {
-          setIsSpeedBurst(false);
-          metronome.setSpeedBurst(false);
-          setVariantBurstFailedInSession(true);
-          setBurstChallengeBanner('Burst disattivato · Consolidiamo il ritmo');
-          if (newVariantSets >= 4) {
-            rotateToNextVariant('Nuova Variante sbloccata!');
-          } else {
-            setVariantSetsInSession(newVariantSets);
-            setVariantCleanNonBurstInSession(newVariantCleanNonBurst);
-          }
+          setVariantSetsInSession(newVariantSets);
+          setVariantCleanNonBurstInSession(newVariantCleanNonBurst);
+          setBurstChallengeBanner(null);
         }
       } else {
+        // Case C: Calibrated Boss Fight or Consolidation
+        const BOSS_FIGHT_EXCLUDED = new Set([
+          'ex-arpeggio-progressions',
+          'ex-harmony-scale',
+          'ex-lead-bending',
+          'ex-rhythm-gap',
+          'ex-bass-arpeggios',
+          'ex-bass-pocket-groove',
+        ]);
+        const bossMinBpm = plan.playerLevel === 'foundation' ? 76 : 68;
         const readyForBossFight =
-          currentExercise.gapClickMode !== '1-in-4' &&
+          !BOSS_FIGHT_EXCLUDED.has(currentExercise.id) &&
+          currentExercise.id !== 'ex-speed-bursts' &&
+          currentExercise.id !== 'ex-bass-fingerstyle' &&
+          metronome.gapClickMode === 'off' &&
+          (score !== 5 || updatedStreakCtx.streak5Count === 0) &&
+          metronome.bpm >= bossMinBpm &&
           !variantBurstFailedInSession &&
-          (newVariantCleanNonBurst >= 2 ||
-            (newVariantCleanNonBurst >= 1 && histCleanNonBurst >= 2));
+          newVariantCleanNonBurst >= 2 &&
+          newVariantSets < currentItem.sets;
 
-        if (readyForBossFight && newVariantSets < 3) {
+        if (readyForBossFight) {
           setIsSpeedBurst(true);
           metronome.setSpeedBurst(true);
           nextSetBpm = Math.max(40, Math.round(metronome.bpm * 0.92));
@@ -985,18 +1124,16 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
           setBurstChallengeBanner(
             '⚡ SFIDA SPEED BURST (1/8 → 1/16) · BPM calibrati (-8%)'
           );
-        } else if (newVariantSets >= 3) {
-          const nextVar = pickNextVariantInSession(
-            currentExercise,
-            activeVariant?.id,
-            priorSessionLogs,
-            nextLoggedSets,
-            plan.playerLevel
-          );
-          rotateToNextVariant(
-            nextVar && nextVar.id !== activeVariant?.id
-              ? `Nuova Variante: ${nextVar.shortLabel}`
-              : 'Nuova Variante sbloccata!'
+        } else if (
+          activeVariantMastered &&
+          newVariantSets >= 3 &&
+          nextVar &&
+          nextVar.id !== activeVariant?.id &&
+          nextVar.difficultyWeight > (activeVariant?.difficultyWeight ?? 0)
+        ) {
+          switchVariantInSession(
+            nextVar,
+            `Nuova Variante: ${nextVar.shortLabel}`
           );
         } else {
           setVariantSetsInSession(newVariantSets);
@@ -1201,7 +1338,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
               </div>
             </div>
 
-            {isArpeggioExercise && (
+            {isArpeggioExercise && !arpeggioData?.isFixedChordStep && (
               <div className="flex w-full max-w-2xl flex-wrap items-center justify-center gap-1.5">
                 {activeArpeggioProgressions.map((prog) => {
                   const active = prog.id === selectedArpeggioProgressionId;
@@ -1539,25 +1676,27 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
                     <div className="inline-flex rounded-full border border-[#39FF14]/45 bg-[#39FF14]/12 px-3 py-0.5 text-[11px] font-black text-[#39FF14] tabular-nums">
                       Formula Gradi: {arpeggioData.pattern.formulaText}
                     </div>
-                    <div className="flex flex-wrap items-center justify-center gap-1">
-                      {activeArpeggioProgressions.map((prog) => {
-                        const active = prog.id === selectedArpeggioProgressionId;
-                        return (
-                          <button
-                            key={prog.id}
-                            type="button"
-                            onClick={() => setSelectedArpeggioProgressionId(prog.id)}
-                            className={`rounded-full border px-2 py-0.5 text-[10px] font-bold transition ${
-                              active
-                                ? 'border-white bg-white text-black'
-                                : 'border-white/15 bg-black text-white/55 hover:border-white/40 hover:text-white'
-                            }`}
-                          >
-                            {prog.shortLabel}
-                          </button>
-                        );
-                      })}
-                    </div>
+                    {!arpeggioData.isFixedChordStep && (
+                      <div className="flex flex-wrap items-center justify-center gap-1">
+                        {activeArpeggioProgressions.map((prog) => {
+                          const active = prog.id === selectedArpeggioProgressionId;
+                          return (
+                            <button
+                              key={prog.id}
+                              type="button"
+                              onClick={() => setSelectedArpeggioProgressionId(prog.id)}
+                              className={`rounded-full border px-2 py-0.5 text-[10px] font-bold transition ${
+                                active
+                                  ? 'border-white bg-white text-black'
+                                  : 'border-white/15 bg-black text-white/55 hover:border-white/40 hover:text-white'
+                              }`}
+                            >
+                              {prog.shortLabel}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1750,7 +1889,14 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
                   metronome.bpm,
                   currentComfortBpm,
                   score,
-                  setNumber
+                  setNumber,
+                  {
+                    streak5Count: streakCtx.streak5Count,
+                    streak4PlusCount: streakCtx.streak4PlusCount,
+                    isWarmupSet,
+                    isSpeedBurstSet: isSpeedBurst,
+                    hasHitCeilingInSession: streakCtx.hasHitCeilingInSession,
+                  }
                 );
                 const deltaText =
                   delta > 0
