@@ -97,6 +97,8 @@ function getSubdivisionMultiplier(sub: Subdivision | undefined): number {
       return 3;
     case '1/16':
       return 4;
+    case '1/16T':
+      return 6;
     default:
       return 2;
   }
@@ -235,7 +237,7 @@ export function computeNerdTelemetry(
   const estimatedNotesPlayed = Math.round(
     allSets.reduce((acc, s) => {
       const ex = exMap.get(s.exerciseId);
-      const subMult = getSubdivisionMultiplier(ex?.subdivision);
+      const subMult = getSubdivisionMultiplier(s.subdivision ?? ex?.subdivision);
       return acc + s.durationSec * (s.bpm / 60) * subMult;
     }, 0)
   );

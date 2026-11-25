@@ -1372,8 +1372,12 @@ export function App() {
           sessionLogs={activeSessionLogs}
           initialVisualOnly={appState.settings.visualMetronomeOnly}
           initialMetronomeSound={appState.settings.metronomeSound ?? 'woodblock'}
+          initialDroneEnabled={appState.settings.droneEnabled ?? false}
           onChangeMetronomeSound={(sound) =>
             updateSettings({ metronomeSound: sound })
+          }
+          onChangeDroneEnabled={(droneEnabled) =>
+            updateSettings({ droneEnabled })
           }
           onSaveProgress={handleSaveSessionProgress}
           onCompleteSession={handleCompleteSession}

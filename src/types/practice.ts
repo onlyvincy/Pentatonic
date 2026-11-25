@@ -73,7 +73,7 @@ export interface ScientificPlanPrescription {
   doses: ExerciseWeeklyDose[];
 }
 
-export type Subdivision = '1/4' | '1/8' | '1/8T' | '1/16';
+export type Subdivision = '1/4' | '1/8' | '1/8T' | '1/16' | '1/16T';
 
 export type GapClickMode = 'off' | '1-in-4' | 'random-25';
 
@@ -97,6 +97,10 @@ export interface DemoStep {
   muted?: boolean;
   /** True when the note from the previous step sustains through this 1/8 slot without re-plucking (creates 1/4 holds & rhythmic variety) */
   sustain?: boolean;
+  /** Emphasizes beat/step with accented volume & visual marker */
+  accent?: boolean;
+  /** Dynamic level for expression/accent grid drills */
+  dynamic?: 'p' | 'mf' | 'f';
   /** Optional technique hint shown during animated playback (e.g. 'Hammer-On', 'Slide', 'Tenuta 1/4') */
   technique?: string;
 }
@@ -115,6 +119,10 @@ export interface ExerciseVariant {
   overrideGapClick?: GapClickMode;
   /** Allows Step 1-2 picking/fingerstyle variants to force steady 1/8ths (false) even if parent has speedBurst: true */
   overrideSpeedBurst?: boolean;
+  /** Overrides parent exercise subdivision for triplet / 16th / sextuplet drills */
+  overrideSubdivision?: Subdivision;
+  /** Enables 4/4 backbeat metronome (clicks only on beats 2 & 4) */
+  clickBackbeat?: boolean;
   fretboardNotes: FretNote[];
   demoSequence: DemoStep[];
 }
@@ -208,6 +216,7 @@ export interface SetLog {
   durationSec: number;
   cleanliness: CleanlinessScore;
   nextRecommendedBpm: number;
+  subdivision?: Subdivision;
   speedBurst?: boolean;
   timestamp: string;
   savedRecordingId?: string;
@@ -248,6 +257,7 @@ export interface UserSettings {
   shadowplayMode: ShadowplayMode;
   metronomeSound?: MetronomeSoundId;
   visualMetronomeOnly: boolean;
+  droneEnabled?: boolean;
   autoRampPerSet: boolean;
   weeklyGoalDays: number;
   activeProgramId: string;

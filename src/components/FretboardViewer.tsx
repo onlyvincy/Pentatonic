@@ -68,6 +68,10 @@ type StepArticulation =
   | 'slide'
   | 'bend'
   | 'palmmute'
+  | 'tapping'
+  | 'harmonic'
+  | 'sweep'
+  | 'hybrid'
   | 'vibrato'
   | 'sustain'
   | 'muted';
@@ -80,12 +84,37 @@ function getStepArticulation(step: DemoStep | null | undefined): StepArticulatio
   if (tech.includes('palm') || tech.includes('p.m.') || tech.includes('chug')) {
     return 'palmmute';
   }
+  if (tech.includes('tap')) return 'tapping';
+  if (tech.includes('pinch') || tech.includes('armonic') || tech.includes('p.h.')) {
+    return 'harmonic';
+  }
+  if (tech.includes('sweep') || tech.includes('economy')) return 'sweep';
+  if (tech.includes('hybrid') || tech.includes('medio (m)')) return 'hybrid';
   if (tech.includes('hammer')) return 'hammer';
   if (tech.includes('pull')) return 'pull';
   if (tech.includes('slide')) return 'slide';
   if (step.sustain && tech.includes('vibrato')) return 'vibrato';
   if (step.sustain) return 'sustain';
   return 'pick';
+}
+
+function getSubdivisionMetrics(sub?: string): {
+  subsPerBeat: number;
+  slowDemoBpm: number;
+} {
+  switch (sub) {
+    case '1/4':
+      return { subsPerBeat: 1, slowDemoBpm: 56 };
+    case '1/8T':
+      return { subsPerBeat: 3, slowDemoBpm: 50 };
+    case '1/16':
+      return { subsPerBeat: 4, slowDemoBpm: 46 };
+    case '1/16T':
+      return { subsPerBeat: 6, slowDemoBpm: 40 };
+    case '1/8':
+    default:
+      return { subsPerBeat: 2, slowDemoBpm: 56 };
+  }
 }
 
 function getBarreInfo(
@@ -160,6 +189,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
   variant = 'compact',
   demoMode = 'manual',
   externalStepTick,
+  subdivisionLabel = '1/8',
   metronomeSound = 'woodblock',
   stringLabels,
   customStringFreqs,
@@ -218,9 +248,6 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
     : 'fingers';
   const labelMode: LabelMode = userLabelMode ?? defaultLabelMode;
 
-  // Steady didactic half-time tempo in 1/8 subdivision (2 notes per metronome beat)
-  const slowBpm = 56;
-
   const clearTimers = useCallback(() => {
     if (rafRef.current !== null) {
       window.cancelAnimationFrame(rafRef.current);
@@ -263,8 +290,9 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
     (index: number, withSoftMetronome = false) => {
       const step = effectiveSteps[index];
       if (!step || muteAudio) return;
-      if (withSoftMetronome && index % 2 === 0) {
-        playSoftMetronomeTick(index % 8 === 0, metronomeSound);
+      const subsPerBeat = getSubdivisionMetrics(subdivisionLabel).subsPerBeat;
+      if (withSoftMetronome && index % subsPerBeat === 0) {
+        playSoftMetronomeTick(index % (subsPerBeat * 4) === 0, metronomeSound);
       }
       if (customStringFreqs && !step.sustain && !step.muted && step.notes.length > 0) {
         step.notes.forEach((n, idx) => {
@@ -291,11 +319,13 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
           step.notes,
           step.muted,
           step.sustain,
-          step.technique
+          step.technique,
+          step.accent,
+          step.dynamic
         );
       }
     },
-    [effectiveSteps, muteAudio, metronomeSound, customStringFreqs, instrument]
+    [effectiveSteps, muteAudio, subdivisionLabel, metronomeSound, customStringFreqs, instrument]
   );
 
   const startDemo = useCallback(
@@ -315,7 +345,10 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
           : performance.now() / 1000;
       };
 
-      if (speedBurst) {
+      const useBurstDemo =
+        speedBurst && (subdivisionLabel === '1/8' || subdivisionLabel === '1/4');
+
+      if (useBurstDemo) {
         const demoBpm =
           mode === 'slow-intro' ? 62 : Math.max(40, Math.min(240, bpm));
         const sixteenthSec = 60 / demoBpm / 4;
@@ -386,14 +419,17 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
         return;
       }
 
+      const { subsPerBeat, slowDemoBpm } = getSubdivisionMetrics(subdivisionLabel);
+
       if (mode === 'slow-intro') {
-        const stepSec = 60 / slowBpm / 2;
+        const stepSec = 60 / slowDemoBpm / subsPerBeat;
         const totalStepsPerPass = effectiveSteps.length;
-        const passes = totalStepsPerPass >= 16 ? 1 : 2;
+        const passes = totalStepsPerPass >= 12 ? 1 : 2;
         const startAnchor = getNowSec();
         let lastTriggeredTotalIdx = 0;
 
         setActiveStepIndex(0);
+        setInternalBeatIdx(0);
         triggerStepAudio(0, true);
 
         const loopSlow = () => {
@@ -405,6 +441,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
             endTimeoutRef.current = window.setTimeout(() => {
               setIsPlayingDemo(false);
               setActiveStepIndex(null);
+              setInternalBeatIdx(null);
               onDemoCompleteRef.current?.();
             }, Math.round(stepSec * 400));
             return;
@@ -414,6 +451,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
             lastTriggeredTotalIdx = totalIdx;
             const stepIdx = totalIdx % totalStepsPerPass;
             setActiveStepIndex(stepIdx);
+            setInternalBeatIdx(Math.floor(stepIdx / subsPerBeat) % 4);
             triggerStepAudio(stepIdx, true);
           }
 
@@ -426,7 +464,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
 
       if (mode === 'live-loop') {
         const beatSec = 60 / Math.max(40, Math.min(240, bpm));
-        const stepSec = Math.max(0.24, Math.min(0.6, beatSec / 2));
+        const stepSec = Math.max(0.11, Math.min(0.65, beatSec / subsPerBeat));
         const startAnchor = getNowSec();
         let lastIdx = 0;
 
@@ -449,8 +487,8 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
         return;
       }
 
-      // 'manual' mode: 1/8 note pace synced to BPM on audio clock
-      const stepSec = Math.max(0.24, Math.min(0.55, 60 / bpm / 2));
+      // 'manual' mode: synced to BPM & subdivision on audio clock
+      const stepSec = Math.max(0.11, Math.min(0.6, 60 / bpm / subsPerBeat));
       const startAnchor = getNowSec();
       let lastIdx = 0;
 
@@ -485,6 +523,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
       demoMode,
       bpm,
       speedBurst,
+      subdivisionLabel,
       muteAudio,
       metronomeSound,
       clearTimers,
@@ -505,6 +544,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
   const externalBurstResolved =
     usesExternalClock &&
     speedBurst &&
+    (subdivisionLabel === '1/8' || subdivisionLabel === '1/4') &&
     !forceStopDemo &&
     externalStepTick !== null &&
     effectiveSteps.length > 0
@@ -531,7 +571,9 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
         step.notes,
         step.muted,
         step.sustain,
-        step.technique
+        step.technique,
+        step.accent,
+        step.dynamic
       );
     }
   }, [
@@ -2031,24 +2073,73 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
     </div>
   );
 
-  // Instant 0ms highlight 8-slot 4/4 cyclic rhythm grid (slices 8-step bars for multi-bar progressions)
-  const totalBars = Math.max(1, Math.ceil(effectiveSteps.length / 8));
+  const { subsPerBeat } = getSubdivisionMetrics(subdivisionLabel);
+  const gridChunkSize =
+    subdivisionLabel === '1/4'
+      ? 4
+      : subdivisionLabel === '1/8T'
+      ? effectiveSteps.length === 6
+        ? 6
+        : 12
+      : subdivisionLabel === '1/16T'
+      ? 6
+      : 8;
+  const gridColsClass =
+    gridChunkSize === 4
+      ? 'grid-cols-4'
+      : gridChunkSize === 6
+      ? 'grid-cols-6'
+      : gridChunkSize === 12
+      ? 'grid-cols-12'
+      : 'grid-cols-8';
+
+  const totalBars = Math.max(1, Math.ceil(effectiveSteps.length / gridChunkSize));
   const activeBarIdx =
     effectiveActiveStepIndex !== null
-      ? Math.floor(effectiveActiveStepIndex / 8) % totalBars
+      ? Math.floor(effectiveActiveStepIndex / gridChunkSize) % totalBars
       : 0;
-  const barOffset = activeBarIdx * 8;
-  const barSteps = effectiveSteps.slice(barOffset, barOffset + 8);
+  const barOffset = activeBarIdx * gridChunkSize;
+  const barSteps = effectiveSteps.slice(barOffset, barOffset + gridChunkSize);
   const activeTechniqueLabel =
     effectiveActiveStepIndex !== null ? activeStep?.technique : undefined;
 
+  const getSlotLabel = (idx: number): string => {
+    if (subdivisionLabel === '1/4') {
+      return String(idx + 1);
+    }
+    if (subdivisionLabel === '1/8T') {
+      const tripletLabels = ['1', 't', 'a', '2', 't', 'a', '3', 't', 'a', '4', 't', 'a'];
+      return tripletLabels[idx] ?? String(idx + 1);
+    }
+    if (subdivisionLabel === '1/16') {
+      const firstHalf = ['1', 'e', '&', 'a', '2', 'e', '&', 'a'];
+      const secondHalf = ['3', 'e', '&', 'a', '4', 'e', '&', 'a'];
+      return (activeBarIdx % 2 === 0 ? firstHalf : secondHalf)[idx] ?? String(idx + 1);
+    }
+    if (subdivisionLabel === '1/16T') {
+      const beatNum = (activeBarIdx % 4) + 1;
+      const sextLabels = [String(beatNum), '·', '·', '&', '·', '·'];
+      return sextLabels[idx] ?? '·';
+    }
+    return BAR_8_LABELS[idx] ?? String(idx + 1);
+  };
+
   const rhythmGridBar =
-    !interactive && barSteps.length > 0 && effectiveSteps.length <= 32 ? (
-      <div className="grid grid-cols-8 gap-1 w-full min-w-0">
+    !interactive && barSteps.length > 0 && effectiveSteps.length <= 64 ? (
+      <div className={`grid ${gridColsClass} gap-1 w-full min-w-0`}>
         {barSteps.map((step, idx) => {
           const isActive = effectiveActiveStepIndex === barOffset + idx;
-          const slotLabel = BAR_8_LABELS[idx] ?? String(idx + 1);
-          const isDownbeat = idx % 2 === 0;
+          const slotLabel = getSlotLabel(idx);
+          const isDownbeat =
+            subdivisionLabel === '1/4'
+              ? true
+              : subdivisionLabel === '1/8T'
+              ? idx % 3 === 0
+              : subdivisionLabel === '1/16'
+              ? idx % 4 === 0
+              : subdivisionLabel === '1/16T'
+              ? idx === 0
+              : idx % 2 === 0;
           const art = getStepArticulation(step);
           const degreeLabel = step.notes[0]?.label;
           const isChordDegree =
@@ -2061,14 +2152,29 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
               degreeLabel === '7' ||
               degreeLabel === 'b7' ||
               degreeLabel === '8');
+          const isAccented = Boolean(step.accent || step.dynamic === 'f');
+          const isSoft = step.dynamic === 'p';
           const isArticulatedSlot =
+            isAccented ||
             art === 'hammer' ||
             art === 'pull' ||
             art === 'slide' ||
             art === 'bend' ||
-            art === 'palmmute';
+            art === 'palmmute' ||
+            art === 'tapping' ||
+            art === 'harmonic' ||
+            art === 'sweep' ||
+            art === 'hybrid';
           const symbol = isChordDegree
             ? degreeLabel
+            : art === 'tapping'
+            ? 'T'
+            : art === 'harmonic'
+            ? '◇'
+            : art === 'sweep'
+            ? 'SW'
+            : art === 'hybrid'
+            ? 'm'
             : art === 'bend'
             ? '↑'
             : art === 'palmmute'
@@ -2085,6 +2191,8 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
             ? '—'
             : art === 'muted'
             ? '×'
+            : isAccented
+            ? '>'
             : '●';
 
           return (
@@ -2093,12 +2201,14 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
               className={`min-w-0 flex flex-col items-center justify-center rounded-lg border py-1 text-[10px] font-bold tabular-nums ${
                 isActive
                   ? 'border-[#39FF14] bg-[#39FF14] text-black'
+                  : isAccented
+                  ? 'border-[#39FF14]/65 bg-[#39FF14]/10 text-[#39FF14]'
                   : isArticulatedSlot
                   ? 'border-[#39FF14]/35 bg-black text-[#39FF14]'
                   : isDownbeat
                   ? 'border-white/15 bg-black text-white/75'
                   : 'border-white/10 bg-black text-white/40'
-              }`}
+              } ${!isActive && isSoft ? 'opacity-55' : ''}`}
             >
               <span className="leading-none">{slotLabel}</span>
               <span className="mt-0.5 text-[9px] leading-none">{symbol}</span>
@@ -2139,7 +2249,7 @@ export const FretboardViewer: React.FC<FretboardViewerProps> = ({
       internalBeatIdx !== null
         ? internalBeatIdx
         : effectiveActiveStepIndex !== null
-        ? Math.floor(effectiveActiveStepIndex / 2) % 4
+        ? Math.floor(effectiveActiveStepIndex / subsPerBeat) % 4
         : -1;
 
     return (

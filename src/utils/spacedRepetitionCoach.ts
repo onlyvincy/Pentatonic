@@ -125,6 +125,10 @@ export type TechniqueId =
   | 'bending-vibrato'
   | 'pick-escape'
   | 'barre-clamp'
+  | 'economy-sweep'
+  | 'hybrid-pick'
+  | 'tapping'
+  | 'strumming-dynamics'
   | 'bass-fingerstyle'
   | 'bass-slap-pop'
   | 'bass-ghost-pocket'
@@ -352,6 +356,70 @@ export const TECHNIQUE_GUIDES: Record<TechniqueId, TechniqueGuide> = {
       rightHand: 'Pizzica la prima nota e tieni mute le corde vicine.',
     },
     commonMistake: 'Colpire al centro del tasto o perdere pressione nello slide.',
+  },
+  'economy-sweep': {
+    id: 'economy-sweep',
+    name: 'Economy & Sweep',
+    subtitle: 'Rest-stroke continuo',
+    whatItIs: 'Attraversa corde adiacenti in un unico movimento fluido senza scatti.',
+    howToSteps: [
+      'Inclina il plettro nella direzione della corda successiva.',
+      'Lascia cadere la punta sulla corda sotto (rest-stroke).',
+      'Ferma la corda appena suonata sollevando il dito sinistro.',
+    ],
+    handFocus: {
+      leftHand: 'Una nota alla volta: rilascia il tasto precedente per evitare impasti.',
+      rightHand: 'Polso continuo a caduta controllata, mai colpi separati.',
+    },
+    commonMistake: 'Plettrare le corde singolarmente o farle risuonare insieme.',
+  },
+  'hybrid-pick': {
+    id: 'hybrid-pick',
+    name: 'Hybrid Picking',
+    subtitle: 'Plettro + dita',
+    whatItIs: 'Combina plettro sui bassi e medio/anulare sulle corde acute.',
+    howToSteps: [
+      'Tieni il plettro tra pollice e indice.',
+      'Pizzica i cantini verso l’alto con medio e anulare.',
+      'Pareggia il volume tra plettro e dita.',
+    ],
+    handFocus: {
+      leftHand: 'Pressione netta anche sulle corde pizzicate da medio e anulare.',
+      rightHand: 'Mano compatta vicino al ponte senza irrigidire la presa del plettro.',
+    },
+    commonMistake: 'Allargare il braccio destro strappando troppo forte coi cantini.',
+  },
+  tapping: {
+    id: 'tapping',
+    name: 'Tapping',
+    subtitle: 'Martelletto destro',
+    whatItIs: 'Usa l’indice o medio destro sulla tastiera in sequenza col legato sinistro.',
+    howToSteps: [
+      'Appoggia il palmo destro sul manico per smorzare i ronzii.',
+      'Martella deciso appena dietro la barretta.',
+      'Tira leggermente verso il basso al rilascio.',
+    ],
+    handFocus: {
+      leftHand: 'Dita pronte su nota base e primo pull-off.',
+      rightHand: 'Indice/medio perpendicolari con flick laterale pulito.',
+    },
+    commonMistake: 'Sollevare il dito verticalmente invece di pizzicare leggermente.',
+  },
+  'strumming-dynamics': {
+    id: 'strumming-dynamics',
+    name: 'Strum & Dinamica',
+    subtitle: 'Pendolo e accenti',
+    whatItIs: 'Polso continuo in ottavi alternando colpi ampi (f) e tocchi leggeri (p).',
+    howToSteps: [
+      'Tieni il polso destro sempre in movimento costante.',
+      'Varia l’ampiezza tra colpi forti e corde acute leggere.',
+      'Usa le stoppate sui battere accentati.',
+    ],
+    handFocus: {
+      leftHand: 'Mantieni l’accordo fermo anche nei colpi leggeri o a vuoto.',
+      rightHand: 'Pendolo fluido dal gomito/polso senza mai fermarsi.',
+    },
+    commonMistake: 'Fermare il braccio quando non colpisci le corde o colpire sempre uguale.',
   },
 };
 
@@ -663,7 +731,8 @@ function detectTechniquesFromSteps(
       step.muted ||
       tech.includes('stoppata') ||
       tech.includes('ghost') ||
-      tech.includes('silenzio')
+      tech.includes('silenzio') ||
+      tech.includes('chuck')
     ) {
       found.add('stoppata-ghost');
     }
@@ -673,8 +742,20 @@ function detectTechniquesFromSteps(
     if (tech.includes('hammer') || tech.includes('pull') || tech.includes('trill')) {
       found.add('hammer-pull');
     }
-    if (tech.includes('bend') || tech.includes('vibrato')) {
+    if (tech.includes('bend') || tech.includes('vibrato') || tech.includes('pinch')) {
       found.add('bending-vibrato');
+    }
+    if (tech.includes('sweep') || tech.includes('economy') || tech.includes('rest-stroke')) {
+      found.add('economy-sweep');
+    }
+    if (tech.includes('hybrid')) {
+      found.add('hybrid-pick');
+    }
+    if (tech.includes('tap')) {
+      found.add('tapping');
+    }
+    if (tech.includes('strum') || tech.includes('pendolo') || step.accent) {
+      found.add('strumming-dynamics');
     }
     if (step.notes.length >= 3) {
       found.add('barre-clamp');

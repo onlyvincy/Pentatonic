@@ -163,6 +163,7 @@ export function isIosMicSessionActive(): boolean {
  * so subsequent metronome/demo playback opens a clean 'playback' context routed to main speakers.
  */
 export function recoverPlaybackAfterMic(): void {
+  stopBackingDrone();
   iosMicSessionActive = false;
   configureIosPlaybackSession();
 
@@ -542,6 +543,7 @@ export function playGuitarFrequency(
     delaySec?: number;
     bendSemitones?: number;
     palmMute?: boolean;
+    harmonic?: boolean;
   }
 ): void {
   try {
@@ -549,19 +551,21 @@ export function playGuitarFrequency(
     if (!ctx) return;
 
     const palmMute = Boolean(options?.palmMute);
+    const harmonic = Boolean(options?.harmonic);
     const bendSemitones = options?.bendSemitones ?? 0;
+    const effectiveFreq = harmonic ? freq * 2 : freq;
     const durationSec = palmMute
       ? Math.min(options?.durationSec ?? 0.2, 0.2)
       : options?.durationSec ?? 1.25;
     const volume = options?.volume ?? 0.52;
     const startTime = ctx.currentTime + (options?.delaySec ?? 0);
 
-    const anchor = selectNearestSampleAnchor(freq);
+    const anchor = selectNearestSampleAnchor(effectiveFreq);
     const source = ctx.createBufferSource();
 
     if (anchor && anchor.buffer) {
       source.buffer = anchor.buffer;
-      const baseRate = freq / anchor.baseFreq;
+      const baseRate = effectiveFreq / anchor.baseFreq;
       source.playbackRate.setValueAtTime(baseRate, startTime);
       if (bendSemitones > 0) {
         const targetRate = baseRate * Math.pow(2, bendSemitones / 12);
@@ -596,6 +600,14 @@ export function playGuitarFrequency(
         source.connect(thump);
         thump.connect(lp);
         lp.connect(gain);
+      } else if (harmonic) {
+        const pinchPeak = ctx.createBiquadFilter();
+        pinchPeak.type = 'peaking';
+        pinchPeak.frequency.setValueAtTime(Math.min(4200, effectiveFreq * 2.5), startTime);
+        pinchPeak.Q.setValueAtTime(3.0, startTime);
+        pinchPeak.gain.setValueAtTime(7.0, startTime);
+        source.connect(pinchPeak);
+        pinchPeak.connect(gain);
       } else {
         source.connect(gain);
       }
@@ -605,7 +617,7 @@ export function playGuitarFrequency(
       return;
     }
 
-    source.buffer = createPluckBuffer(ctx, freq, durationSec);
+    source.buffer = createPluckBuffer(ctx, effectiveFreq, durationSec);
     if (bendSemitones > 0) {
       source.playbackRate.setValueAtTime(1, startTime + 0.025);
       source.playbackRate.exponentialRampToValueAtTime(
@@ -622,18 +634,18 @@ export function playGuitarFrequency(
 
     const clarityPeak = ctx.createBiquadFilter();
     clarityPeak.type = 'peaking';
-    clarityPeak.frequency.setValueAtTime(2400, startTime);
-    clarityPeak.Q.setValueAtTime(1.4, startTime);
-    clarityPeak.gain.setValueAtTime(palmMute ? -4.0 : 2.5, startTime);
+    clarityPeak.frequency.setValueAtTime(harmonic ? 3100 : 2400, startTime);
+    clarityPeak.Q.setValueAtTime(harmonic ? 2.8 : 1.4, startTime);
+    clarityPeak.gain.setValueAtTime(palmMute ? -4.0 : harmonic ? 6.5 : 2.5, startTime);
 
     const lowpass = ctx.createBiquadFilter();
     lowpass.type = 'lowpass';
     lowpass.frequency.setValueAtTime(
-      palmMute ? 680 : Math.min(5800, freq * 10),
+      palmMute ? 680 : Math.min(5800, effectiveFreq * 10),
       startTime
     );
     lowpass.frequency.exponentialRampToValueAtTime(
-      palmMute ? 340 : Math.max(1100, freq * 3),
+      palmMute ? 340 : Math.max(1100, effectiveFreq * 3),
       startTime + durationSec
     );
 
@@ -666,6 +678,7 @@ export function playGuitarPluck(
     delaySec?: number;
     bendSemitones?: number;
     palmMute?: boolean;
+    harmonic?: boolean;
   }
 ): void {
   const freq = getGuitarFrequency(stringNum, fret);
@@ -719,43 +732,53 @@ export function playGuitarStep(
   notes: { string: 1 | 2 | 3 | 4 | 5 | 6; fret: number }[],
   muted = false,
   sustain = false,
-  technique?: string
+  technique?: string,
+  accent?: boolean,
+  dynamic?: 'p' | 'mf' | 'f'
 ): void {
   if (sustain) {
     return;
   }
 
   if (muted || notes.length === 0) {
-    playMutedStrum();
+    playMutedStrum(dynamic === 'p' ? 0.16 : accent || dynamic === 'f' ? 0.34 : 0.28);
     return;
   }
 
   const tech = (technique || '').toLowerCase();
   const palmMute = tech.includes('palm') || tech.includes('p.m.');
+  const harmonic =
+    tech.includes('pinch') || tech.includes('armonic') || tech.includes('p.h.');
   const bendSemitones = tech.includes('bend')
     ? tech.includes('1/2') || tech.includes('½')
       ? 1
       : 2
     : 0;
 
+  const dynScale =
+    dynamic === 'p' ? 0.5 : accent || dynamic === 'f' ? 1.22 : 1.0;
+
   if (notes.length === 1) {
+    const baseVol = palmMute ? 0.48 : 0.54;
     playGuitarPluck(notes[0].string, notes[0].fret, {
       durationSec: palmMute ? 0.2 : 1.25,
-      volume: palmMute ? 0.48 : 0.54,
+      volume: Math.min(0.72, baseVol * dynScale),
       bendSemitones,
       palmMute,
+      harmonic,
     });
     return;
   }
 
   const ordered = [...notes].sort((a, b) => b.string - a.string);
-  const perNoteVol = Math.min(0.36, 0.78 / ordered.length);
+  const perNoteVol = Math.min(0.42, (0.78 / ordered.length) * dynScale);
   ordered.forEach((n, idx) => {
     playGuitarPluck(n.string, n.fret, {
       durationSec: palmMute ? 0.2 : 1.35,
       volume: perNoteVol,
       delaySec: idx * 0.016,
       palmMute,
+      harmonic,
     });
   });
 }
@@ -1017,10 +1040,12 @@ export function playInstrumentStep(
   notes: { string: 1 | 2 | 3 | 4 | 5 | 6; fret: number }[],
   muted = false,
   sustain = false,
-  technique?: string
+  technique?: string,
+  accent?: boolean,
+  dynamic?: 'p' | 'mf' | 'f'
 ): void {
   if (instrument === 'guitar') {
-    playGuitarStep(notes, muted, sustain, technique);
+    playGuitarStep(notes, muted, sustain, technique, accent, dynamic);
     return;
   }
 
@@ -1251,5 +1276,217 @@ export function playSoftMetronomeTick(
     playMetronomeClick(ctx, targetTime, isDownbeat ? 'accent' : 'beat', soundId);
   } catch {
     // Ignore in restricted environments
+  }
+}
+
+export type DroneQuality = 'minor' | 'major' | 'power';
+
+interface ActiveDroneState {
+  ctx: AudioContext;
+  rootOsc: OscillatorNode;
+  fifthOsc: OscillatorNode;
+  colorOsc: OscillatorNode;
+  colorGain: GainNode;
+  masterGain: GainNode;
+  stopTimer: number | null;
+}
+
+let activeDrone: ActiveDroneState | null = null;
+
+const NOTE_BASE_HZ_MAP: Record<string, number> = {
+  E: 82.4069,
+  F: 87.3071,
+  'F#': 92.4986,
+  Gb: 92.4986,
+  G: 97.9989,
+  'G#': 103.8262,
+  Ab: 103.8262,
+  A: 110.0,
+  'A#': 116.5409,
+  Bb: 116.5409,
+  B: 123.4708,
+  C: 130.8128,
+  'C#': 138.5913,
+  Db: 138.5913,
+  D: 146.8324,
+  'D#': 155.5635,
+  Eb: 155.5635,
+};
+
+export function resolveChordDroneParams(
+  chordLabel?: string,
+  transposeSemitones = 0
+): { rootHz: number; quality: DroneQuality } {
+  const defaultRoot = 110.0 * Math.pow(2, transposeSemitones / 12);
+  if (!chordLabel) {
+    return { rootHz: defaultRoot, quality: 'minor' };
+  }
+
+  // Extract chord token e.g. "i (Am)" -> "Am", "VI (Fmaj7)" -> "Fmaj7", "Am" -> "Am"
+  const parenMatch = chordLabel.match(/\(([^)]+)\)/);
+  const rawToken = (parenMatch ? parenMatch[1] : chordLabel).trim();
+  const rootMatch = rawToken.match(/^([A-G][#b]?)/);
+  const baseHz = rootMatch
+    ? NOTE_BASE_HZ_MAP[rootMatch[1]] ?? 110.0
+    : 110.0;
+
+  let quality: DroneQuality = 'major';
+  if (
+    rawToken.includes('5') ||
+    rawToken.includes('°') ||
+    rawToken.toLowerCase().includes('dim')
+  ) {
+    quality = 'power';
+  } else if (/^[A-G][#b]?m(?!aj)/i.test(rawToken)) {
+    quality = 'minor';
+  }
+
+  return {
+    rootHz: baseHz * Math.pow(2, transposeSemitones / 12),
+    quality,
+  };
+}
+
+function getDroneColorFreq(rootHz: number, quality: DroneQuality): number {
+  if (quality === 'minor') return rootHz * 2 * Math.pow(2, 3 / 12);
+  if (quality === 'major') return rootHz * 2 * Math.pow(2, 4 / 12);
+  return rootHz * 2;
+}
+
+export function stopBackingDrone(): void {
+  const d = activeDrone;
+  if (!d) return;
+  activeDrone = null;
+  if (d.stopTimer !== null && typeof window !== 'undefined') {
+    window.clearTimeout(d.stopTimer);
+  }
+  try {
+    const now = d.ctx.currentTime;
+    d.masterGain.gain.cancelScheduledValues(now);
+    d.masterGain.gain.setValueAtTime(
+      Math.max(0.0001, d.masterGain.gain.value),
+      now
+    );
+    d.masterGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.14);
+    const cleanup = () => {
+      try {
+        d.rootOsc.stop();
+        d.fifthOsc.stop();
+        d.colorOsc.stop();
+        d.rootOsc.disconnect();
+        d.fifthOsc.disconnect();
+        d.colorOsc.disconnect();
+        d.masterGain.disconnect();
+      } catch {
+        // ignore
+      }
+    };
+    if (typeof window !== 'undefined') {
+      window.setTimeout(cleanup, 170);
+    } else {
+      cleanup();
+    }
+  } catch {
+    // ignore
+  }
+}
+
+export function updateBackingDrone(
+  rootHz: number,
+  quality: DroneQuality = 'minor'
+): void {
+  const ctx = getAudioContext();
+  if (!ctx || (ctx.state as string) === 'closed') return;
+  if (!activeDrone || activeDrone.ctx !== ctx) {
+    startBackingDrone(rootHz, quality);
+    return;
+  }
+  try {
+    const now = ctx.currentTime;
+    activeDrone.rootOsc.frequency.setTargetAtTime(rootHz, now, 0.045);
+    activeDrone.fifthOsc.frequency.setTargetAtTime(rootHz * 1.4983, now, 0.045);
+    activeDrone.colorOsc.frequency.setTargetAtTime(
+      getDroneColorFreq(rootHz, quality),
+      now,
+      0.045
+    );
+    activeDrone.colorGain.gain.setTargetAtTime(
+      quality === 'power' ? 0.12 : 0.18,
+      now,
+      0.045
+    );
+  } catch {
+    // ignore
+  }
+}
+
+export function startBackingDrone(
+  rootHz: number,
+  quality: DroneQuality = 'minor'
+): void {
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    if (activeDrone && activeDrone.ctx === ctx) {
+      updateBackingDrone(rootHz, quality);
+      return;
+    }
+    stopBackingDrone();
+
+    const now = ctx.currentTime;
+    const rootOsc = ctx.createOscillator();
+    rootOsc.type = 'triangle';
+    rootOsc.frequency.setValueAtTime(rootHz, now);
+
+    const fifthOsc = ctx.createOscillator();
+    fifthOsc.type = 'sine';
+    fifthOsc.frequency.setValueAtTime(rootHz * 1.4983, now);
+
+    const colorOsc = ctx.createOscillator();
+    colorOsc.type = 'sine';
+    colorOsc.frequency.setValueAtTime(getDroneColorFreq(rootHz, quality), now);
+
+    const rootGain = ctx.createGain();
+    rootGain.gain.setValueAtTime(0.46, now);
+
+    const fifthGain = ctx.createGain();
+    fifthGain.gain.setValueAtTime(0.28, now);
+
+    const colorGain = ctx.createGain();
+    colorGain.gain.setValueAtTime(quality === 'power' ? 0.12 : 0.18, now);
+
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(420, now);
+    lp.Q.setValueAtTime(0.7, now);
+
+    const masterGain = ctx.createGain();
+    masterGain.gain.setValueAtTime(0.0001, now);
+    masterGain.gain.exponentialRampToValueAtTime(0.068, now + 0.28);
+
+    rootOsc.connect(rootGain);
+    fifthOsc.connect(fifthGain);
+    colorOsc.connect(colorGain);
+    rootGain.connect(lp);
+    fifthGain.connect(lp);
+    colorGain.connect(lp);
+    lp.connect(masterGain);
+    masterGain.connect(ctx.destination);
+
+    rootOsc.start(now);
+    fifthOsc.start(now);
+    colorOsc.start(now);
+
+    activeDrone = {
+      ctx,
+      rootOsc,
+      fifthOsc,
+      colorOsc,
+      colorGain,
+      masterGain,
+      stopTimer: null,
+    };
+  } catch {
+    // ignore in restricted environments
   }
 }

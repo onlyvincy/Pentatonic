@@ -318,6 +318,40 @@ const DOSE_COPY_BY_EXERCISE: Record<
   },
 };
 
+/**
+ * Calibrates single-set duration (in seconds) using motor-learning intervals:
+ * - High-speed / high-CNS focus: 45s
+ * - Precision / phrasing / coordination: 55s
+ * - Groove / pocket timing: 60s
+ * - Chord transitions / arpeggios: 70s
+ */
+export function getOptimalSetDurationSec(exerciseId: string): number {
+  switch (exerciseId) {
+    case 'ex-speed-bursts':
+    case 'ex-legato-trill':
+    case 'ex-bass-fingerstyle':
+    case 'ex-bass-slap-pop':
+      return 45;
+    case 'ex-picking-spider':
+    case 'ex-pent-licks':
+    case 'ex-pent-diagonal':
+    case 'ex-lead-bending':
+    case 'ex-bass-spider-muting':
+    case 'ex-bass-neck-legato':
+      return 55;
+    case 'ex-rhythm-palmmute':
+    case 'ex-rhythm-gap':
+    case 'ex-bass-pocket-groove':
+      return 60;
+    case 'ex-harmony-scale':
+    case 'ex-arpeggio-progressions':
+    case 'ex-bass-arpeggios':
+      return 70;
+    default:
+      return 55;
+  }
+}
+
 export function generateScientificPrescription(
   answers: DiagnosticQuizAnswers,
   exercises: Exercise[]
@@ -623,7 +657,7 @@ export function generateScientificPrescription(
       weeklyMinSets: item.minSets,
       weeklyOptimalSets: Math.max(item.minSets + 2, item.optSets),
       setsPerSession: item.setsPerSession,
-      setDurationSec: item.durationSec,
+      setDurationSec: getOptimalSetDurationSec(item.id),
       restSec: 15,
       coachMethod: copy.coachMethod,
       scientificRationale: copy.scientificRationale,
@@ -1111,26 +1145,26 @@ export function buildSessionPlanFromPrescription(
   const targetTotalSec = preset * 60;
   const restSec = 15;
   const baseDurByPreset: Record<SessionDurationPreset, number> = {
-    5: 85,
-    15: 95,
-    30: 105,
-    45: 120,
+    5: 45,
+    15: 55,
+    30: 60,
+    45: 65,
   };
 
   const numExercises = Math.max(1, chosenProgressItems.length);
   const baseDur = baseDurByPreset[preset];
-  const maxTotalSets = numExercises * 10;
+  const maxTotalSets = numExercises * 12;
   const rawTotalSets = Math.round(targetTotalSec / (baseDur + restSec));
   const totalSets = Math.min(
     maxTotalSets,
     Math.max(numExercises, rawTotalSets)
   );
 
-  // Fine-tune per-set duration (in 5s steps, clamped 45s..150s) to match preset minutes
+  // Fine-tune per-set duration (in 5s steps, clamped 45s..75s) for crisp motor-learning blocks
   const idealSetDur = targetTotalSec / totalSets - restSec;
   const durationSec = Math.max(
     45,
-    Math.min(150, Math.round(idealSetDur / 5) * 5)
+    Math.min(75, Math.round(idealSetDur / 5) * 5)
   );
 
   const baseSetsPerEx = Math.floor(totalSets / numExercises);

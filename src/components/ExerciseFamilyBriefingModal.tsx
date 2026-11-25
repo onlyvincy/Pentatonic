@@ -1077,6 +1077,75 @@ export const TechniqueHandAnimator: React.FC<TechniqueHandAnimatorProps> = ({
             </text>
           </g>
         )}
+
+        {techniqueId === 'economy-sweep' && (
+          <g>
+            {[32, 54, 76, 98].map((y) => (
+              <line key={y} x1="28" y1={y} x2="332" y2={y} stroke="rgba(255,255,255,0.25)" strokeWidth="1.4" />
+            ))}
+            <line x1="120" y1="24" x2="230" y2="106" stroke="#39FF14" strokeWidth="3" strokeDasharray="5 3" />
+            <circle cx="128" cy="32" r="8" fill="#39FF14" />
+            <circle cx="168" cy="54" r="8" fill="#39FF14" />
+            <circle cx="208" cy="76" r="8" fill="#39FF14" />
+            <circle cx="242" cy="98" r="8" fill="#FFFFFF" stroke="#39FF14" strokeWidth="2" />
+            <text x="180" y="138" textAnchor="middle" fontSize="9" fontWeight="900" fill="#39FF14">
+              SCIVOLATA CONTINUA DEL PLETTRO · UN SOLO MOVIMENTO FLUIDO
+            </text>
+          </g>
+        )}
+
+        {techniqueId === 'hybrid-pick' && (
+          <g>
+            {[32, 54, 76, 98].map((y) => (
+              <line key={y} x1="28" y1={y} x2="332" y2={y} stroke="rgba(255,255,255,0.25)" strokeWidth="1.4" />
+            ))}
+            <circle cx="120" cy="98" r="10" fill="#39FF14" />
+            <text x="120" y="102" textAnchor="middle" fontSize="9" fontWeight="900" fill="#000">P</text>
+            <circle cx="200" cy="54" r="10" fill="#38BDF8" />
+            <text x="200" y="58" textAnchor="middle" fontSize="9" fontWeight="900" fill="#000">M</text>
+            <circle cx="248" cy="32" r="10" fill="#FFFFFF" />
+            <text x="248" y="36" textAnchor="middle" fontSize="9" fontWeight="900" fill="#000">A</text>
+            <text x="180" y="138" textAnchor="middle" fontSize="9" fontWeight="900" fill="#39FF14">
+              PLETTRO SUI BASSI · MEDIO E ANULARE PIZZICANO I CANTINI
+            </text>
+          </g>
+        )}
+
+        {techniqueId === 'tapping' && (
+          <g>
+            {[32, 54, 76, 98].map((y) => (
+              <line key={y} x1="28" y1={y} x2="332" y2={y} stroke="rgba(255,255,255,0.25)" strokeWidth="1.4" />
+            ))}
+            <circle cx="105" cy="54" r="9" fill="#FFFFFF" stroke="#39FF14" strokeWidth="2" />
+            <text x="105" y="57" textAnchor="middle" fontSize="9" fontWeight="900" fill="#000">1</text>
+            <circle cx="165" cy="54" r="9" fill="#39FF14" />
+            <text x="165" y="57" textAnchor="middle" fontSize="9" fontWeight="900" fill="#000">H</text>
+            <circle cx="255" cy="54" r="12" fill="#FBBF24" stroke="#FFFFFF" strokeWidth="2" />
+            <text x="255" y="58" textAnchor="middle" fontSize="9.5" fontWeight="900" fill="#000">T</text>
+            <text x="180" y="138" textAnchor="middle" fontSize="9" fontWeight="900" fill="#FBBF24">
+              COLPO DECISO SULLA CORDA E FLICK LATERALE AL RILASCIO
+            </text>
+          </g>
+        )}
+
+        {techniqueId === 'strumming-dynamics' && (
+          <g>
+            {[0, 1, 2, 3].map((i) => (
+              <rect
+                key={i}
+                x={86 + i * 52}
+                y={i === 0 || i === 2 ? 32 : 66}
+                width="26"
+                height={i === 0 || i === 2 ? 72 : 38}
+                rx="6"
+                fill={i === 0 || i === 2 ? '#39FF14' : 'rgba(255,255,255,0.28)'}
+              />
+            ))}
+            <text x="180" y="138" textAnchor="middle" fontSize="9" fontWeight="900" fill="#39FF14">
+              POLSO PENDOLO COSTANTE · ACCENTI AMPI E GHOST LEGGERE
+            </text>
+          </g>
+        )}
       </svg>
     </div>
   );

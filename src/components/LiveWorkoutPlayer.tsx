@@ -4,6 +4,7 @@ import {
   Check,
   FastForward,
   HelpCircle,
+  Music,
   Pause,
   Play,
   RotateCcw,
@@ -28,16 +29,21 @@ import {
   getExerciseInstrument,
 } from '../types/practice';
 import {
+  PlateauIntervention,
   calculateGoldilocksNextBpm,
   calculateWarmupBpm,
+  canTransposeNotes,
+  computeAdvancedTransposeOffset,
   computeExerciseStreakContext,
   computeWeightedExerciseBpm,
+  detectPlateauIntervention,
   getLevelFilteredVariants,
   isVariantMastered,
   pickEasierVariantInSession,
   pickNextRecommendedVariant,
   pickNextVariantInSession,
   shouldEnableSpeedBurstForSkill,
+  transposeVariantData,
 } from '../utils/overloadEngine';
 import { useMetronome } from '../hooks/useMetronome';
 import { useWakeLock } from '../hooks/useWakeLock';
@@ -46,7 +52,11 @@ import {
   isIosMicSessionActive,
   playSoftMetronomeTick,
   recoverPlaybackAfterMic,
+  resolveChordDroneParams,
+  startBackingDrone,
+  stopBackingDrone,
   unlockSharedAudioContext,
+  updateBackingDrone,
 } from '../utils/guitarSynth';
 import {
   ARPEGGIO_EXERCISE_ID,
@@ -84,7 +94,9 @@ interface LiveWorkoutPlayerProps {
   sessionLogs?: WorkoutSessionLog[];
   initialVisualOnly: boolean;
   initialMetronomeSound?: MetronomeSoundId;
+  initialDroneEnabled?: boolean;
   onChangeMetronomeSound?: (sound: MetronomeSoundId) => void;
+  onChangeDroneEnabled?: (enabled: boolean) => void;
   onSaveProgress?: (
     sessionLog: WorkoutSessionLog,
     updatedBpmByExercise: SessionBpmUpdateMap
@@ -118,19 +130,29 @@ const RATING_TEXT: Record<CleanlinessScore, string> = {
   5: 'Perfetta e facile',
 };
 
-const SUBDIVISIONS: Subdivision[] = ['1/4', '1/8', '1/8T', '1/16'];
+const SUBDIVISIONS: Subdivision[] = ['1/4', '1/8', '1/8T', '1/16', '1/16T'];
 const GAP_MODES: { value: GapClickMode; label: string }[] = [
   { value: 'off', label: 'Battuta muta: No' },
   { value: '1-in-4', label: 'Battuta muta: 1 ogni 4' },
   { value: 'random-25', label: 'Battuta muta: Casuale' },
 ];
 
+function extractDroneChordToken(technique?: string): string | undefined {
+  if (!technique) return undefined;
+  const match = technique.match(
+    /(?:Power|Barrè|Strum(?:\s+Giù|\s+Su)?\s*·|Accento|Ottava|\b[ivIV°]+\s*\()\s*([A-G](?:b|#)?(?:m7|maj7|m|dim|°|sus\d?|5|7)?)/i
+  );
+  return match?.[1];
+}
+
 export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
   plan,
   sessionLogs = [],
   initialVisualOnly,
   initialMetronomeSound = 'woodblock',
+  initialDroneEnabled = false,
   onChangeMetronomeSound,
+  onChangeDroneEnabled,
   onSaveProgress,
   onCompleteSession,
   onCancel,
@@ -155,6 +177,14 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
   const [recallReturnPhase, setRecallReturnPhase] = useState<'precount' | 'rest'>('precount');
   const demoBetweenTimerRef = useRef<number | null>(null);
   const [showMetronomeOptions, setShowMetronomeOptions] = useState(false);
+  const [droneEnabled, setDroneEnabled] = useState<boolean>(initialDroneEnabled);
+  const [transposeSemitones, setTransposeSemitones] = useState<number>(0);
+  const [, setPlateauAction] = useState<PlateauIntervention>({
+    type: 'none',
+    pillLabel: '',
+    bpmDeltaFactor: 1,
+  });
+  const lastDroneChordRef = useRef<string>('Am');
   const [showFamilyBriefing, setShowFamilyBriefing] = useState<boolean>(() => {
     const firstEx = plan.items[0]?.exercise;
     return firstEx ? getFamilyBriefingSrsStatus(firstEx.id).isDue : false;
@@ -319,15 +349,36 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     selectedArpeggioProgressionId,
   ]);
 
-  const effectiveFretboardNotes =
+  const isMusicalExercise = Boolean(
+    currentExercise && currentExercise.category !== 'fretboard'
+  );
+
+  const rawFretboardNotes =
     arpeggioData?.fretboardNotes ??
     activeVariant?.fretboardNotes ??
     currentExercise?.fretboardNotes ??
     [];
-  const effectiveDemoSequence =
+  const rawDemoSequence =
     arpeggioData?.demoSequence ??
     activeVariant?.demoSequence ??
     currentExercise?.demoSequence;
+
+  const transposedDisplay = useMemo(() => {
+    if (!transposeSemitones || isArpeggioExercise) {
+      return {
+        fretboardNotes: rawFretboardNotes,
+        demoSequence: rawDemoSequence,
+      };
+    }
+    return transposeVariantData(
+      rawFretboardNotes,
+      rawDemoSequence,
+      transposeSemitones
+    );
+  }, [rawFretboardNotes, rawDemoSequence, transposeSemitones, isArpeggioExercise]);
+
+  const effectiveFretboardNotes = transposedDisplay.fretboardNotes;
+  const effectiveDemoSequence = transposedDisplay.demoSequence;
 
   const familyBriefing = useMemo(() => {
     if (!currentExercise) return null;
@@ -420,12 +471,16 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
 
   const metronome = useMetronome({
     initialBpm: initialFirstBpm,
-    initialSubdivision: currentExercise?.subdivision ?? '1/8',
+    initialSubdivision:
+      initialFirstVariant?.overrideSubdivision ??
+      currentExercise?.subdivision ??
+      '1/8',
     initialGapClick:
       initialFirstVariant?.overrideGapClick ??
       currentExercise?.gapClickMode ??
       'off',
     initialSound: initialMetronomeSound,
+    initialBackbeatMode: initialFirstVariant?.clickBackbeat ?? false,
     visualOnly: initialVisualOnly,
     speedBurst: isSpeedBurst,
     initialBurstCycleSteps: effectiveStepCount,
@@ -444,7 +499,80 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
       recoverPlaybackAfterMic();
     }
     unlockSharedAudioContext().catch(() => {});
+    return () => {
+      stopBackingDrone();
+    };
   }, []);
+
+  // Active drone chord resolution & lifecycle
+  const activeStepTechnique = useMemo(() => {
+    if (!effectiveDemoSequence || effectiveDemoSequence.length === 0) {
+      return undefined;
+    }
+    const idx = metronome.currentSubStep % effectiveDemoSequence.length;
+    return effectiveDemoSequence[idx]?.technique;
+  }, [effectiveDemoSequence, metronome.currentSubStep]);
+
+  const activeDroneChord = useMemo(() => {
+    const token = extractDroneChordToken(activeStepTechnique);
+    if (token) {
+      lastDroneChordRef.current = token;
+      return token;
+    }
+    if (metronome.currentSubStep === 0) {
+      lastDroneChordRef.current = 'Am';
+    }
+    return lastDroneChordRef.current;
+  }, [activeStepTechnique, metronome.currentSubStep]);
+
+  useEffect(() => {
+    const shouldPlayDrone =
+      phase === 'playing' &&
+      !isSetPaused &&
+      droneEnabled &&
+      isMusicalExercise &&
+      !metronome.visualOnly;
+
+    if (!shouldPlayDrone) {
+      stopBackingDrone();
+      return;
+    }
+
+    const params = resolveChordDroneParams(
+      lastDroneChordRef.current,
+      isArpeggioExercise ? 0 : transposeSemitones
+    );
+    startBackingDrone(params.rootHz, params.quality);
+    return () => {
+      stopBackingDrone();
+    };
+  }, [phase, isSetPaused, droneEnabled, isMusicalExercise, metronome.visualOnly, isArpeggioExercise, transposeSemitones]);
+
+  useEffect(() => {
+    if (
+      phase !== 'playing' ||
+      isSetPaused ||
+      !droneEnabled ||
+      !isMusicalExercise ||
+      metronome.visualOnly
+    ) {
+      return;
+    }
+    const params = resolveChordDroneParams(
+      activeDroneChord,
+      isArpeggioExercise ? 0 : transposeSemitones
+    );
+    updateBackingDrone(params.rootHz, params.quality);
+  }, [
+    activeDroneChord,
+    transposeSemitones,
+    isArpeggioExercise,
+    phase,
+    isSetPaused,
+    droneEnabled,
+    isMusicalExercise,
+    metronome.visualOnly,
+  ]);
 
   // Lock background page scroll while LiveWorkoutPlayer is active
   useEffect(() => {
@@ -461,9 +589,10 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
     };
   }, []);
 
-  // Sync metronome, variant & timers when switching to a new exercise
+  // Sync metronome, variant, transposition & plateau breaker when switching to a new exercise
   useEffect(() => {
     if (!currentItem || !currentExercise) return;
+    lastDroneChordRef.current = 'Am';
     const pickedVar = pickNextRecommendedVariant(
       currentExercise,
       combinedHistoryLogs,
@@ -476,28 +605,78 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
       pickedVar?.id,
       currentItem.targetBpm
     );
-    // Warmup (-12%) applies ONLY to Exercise 1, Set 1; subsequent exercises start at full comfort BPM
-    metronome.setBpm(
-      exerciseIdx === 0 ? calculateWarmupBpm(comfortBpm) : comfortBpm
+
+    const isArpEx =
+      currentExercise.id === ARPEGGIO_EXERCISE_ID ||
+      currentExercise.id === BASS_ARPEGGIO_EXERCISE_ID;
+    const canTranspose =
+      !isArpEx &&
+      canTransposeNotes(
+        pickedVar?.fretboardNotes ?? currentExercise.fretboardNotes,
+        pickedVar?.demoSequence ?? currentExercise.demoSequence
+      );
+    const intervention = detectPlateauIntervention(
+      currentExercise.id,
+      pickedVar?.id,
+      combinedHistoryLogs,
+      canTranspose
     );
-    metronome.setSubdivision(currentExercise.subdivision);
+    setPlateauAction(intervention);
+
+    const nextTranspose =
+      plan.playerLevel === 'advanced' || intervention.forceTranspose
+        ? computeAdvancedTransposeOffset(
+            currentExercise,
+            pickedVar,
+            combinedHistoryLogs,
+            plan.playerLevel,
+            Boolean(intervention.forceTranspose)
+          )
+        : 0;
+    setTransposeSemitones(nextTranspose);
+
+    const effectiveSub = pickedVar?.overrideSubdivision ?? currentExercise.subdivision;
+    metronome.setSubdivision(effectiveSub);
     metronome.setGapClickMode(
       pickedVar?.overrideGapClick ?? currentExercise.gapClickMode
     );
-    const nextBurst = shouldEnableSpeedBurstForSkill(
-      currentExercise,
-      combinedHistoryLogs,
-      plan.playerLevel,
-      pickedVar
+    metronome.setBackbeatMode(
+      Boolean(pickedVar?.clickBackbeat || intervention.forceBackbeat)
     );
+
+    const canBurstSub =
+      effectiveSub !== '1/8T' &&
+      effectiveSub !== '1/16' &&
+      effectiveSub !== '1/16T';
+    const nextBurst =
+      intervention.forceSpeedBurst && canBurstSub
+        ? true
+        : shouldEnableSpeedBurstForSkill(
+            currentExercise,
+            combinedHistoryLogs,
+            plan.playerLevel,
+            pickedVar
+          );
     setIsSpeedBurst(nextBurst);
     metronome.setSpeedBurst(nextBurst);
+
+    // Warmup (-15%) applies ONLY to Exercise 1, Set 1; subsequent exercises start at full comfort BPM
+    const baseBpm =
+      exerciseIdx === 0 ? calculateWarmupBpm(comfortBpm) : comfortBpm;
+    const adjustedBpm =
+      intervention.type !== 'none'
+        ? Math.max(40, Math.round(baseBpm * intervention.bpmDeltaFactor))
+        : baseBpm;
+    metronome.setBpm(adjustedBpm);
+
     setVariantSetsInSession(0);
     setVariantCleanNonBurstInSession(0);
     setVariantBurstFailedInSession(false);
     pendingNewVariantDemoRef.current = false;
     setPendingNewVariantDemo(false);
-    setBurstChallengeBanner(null);
+    setBurstChallengeBanner(
+      intervention.type !== 'none' ? intervention.pillLabel : null
+    );
     setSetRemainingSec(currentItem.durationSec);
     setRestRemainingSec(currentItem.restSec);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -700,6 +879,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
         variantLabel: activeVariant?.shortLabel,
         setNumber,
         bpm: metronome.bpm,
+        subdivision: metronome.subdivision,
         durationSec:
           durationSecOverride ??
           Math.max(10, currentItem.durationSec - setRemainingSec),
@@ -979,6 +1159,13 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
         setVariantBurstFailedInSession(false);
         pendingNewVariantDemoRef.current = true;
         setPendingNewVariantDemo(true);
+        const nextSub =
+          targetVar.overrideSubdivision ?? currentExercise.subdivision;
+        metronome.setSubdivision(nextSub);
+        metronome.setBackbeatMode(Boolean(targetVar.clickBackbeat));
+        metronome.setGapClickMode(
+          targetVar.overrideGapClick ?? currentExercise.gapClickMode
+        );
         const nextBurst = shouldEnableSpeedBurstForSkill(
           currentExercise,
           syntheticAfterSetHistory,
@@ -987,8 +1174,17 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
         );
         setIsSpeedBurst(nextBurst);
         metronome.setSpeedBurst(nextBurst);
-        metronome.setGapClickMode(
-          targetVar.overrideGapClick ?? currentExercise.gapClickMode
+        setPlateauAction({ type: 'none', pillLabel: '', bpmDeltaFactor: 1 });
+        setTransposeSemitones(
+          plan.playerLevel === 'advanced' && !isArpeggioExercise
+            ? computeAdvancedTransposeOffset(
+                currentExercise,
+                targetVar,
+                syntheticAfterSetHistory,
+                plan.playerLevel,
+                false
+              )
+            : 0
         );
         nextSetBpm =
           overrideBpm ??
@@ -1086,7 +1282,10 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
           'ex-bass-pocket-groove',
         ]);
         const bossMinBpm = plan.playerLevel === 'foundation' ? 76 : 68;
+        const canBossBurstSub =
+          metronome.subdivision === '1/4' || metronome.subdivision === '1/8';
         const readyForBossFight =
+          canBossBurstSub &&
           !BOSS_FIGHT_EXCLUDED.has(currentExercise.id) &&
           currentExercise.id !== 'ex-speed-bursts' &&
           currentExercise.id !== 'ex-bass-fingerstyle' &&
@@ -1220,6 +1419,26 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
               <BookOpen className="h-3.5 w-3.5 text-[#39FF14]" />
               <span className="hidden sm:inline">Tecnica</span>
             </button>
+            {isMusicalExercise && (phase === 'precount' || phase === 'playing') && (
+              <button
+                type="button"
+                onClick={() => {
+                  unlockSharedAudioContext().catch(() => {});
+                  const next = !droneEnabled;
+                  setDroneEnabled(next);
+                  onChangeDroneEnabled?.(next);
+                }}
+                aria-label={droneEnabled ? 'Disattiva drone' : 'Attiva drone'}
+                title={droneEnabled ? 'Drone attivo' : 'Drone spento'}
+                className={`flex h-8 w-8 items-center justify-center rounded-full border transition ${
+                  droneEnabled
+                    ? 'border-[#39FF14]/60 bg-[#39FF14]/15 text-[#39FF14]'
+                    : 'border-white/15 bg-black text-white/45 hover:text-white'
+                }`}
+              >
+                <Music className="h-3.5 w-3.5" />
+              </button>
+            )}
             {(phase === 'precount' || phase === 'playing') && (
               <button
                 type="button"
@@ -1332,6 +1551,7 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
               variant="stage"
               demoMode="slow-intro"
               metronomeSound={metronome.soundId}
+              subdivisionLabel={metronome.subdivision}
               bpm={metronome.bpm}
               speedBurst={isSpeedBurst}
               autoPlayDemo={!showFamilyBriefing}
@@ -1486,6 +1706,18 @@ export const LiveWorkoutPlayer: React.FC<LiveWorkoutPlayerProps> = ({
                       </option>
                     ))}
                   </select>
+
+                  <button
+                    type="button"
+                    onClick={() => metronome.setBackbeatMode(!metronome.backbeatMode)}
+                    className={`rounded-full border px-2.5 py-1 text-[11px] font-bold transition ${
+                      metronome.backbeatMode
+                        ? 'border-[#39FF14] bg-[#39FF14] text-black'
+                        : 'border-white/15 bg-black text-white/60 hover:text-white'
+                    }`}
+                  >
+                    Backbeat 2&amp;4
+                  </button>
 
                   <button
                     type="button"

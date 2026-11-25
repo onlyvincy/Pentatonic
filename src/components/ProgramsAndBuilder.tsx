@@ -561,6 +561,7 @@ export const ProgramsAndBuilder: React.FC<ProgramsAndBuilderProps> = ({
                   ex.demoSequence
                 }
                 bpm={targetForSelected}
+                subdivisionLabel={selectedVariant?.overrideSubdivision ?? ex.subdivision}
                 speedBurst={exSpeedBurst}
                 variant="compact"
               />

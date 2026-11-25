@@ -11,6 +11,7 @@ interface UseMetronomeOptions {
   initialBpm?: number;
   initialSubdivision?: Subdivision;
   initialGapClick?: GapClickMode;
+  initialBackbeatMode?: boolean;
   initialSound?: MetronomeSoundId;
   visualOnly?: boolean;
   speedBurst?: boolean;
@@ -29,6 +30,7 @@ export interface MetronomeState {
   bpm: number;
   subdivision: Subdivision;
   gapClickMode: GapClickMode;
+  backbeatMode: boolean;
   soundId: MetronomeSoundId;
   visualOnly: boolean;
   speedBurst: boolean;
@@ -49,6 +51,8 @@ function getSubdivisionCount(sub: Subdivision): number {
       return 3;
     case '1/16':
       return 4;
+    case '1/16T':
+      return 6;
   }
 }
 
@@ -62,6 +66,9 @@ export function useMetronome(options: UseMetronomeOptions = {}) {
   );
   const [gapClickMode, setGapClickMode] = useState<GapClickMode>(
     options.initialGapClick ?? 'off'
+  );
+  const [backbeatMode, setBackbeatModeState] = useState<boolean>(
+    options.initialBackbeatMode ?? false
   );
   const [soundId, setSoundId] = useState<MetronomeSoundId>(
     options.initialSound ?? 'woodblock'
@@ -115,6 +122,7 @@ export function useMetronome(options: UseMetronomeOptions = {}) {
   const bpmRef = useRef(bpm);
   const subRef = useRef(subdivision);
   const gapRef = useRef(gapClickMode);
+  const backbeatRef = useRef(backbeatMode);
   const soundIdRef = useRef(soundId);
   const visualOnlyRef = useRef(visualOnly);
   const speedBurstRef = useRef(speedBurst);
@@ -125,6 +133,10 @@ export function useMetronome(options: UseMetronomeOptions = {}) {
   useEffect(() => {
     gapRef.current = gapClickMode;
   }, [gapClickMode]);
+
+  useEffect(() => {
+    backbeatRef.current = backbeatMode;
+  }, [backbeatMode]);
 
   useEffect(() => {
     soundIdRef.current = soundId;
@@ -196,6 +208,11 @@ export function useMetronome(options: UseMetronomeOptions = {}) {
     burstCycleStepsRef.current = Math.max(1, Math.round(stepsCount));
   }, []);
 
+  const setBackbeatMode = useCallback((next: boolean) => {
+    backbeatRef.current = next;
+    setBackbeatModeState(next);
+  }, []);
+
   const triggerSound = useCallback(
     (time: number, kind: MetronomeClickKind): number => {
       const ctx = getSharedAudioContext();
@@ -224,7 +241,10 @@ export function useMetronome(options: UseMetronomeOptions = {}) {
   const scheduleAudioStep = useCallback(
     (step: number, time: number, nowClock: number, useAudioClock: boolean) => {
       const audioSubsPerBeat = getSubdivisionCount(subRef.current);
-      const clockSubsPerBeat = speedBurstRef.current ? 4 : audioSubsPerBeat;
+      const useBurstClock =
+        speedBurstRef.current &&
+        (subRef.current === '1/8' || subRef.current === '1/4');
+      const clockSubsPerBeat = useBurstClock ? 4 : audioSubsPerBeat;
 
       // Native sample-accurate count-in bar (step < 0) seamlessly leading into step 0 (Bar 1 Beat 1)
       if (step < 0) {
@@ -243,7 +263,7 @@ export function useMetronome(options: UseMetronomeOptions = {}) {
         const remainingBeat = Math.max(1, countInBeatsTotal - beatIdx);
 
         // During count-in, play at the exact exercise BPM & subdivision (1x normal speed if speedBurst is on)
-        const shouldTriggerAudioClick = !speedBurstRef.current
+        const shouldTriggerAudioClick = !useBurstClock
           ? true
           : subRef.current === '1/4'
           ? stepsFromStart % 4 === 0
@@ -309,7 +329,7 @@ export function useMetronome(options: UseMetronomeOptions = {}) {
       const mutedByGap = barGapMapRef.current.get(barNum) ?? false;
 
       let isInSpeedBurstPhase = false;
-      if (speedBurstRef.current) {
+      if (useBurstClock) {
         const totalSteps = Math.max(1, burstCycleStepsRef.current);
         const phase1Ticks = 2 * totalSteps;
         const phase2Ticks = Math.max(16, totalSteps);
@@ -318,7 +338,9 @@ export function useMetronome(options: UseMetronomeOptions = {}) {
         isInSpeedBurstPhase = tickInCycle >= phase1Ticks;
       }
 
-      const shouldTriggerAudioClick = !speedBurstRef.current
+      const shouldTriggerAudioClick = backbeatRef.current
+        ? isQuarterBeat && (beatNumber === 2 || beatNumber === 4)
+        : !useBurstClock
         ? true
         : isInSpeedBurstPhase
         ? // 2x double-speed audible click during burst phase
@@ -338,12 +360,13 @@ export function useMetronome(options: UseMetronomeOptions = {}) {
             ? time
             : ctx.currentTime + Math.max(0.004, time - nowClock);
 
-        const kind: MetronomeClickKind =
-          beatNumber === 1 && isQuarterBeat
-            ? 'accent'
-            : isQuarterBeat || (isInSpeedBurstPhase && stepInBar % 2 === 0)
-            ? 'beat'
-            : 'sub';
+        const kind: MetronomeClickKind = backbeatRef.current
+          ? 'accent'
+          : beatNumber === 1 && isQuarterBeat
+          ? 'accent'
+          : isQuarterBeat || (isInSpeedBurstPhase && stepInBar % 2 === 0)
+          ? 'beat'
+          : 'sub';
 
         const actualAudioTime = triggerSound(audioTime, kind);
         if (useAudioClock) {
@@ -388,7 +411,10 @@ export function useMetronome(options: UseMetronomeOptions = {}) {
         Math.round(startOptions?.countInBeats ?? 0)
       );
       const audioSubsPerBeat = getSubdivisionCount(subRef.current);
-      const clockSubsPerBeat = speedBurstRef.current ? 4 : audioSubsPerBeat;
+      const useBurstClock =
+        speedBurstRef.current &&
+        (subRef.current === '1/8' || subRef.current === '1/4');
+      const clockSubsPerBeat = useBurstClock ? 4 : audioSubsPerBeat;
       const countInSteps = countInBeats * clockSubsPerBeat;
 
       isPlayingRef.current = true;
@@ -452,7 +478,10 @@ export function useMetronome(options: UseMetronomeOptions = {}) {
       }
 
       const audioSubsPerBeat = getSubdivisionCount(subRef.current);
-      const clockSubsPerBeat = speedBurstRef.current ? 4 : audioSubsPerBeat;
+      const useBurstClock =
+        speedBurstRef.current &&
+        (subRef.current === '1/8' || subRef.current === '1/4');
+      const clockSubsPerBeat = useBurstClock ? 4 : audioSubsPerBeat;
       const stepDur = 60.0 / bpmRef.current / clockSubsPerBeat;
       const lookahead = 0.1;
 
@@ -620,6 +649,7 @@ export function useMetronome(options: UseMetronomeOptions = {}) {
     bpm,
     subdivision,
     gapClickMode,
+    backbeatMode,
     soundId,
     visualOnly,
     speedBurst,
@@ -631,6 +661,7 @@ export function useMetronome(options: UseMetronomeOptions = {}) {
     setBpm,
     setSubdivision,
     setGapClickMode,
+    setBackbeatMode,
     setSoundId,
     setVisualOnly,
     setSpeedBurst,

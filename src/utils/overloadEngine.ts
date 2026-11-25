@@ -599,9 +599,26 @@ export function pickEasierVariantInSession(
   return undefined;
 }
 
+export function getSubdivisionNotesPerBeat(subdivision?: string): number {
+  switch (subdivision) {
+    case '1/4':
+      return 1;
+    case '1/8T':
+      return 3;
+    case '1/16':
+      return 4;
+    case '1/16T':
+      return 6;
+    case '1/8':
+    default:
+      return 2;
+  }
+}
+
 /**
  * Determines whether Speed Burst (1/8 -> 1/16) should start active on Set 1.
  * Respects per-variant overrideSpeedBurst and protects Level 1 (foundation) from premature bursts.
+ * Disables burst automatically on triplet/16th subdivisions so complex subdivisions are never clobbered.
  */
 export function shouldEnableSpeedBurstForSkill(
   exercise: Exercise,
@@ -611,6 +628,13 @@ export function shouldEnableSpeedBurstForSkill(
 ): boolean {
   if (activeVariant?.overrideSpeedBurst !== undefined) {
     return activeVariant.overrideSpeedBurst;
+  }
+  if (
+    activeVariant?.overrideSubdivision === '1/8T' ||
+    activeVariant?.overrideSubdivision === '1/16' ||
+    activeVariant?.overrideSubdivision === '1/16T'
+  ) {
+    return false;
   }
   if (playerLevel === 'foundation') {
     return false;
@@ -861,7 +885,7 @@ const XP_PER_LEVEL = 100;
 
 /**
  * Computes Level 1–10 progression strictly starting at Lv. 1 when 0 sets are logged.
- * Advances slowly with consistency, weighted BPM growth above baseline, and variant mastery.
+ * Combines real achieved NPS speed ceiling (55%), multi-variant mastery (25%), and clean consistency (20%).
  */
 export function computeExerciseScore(
   exercise: Exercise,
@@ -905,19 +929,80 @@ export function computeExerciseScore(
   }
 
   const distinctDays = new Set(matchingSets.map((s) => s.timestamp.slice(0, 10))).size;
-  const consistencySetsXp = matchingSets.reduce((acc, st) => {
-    if (st.cleanliness >= 4) return acc + 16;
-    if (st.cleanliness === 3) return acc + 7;
-    return acc + 2;
-  }, 0);
-  const consistencyXp = consistencySetsXp + distinctDays * 14;
-  const bpmGainXp = Math.max(0, weightedSummary.weightedBpm - exercise.baselineBpm) * 10;
-  const variantCoverageXp = weightedSummary.practicedVariantsCount * 20;
+  const cleanSets = matchingSets.filter((st) => st.cleanliness >= 4);
 
-  const totalXp = Math.round(consistencyXp + bpmGainXp + variantCoverageXp);
-  const level = Math.min(10, 1 + Math.floor(totalXp / XP_PER_LEVEL));
+  // Target speed & NPS ceiling derived from the skill's hardest variant
+  const variants = exercise.variants ?? [];
+  let targetCeilingBpm = 115;
+  let targetPeakNps =
+    (targetCeilingBpm / 60) * getSubdivisionNotesPerBeat(exercise.subdivision);
+
+  for (const v of variants) {
+    const vBpm = v.masteryBpm ?? 100;
+    const vNotesPerBeat = getSubdivisionNotesPerBeat(
+      v.overrideSubdivision ?? exercise.subdivision
+    );
+    const vNps = (vBpm / 60) * vNotesPerBeat;
+    if (vNps > targetPeakNps) {
+      targetPeakNps = vNps;
+    }
+    if (vBpm > targetCeilingBpm) {
+      targetCeilingBpm = vBpm;
+    }
+  }
+  targetPeakNps = Math.max(3.5, Math.min(9.5, targetPeakNps));
+
+  let bestCleanNps = 0;
+  let bestAnyNps = 0;
+  for (const st of matchingSets) {
+    const sub = st.subdivision ?? exercise.subdivision;
+    const mult = getSubdivisionNotesPerBeat(sub) * (st.speedBurst ? 1.5 : 1);
+    const nps = (st.bpm / 60) * mult;
+    if (nps > bestAnyNps) bestAnyNps = nps;
+    if (st.cleanliness >= 4 && nps > bestCleanNps) bestCleanNps = nps;
+  }
+  const effectiveNps = bestCleanNps > 0 ? bestCleanNps : bestAnyNps * 0.6;
+
+  const npsRatio = Math.min(1, effectiveNps / targetPeakNps);
+  const bpmFloor = Math.max(45, exercise.baselineBpm - 10);
+  const bpmSpan = Math.max(35, targetCeilingBpm - bpmFloor);
+  const bpmRatio = Math.min(
+    1,
+    Math.max(0, (weightedSummary.weightedBpm - bpmFloor) / bpmSpan)
+  );
+  const speedScore = 55 * (0.65 * npsRatio + 0.35 * bpmRatio);
+
+  // Variant breadth & mastery (up to 25 pts)
+  const setsByVar = mapExerciseSetsByVariant(exercise, sessionLogs);
+  let masteredVariantsCount = 0;
+  for (const v of variants) {
+    if (isVariantMastered(v, setsByVar.get(v.id) ?? [])) {
+      masteredVariantsCount += 1;
+    }
+  }
+  const totalVariantsCount = Math.max(1, weightedSummary.totalVariantsCount);
+  const variantRatio = Math.min(
+    1,
+    (weightedSummary.practicedVariantsCount * 0.5 +
+      masteredVariantsCount * 0.5) /
+      totalVariantsCount
+  );
+  const variantScore = 25 * variantRatio;
+
+  // Consistency & clean ratio (up to 20 pts)
+  const cleanRatio = cleanSets.length / Math.max(1, setsCompleted);
+  const volumeFactor = Math.min(1, cleanSets.length / 24);
+  const dayFactor = Math.min(1, distinctDays / 10);
+  const consistencyScore =
+    20 * (0.4 * cleanRatio + 0.35 * volumeFactor + 0.25 * dayFactor);
+
+  const score = Math.min(
+    100,
+    Math.max(8, Math.round(speedScore + variantScore + consistencyScore))
+  );
+  const totalXp = Math.round(score * 9);
+  const level = Math.min(10, Math.max(1, 1 + Math.floor(totalXp / XP_PER_LEVEL)));
   const levelProgressPct = level >= 10 ? 100 : totalXp % XP_PER_LEVEL;
-  const score = Math.min(100, Math.max(8, Math.round((totalXp / 900) * 100)));
 
   let tierLabel = 'Fondamenta';
   let color = 'text-[#39FF14]';
@@ -1306,5 +1391,206 @@ export function scaleWorkoutForPreset(
     isStandardized: false,
     estimatedMinutes: Math.max(3, Math.round(totalSec / 60)),
     items: scaledItems,
+  };
+}
+
+const CHROMATIC_NOTE_LABELS = [
+  'C',
+  'C#',
+  'D',
+  'Eb',
+  'E',
+  'F',
+  'F#',
+  'G',
+  'Ab',
+  'A',
+  'Bb',
+  'B',
+];
+
+function transposeNoteLabel(label: string | undefined, semitones: number): string | undefined {
+  if (!label) return label;
+  const idx = CHROMATIC_NOTE_LABELS.indexOf(label);
+  if (idx === -1) return label;
+  const nextIdx = (((idx + semitones) % 12) + 12) % 12;
+  return CHROMATIC_NOTE_LABELS[nextIdx];
+}
+
+export function canTransposeNotes(
+  fretboardNotes: Exercise['fretboardNotes'],
+  demoSequence: Exercise['demoSequence']
+): boolean {
+  const allNotes = [
+    ...fretboardNotes,
+    ...(demoSequence?.flatMap((s) => s.notes) ?? []),
+  ];
+  if (allNotes.length === 0) return false;
+  return allNotes.every((n) => n.fret >= 1 && n.fret <= 22);
+}
+
+/**
+ * Safely shifts movable patterns/variants across the neck.
+ * Never alters shapes containing open strings (fret === 0) or pushing past fret 22.
+ */
+export function transposeVariantData(
+  fretboardNotes: Exercise['fretboardNotes'],
+  demoSequence: Exercise['demoSequence'],
+  semitones: number
+): {
+  fretboardNotes: Exercise['fretboardNotes'];
+  demoSequence: Exercise['demoSequence'];
+} {
+  if (!semitones || !canTransposeNotes(fretboardNotes, demoSequence)) {
+    return { fretboardNotes, demoSequence };
+  }
+
+  const allNotes = [
+    ...fretboardNotes,
+    ...(demoSequence?.flatMap((s) => s.notes) ?? []),
+  ];
+  const outOfRange = allNotes.some(
+    (n) => n.fret + semitones < 1 || n.fret + semitones > 22
+  );
+  if (outOfRange) {
+    return { fretboardNotes, demoSequence };
+  }
+
+  return {
+    fretboardNotes: fretboardNotes.map((n) => ({
+      ...n,
+      fret: n.fret + semitones,
+      label: transposeNoteLabel(n.label, semitones) ?? n.label,
+    })),
+    demoSequence: demoSequence?.map((step) => ({
+      ...step,
+      notes: step.notes.map((n) => ({
+        ...n,
+        fret: n.fret + semitones,
+        label: transposeNoteLabel(n.label, semitones) ?? n.label,
+      })),
+    })),
+  };
+}
+
+/**
+ * Picks a deterministic neck transposition semitone offset (+2, -2, +3, +5, etc.)
+ * strictly for advanced players practicing movable shapes.
+ */
+export function computeAdvancedTransposeOffset(
+  exercise: Exercise,
+  activeVariant: ExerciseVariant | undefined,
+  sessionLogs: WorkoutSessionLog[] = [],
+  playerLevel?: PlayerLevelId,
+  forceRotate = false
+): number {
+  if (playerLevel !== 'advanced' && !forceRotate) return 0;
+
+  const notes = activeVariant?.fretboardNotes ?? exercise.fretboardNotes;
+  const seq = activeVariant?.demoSequence ?? exercise.demoSequence;
+  if (!canTransposeNotes(notes, seq)) return 0;
+
+  const priorSets = sessionLogs.flatMap((s) =>
+    s.sets.filter((st) => st.exerciseId === exercise.id)
+  );
+  if (!forceRotate && priorSets.length < 3) return 0;
+
+  const candidateOffsets = forceRotate
+    ? [2, -2, 3, -3, 5, 7]
+    : [0, 2, -2, 3, 5, -3, 7];
+
+  const allNotes = [...notes, ...(seq?.flatMap((s) => s.notes) ?? [])];
+  const validOffsets = candidateOffsets.filter((off) =>
+    allNotes.every((n) => n.fret + off >= 1 && n.fret + off <= 20)
+  );
+  if (validOffsets.length === 0) return 0;
+
+  const index = (sessionLogs.length + priorSets.length) % validOffsets.length;
+  return validOffsets[index];
+}
+
+export type PlateauActionType =
+  | 'none'
+  | 'deload-clean'
+  | 'transpose'
+  | 'overspeed-burst'
+  | 'backbeat';
+
+export interface PlateauIntervention {
+  type: PlateauActionType;
+  pillLabel: string;
+  bpmDeltaFactor: number;
+  forceSpeedBurst?: boolean;
+  forceBackbeat?: boolean;
+  forceTranspose?: boolean;
+}
+
+/**
+ * Detects a genuine speed/cleanliness stall over the last >= 4 sets of an exercise
+ * and selects one targeted motor-learning breakthrough intervention.
+ */
+export function detectPlateauIntervention(
+  exerciseId: string,
+  variantId: string | undefined,
+  sessionLogs: WorkoutSessionLog[] = [],
+  canTranspose = true
+): PlateauIntervention {
+  const allSets = sessionLogs.flatMap((s) =>
+    s.sets.filter((st) => st.exerciseId === exerciseId)
+  );
+  const varSets = variantId
+    ? allSets.filter((st) => st.variantId === variantId)
+    : allSets;
+  const pool = varSets.length >= 4 ? varSets : allSets;
+  if (pool.length < 4) {
+    return { type: 'none', pillLabel: '', bpmDeltaFactor: 1 };
+  }
+
+  const recent = pool.slice(-4);
+  const bpms = recent.map((s) => s.bpm);
+  const minBpm = Math.min(...bpms);
+  const maxBpm = Math.max(...bpms);
+  const avgClean =
+    recent.reduce((acc, s) => acc + s.cleanliness, 0) / recent.length;
+  const lastTwoPerfect =
+    recent[recent.length - 1].cleanliness === 5 &&
+    recent[recent.length - 2].cleanliness === 5;
+
+  const isBpmStalled = maxBpm - minBpm <= 3 && !lastTwoPerfect;
+  const isDirtyStall = avgClean <= 3.1 && maxBpm - minBpm <= 5;
+  if (!isBpmStalled && !isDirtyStall) {
+    return { type: 'none', pillLabel: '', bpmDeltaFactor: 1 };
+  }
+
+  if (avgClean <= 3.0) {
+    return {
+      type: 'deload-clean',
+      pillLabel: 'Sblocco · Deload −15%',
+      bpmDeltaFactor: 0.85,
+    };
+  }
+
+  const rotation = pool.length % 3;
+  if (rotation === 0) {
+    return {
+      type: 'overspeed-burst',
+      pillLabel: 'Sblocco · Burst',
+      bpmDeltaFactor: 0.96,
+      forceSpeedBurst: true,
+    };
+  }
+  if (rotation === 1 && canTranspose) {
+    return {
+      type: 'transpose',
+      pillLabel: 'Sblocco · Tonalità',
+      bpmDeltaFactor: 1,
+      forceTranspose: true,
+    };
+  }
+  return {
+    type: 'backbeat',
+    pillLabel: 'Sblocco · Backbeat 2&4',
+    bpmDeltaFactor: 0.95,
+    forceBackbeat: true,
   };
 }
